@@ -498,6 +498,7 @@ int main(int argc, char* argv[])
   }
   Ofs << endl;
 
+  // Generate footer, way to go!
   Ofs << "[ system ]" << endl;
   Ofs << "Merged structure from " 
       << p.get<string>("topologyA") 
@@ -509,6 +510,51 @@ int main(int argc, char* argv[])
   Ofs << "[ molecules ]" << endl;
   Ofs << "merged 1" << endl;
   Ofs << endl;
+
+  // Generate PDB
+  {
+    ofstream crdfs(p.get<string>("structureO"));
+    crdfs.setf(ios::fixed);
+
+    for(int i = 0; i < N; ++i) {
+      Vector3d crd;
+      int resid;
+      string atom, resname;
+      
+      if(assignAofO[i] != -1) {
+        int acrd = assignAofO[i];
+        crd = Acoords.col(acrd);
+        atom = Atop.names[acrd];
+        resid = Atop.resids[acrd];
+        resname = Atop.resnames[acrd];
+      }else{
+        int bcrd = assignBofO[i];
+        assert(bcrd >= 0);
+        crd = Bcoords.col(bcrd);
+        atom = Btop.names[bcrd];
+        resid = Btop.resids[bcrd];
+        resname = Btop.resnames[bcrd];
+      }
+      crdfs << setw(6) << "ATOM  " 
+            << setw(5) << std::right << (i + 1)
+            << " "
+            << (atom.length() == 4 ? atom.substr(3, 1) : " ")
+            << setw(3) << std::left
+            << (atom.length() == 4 ? atom.substr(0, 3) : atom)
+            << " " // altLoc
+            << setw(3) << std::right << resname
+            << " "
+            << "A" // chainID
+            << setw(4) << std::right << resid
+            << " " // icode
+            << "   "
+            << setw(8) << std::right << setprecision(3) << crd(0)
+            << setw(8) << std::right << setprecision(3) << crd(1)
+            << setw(8) << std::right << setprecision(3) << crd(2)
+            << endl;
+    }
+    crdfs << "TER   " << endl;
+  }
 
   return 0;
 }
