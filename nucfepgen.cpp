@@ -411,6 +411,7 @@ int main(int argc, char* argv[])
       }
       if(func == 1) {
         Bfactors[0] = Afactors[0];
+        Bfactors[2] = Afactors[2];
       }
     }
     // output A-listed angles first
@@ -450,10 +451,16 @@ int main(int argc, char* argv[])
     const vector<double>& Bfactors = v.second;
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << z_in_O + 1 << " " << w_in_O + 1 << " "
-        << func
-        << " " << setw(12) << (func == 1 ? Bfactors[0] : 0.00);
-    for(size_t i = 1; i < Bfactors.size(); ++i) {
-      Ofs << " " << setw(12) << 0.00;
+        << func;
+    if(func == 1) {
+      Ofs << " " << setw(12) << Bfactors[0]
+          << " " << setw(12) << 0.00
+          << " " << setw(12) << Bfactors[2];
+    }else{
+      for(double v: Bfactors) {
+        (void) v;
+        Ofs << " " << setw(12) << 0.00;
+      }
     }
     for(auto v: Bfactors) {
       Ofs << " " << setw(12) << v;
@@ -495,6 +502,13 @@ int main(int argc, char* argv[])
     }
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << func << endl;
+  }
+  Ofs << endl;
+
+  // bonds for phantom atoms
+  Ofs << "[ bonds ]" << endl;
+  {
+    // make clusters of phantom atoms
   }
   Ofs << endl;
 

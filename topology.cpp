@@ -107,7 +107,7 @@ topology::topology(const string& fname)
       if(is.fail() || is.bad()) {
         throw runtime_error("pairs format error");
       }
-      pairs[make_pair(a,b)] = func;
+      pairs[make_pair(a - 1, b - 1)] = func;
     }else if(state == "bonds") {
       istringstream is(line);
       int a, b, func;
