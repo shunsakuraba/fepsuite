@@ -10,12 +10,143 @@
 #include <fstream>
 #include <limits>
 #include <set>
+#include "disjoint_set.hpp"
 
 using namespace std;
 using namespace Eigen;
 
 bool verbose = false;
 bool quiet = false;
+
+void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords, 
+                     double maxdist,
+                     double force_connect,
+                     double force_within_cluster,
+                     const vector<int>& assignAofO,
+                     const vector<int>& assignBofO,
+                     const topology &Atop, 
+                     bool isA)
+{
+  int N = (int)assignAofO.size();
+  vector<int> Aphantoms; // A's atoms which is phantom in state B, numbered in O
+
+  for(int i = 0; i < N; ++i) {
+    if(assignBofO[i] == -1) {
+      Aphantoms.push_back(i);
+    }
+  }
+
+  // make clusters of phantom atoms
+  disjoint_set As(N);
+  for(int x: Aphantoms) {
+    assert(assignAofO[x] >= 0);
+    Vector3d apt = Acoords.col(assignAofO[x]);
+    for(int y: Aphantoms) {
+      assert(assignAofO[y] >= 0);
+      Vector3d bpt = Acoords.col(assignAofO[y]);
+      if(x == y) continue;
+      if((apt - bpt).squaredNorm() > maxdist * maxdist) {
+        continue;
+      }
+      As.join(x, y);
+    }
+  }
+  
+  // Turn to clusters
+  multimap<int, int> Aclusters;
+  for(int x: Aphantoms) {
+    const int p = As.find_parent(x);
+    Aclusters.insert(make_pair(p, x));
+  }
+
+  // find the closest cluster-to-non-phantom-atom distance
+  map<int, pair<int, double> > Aclusterdist;
+
+  for(const auto &x: Aclusters) {
+    Aclusterdist[x.first] = 
+      make_pair(-1, numeric_limits<double>::max());
+  }
+    
+  for(int x: Aphantoms) {
+    const int p = As.find_parent(x);
+    int curminfrom = Aclusterdist[p].first;
+    double curmin  = Aclusterdist[p].second;
+
+    Vector3d apt = Acoords.col(assignAofO[x]);
+    for(int y = 0; y < N; ++y) {
+      if(assignAofO[y] == -1 || assignBofO[y] == -1) {
+        // Both A phantom and B phantom are excluded
+        continue;
+      }
+      Vector3d bpt = Acoords.col(assignAofO[y]);
+      double d = (apt - bpt).norm();
+      if(d < curmin) {
+        curminfrom = y;
+        curmin = d;
+      }
+    }
+    Aclusterdist[p] = make_pair(curminfrom, curmin);
+  }
+  
+  for(const auto& x: Aclusterdist) {
+    int xa = assignAofO[x.second.first];
+    int par = x.first;
+    auto ar = Aclusters.equal_range(par);
+    for(auto it = ar.first; it != ar.second; ++it) {
+      {
+        int ya = assignAofO[it->second];
+        double d = (Acoords.col(xa) - Acoords.col(ya)).norm();
+        Ofs << setw(6) << x.second.first + 1 << " "
+            << setw(6) << it->second + 1 << " "
+            << setw(4) << 6 << " ";
+        if(!isA) {
+          Ofs << setw(8) << d << " "
+              << setw(8) << 0.0 << " ";
+        }
+        Ofs << setw(8) << d << " "
+            << setw(8) << force_connect << " ";
+        if(isA) {
+          Ofs << setw(8) << d << " "
+              << setw(8) << 0.0 << " ";
+        }        
+        Ofs << "; (to-cluster) " 
+            << setw(3) << Atop.resids[xa] << " "
+            << setw(5) << Atop.names[xa] << " - "
+            << setw(3) << Atop.resids[ya] << " "
+            << setw(5) << Atop.names[ya]
+            << endl;
+      }
+      
+      for(auto it2 = ar.first; it2 != ar.second; ++it2) {
+        if(it->second >= it2->second) continue;
+        int xa = assignAofO[it->second];
+        int ya = assignAofO[it2->second];
+        double d = (Acoords.col(xa) - 
+                    Acoords.col(ya)).norm();
+        
+        Ofs << setw(6) << it->second + 1 << " "
+            << setw(6) << it2->second + 1 << " "
+            << setw(4) << 6 << " ";
+        if(!isA) {
+          Ofs << setw(8) << d << " "
+              << setw(8) << 0.0 << " ";
+        }
+        Ofs << setw(8) << d << " "
+            << setw(8) << force_within_cluster << " ";
+        if(isA) {
+          Ofs << setw(8) << d << " "
+              << setw(8) << 0.0 << " ";
+        }
+        Ofs << "; (in-cluster) " 
+            << setw(3) << Atop.resids[xa] << " "
+            << setw(5) << Atop.names[xa] << " - "
+            << setw(3) << Atop.resids[ya] << " "
+            << setw(5) << Atop.names[ya]
+            << endl;
+      }
+    }
+  }
+}
 
  
 int main(int argc, char* argv[])
@@ -25,7 +156,10 @@ int main(int argc, char* argv[])
   p.add("help", 0, "Print this message");
   p.add("verbose", 'v', "Be more verbose");
   p.add("quiet", 'q', "Suppress unnecessary information");
-  p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.5);
+  p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
+  p.add<double>("cluster-dist", 0, "Maximum distances for phantom atoms clustering", false, 2.0);
+  p.add<double>("force-constant", 0, "Cluster fixing force constants", false, 5e+4);
+  p.add<double>("force-within-cluster", 0, "Cluster force constants", false, 5e+4);
   p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
   p.add("debug", 0, "Debug");
 
@@ -207,6 +341,7 @@ int main(int argc, char* argv[])
     }
     if(errcnt > p.get<int>("max-warning")) {
       cerr << "Number of warning exceeds max-warning" << endl;
+      exit(1);
     }
   }
 
@@ -564,7 +699,20 @@ int main(int argc, char* argv[])
   // bonds for phantom atoms
   Ofs << "[ bonds ]" << endl;
   {
-    // make clusters of phantom atoms
+    output_clusters(Ofs, Acoords, 
+                    p.get<double>("cluster-dist"),
+                    p.get<double>("force-constant"),
+                    p.get<double>("force-within-cluster"),
+                    assignAofO,
+                    assignBofO,
+                    Atop, true);
+    output_clusters(Ofs, Bcoords, 
+                    p.get<double>("cluster-dist"),
+                    p.get<double>("force-constant"),
+                    p.get<double>("force-within-cluster"),
+                    assignBofO,
+                    assignAofO,
+                    Btop, false);
   }
   Ofs << endl;
 
