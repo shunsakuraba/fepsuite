@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <fstream>
 #include <limits>
+#include <set>
 
 using namespace std;
 using namespace Eigen;
@@ -25,6 +26,7 @@ int main(int argc, char* argv[])
   p.add("verbose", 'v', "Be more verbose");
   p.add("quiet", 'q', "Suppress unnecessary information");
   p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.5);
+  p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
   p.add("debug", 0, "Debug");
 
   p.add<string>("structureA", 'A', "PDB structure A", true);
@@ -87,6 +89,7 @@ int main(int argc, char* argv[])
   assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
   assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
   assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
 
   if(!quiet){
     cout << "Atoms assigned:" << endl;
@@ -152,6 +155,59 @@ int main(int argc, char* argv[])
       assignOofB[j] = assignOofA[assignAofB[j]];
     }
     assignBofO[assignOofB[j]] = j;
+  }
+
+  // Sanity check
+  {
+    map<int, set<int> > Aconnectivity, Bconnectivity;
+    for(const auto &Abond: Atop.bonds) {
+      int Aa = assignOofA[std::get<0>(Abond.first)];
+      int Ab = assignOofA[std::get<1>(Abond.first)];
+      Aconnectivity[Aa].insert(Ab);
+      Aconnectivity[Ab].insert(Aa);
+    }
+    
+    for(const auto &Bbond: Btop.bonds) {
+      int Ba = assignOofB[std::get<0>(Bbond.first)];
+      int Bb = assignOofB[std::get<1>(Bbond.first)];
+      Bconnectivity[Ba].insert(Bb);
+      Bconnectivity[Bb].insert(Ba);
+    }
+
+    int errcnt = 0;
+    for(int i = 0; i < N; ++i) {
+      const set<int> &As = Aconnectivity[i];
+      const set<int> &Bs = Bconnectivity[i];
+      if(!(std::includes(As.begin(), As.end(),
+                         Bs.begin(), Bs.end()) ||
+           std::includes(Bs.begin(), Bs.end(),
+                         As.begin(), As.end()))) {
+        errcnt++;
+        int Ai = assignAofO[i];
+        int Bi = assignBofO[i];
+        if(Ai == -1 || Bi == -1) {
+          cerr << "Unknown error: Ai / Bi = -1 in sanity check" << endl;
+          cerr << "Ai = " << Ai << ", Bi = " << Bi << ", i = " << i << endl;
+          continue;
+        }
+        cerr << "*** Warning: unmatched connectivity ***" << endl;
+        cerr << Atop.names[Ai] << "(A)" << ": ";
+        for(const auto &e: As) {
+          int Ae = assignAofO[e];
+          cerr << (Ae == -1 ? "PHA" : Atop.names[Ae]) << " ";
+        }
+        cerr << endl;
+        cerr << Btop.names[Bi] << "(B)" << ": ";
+        for(const auto &e: Bs) {
+          int Be = assignBofO[e];
+          cerr << (Be == -1 ? "PHA" : Btop.names[Be]) << " ";
+        }
+        cerr << endl;
+      }
+    }
+    if(errcnt > p.get<int>("max-warning")) {
+      cerr << "Number of warning exceeds max-warning" << endl;
+    }
   }
 
   // output 
