@@ -89,6 +89,7 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
   }
   
   for(const auto& x: Aclusterdist) {
+    const double scale = 0.1; // angstrom to nm
     int xa = assignAofO[x.second.first];
     int par = x.first;
     auto ar = Aclusters.equal_range(par);
@@ -99,14 +100,14 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
         Ofs << setw(6) << x.second.first + 1 << " "
             << setw(6) << it->second + 1 << " "
             << setw(4) << 6 << " ";
-        if(!isA) {
-          Ofs << setw(8) << d << " "
+        if(isA) {
+          Ofs << setw(8) << d * scale << " "
               << setw(8) << 0.0 << " ";
         }
-        Ofs << setw(8) << d << " "
+        Ofs << setw(8) << d * scale << " "
             << setw(8) << force_connect << " ";
-        if(isA) {
-          Ofs << setw(8) << d << " "
+        if(!isA) {
+          Ofs << setw(8) << d * scale << " "
               << setw(8) << 0.0 << " ";
         }        
         Ofs << "; (to-cluster) " 
@@ -127,14 +128,14 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
         Ofs << setw(6) << it->second + 1 << " "
             << setw(6) << it2->second + 1 << " "
             << setw(4) << 6 << " ";
-        if(!isA) {
-          Ofs << setw(8) << d << " "
+        if(isA) {
+          Ofs << setw(8) << d * scale << " "
               << setw(8) << 0.0 << " ";
         }
-        Ofs << setw(8) << d << " "
+        Ofs << setw(8) << d * scale << " "
             << setw(8) << force_within_cluster << " ";
-        if(isA) {
-          Ofs << setw(8) << d << " "
+        if(!isA) {
+          Ofs << setw(8) << d * scale << " "
               << setw(8) << 0.0 << " ";
         }
         Ofs << "; (in-cluster) " 
@@ -699,6 +700,7 @@ int main(int argc, char* argv[])
   // bonds for phantom atoms
   Ofs << "[ bonds ]" << endl;
   {
+    Ofs << "; Atoms existing in A state" << endl;
     output_clusters(Ofs, Acoords, 
                     p.get<double>("cluster-dist"),
                     p.get<double>("force-constant"),
@@ -706,6 +708,7 @@ int main(int argc, char* argv[])
                     assignAofO,
                     assignBofO,
                     Atop, true);
+    Ofs << "; Atoms existing in B state" << endl;
     output_clusters(Ofs, Bcoords, 
                     p.get<double>("cluster-dist"),
                     p.get<double>("force-constant"),
