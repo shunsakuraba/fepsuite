@@ -1,0 +1,41 @@
+
+molecule arna( string s )
+{
+  molecule m;
+  string seq, cseq;
+  seq = s;
+  cseq = wc_complement( seq, "", "rna" );
+  printf("SEQ = %s, CSEQ = %s\n", seq, cseq);
+  //m = wc_helix( seq, "", "rna", cseq, "", "rna", 2.25, -4.96, 36.0, 3.38, "s5a5s3a3" );
+  m = fd_helix("arna", seq, "rna");
+  return( m );
+};
+
+string seqs[hashed];
+string key;
+string seq, fname;
+molecule m;
+atom a;
+string tmp;
+
+seqs["26"] = "gcaucg";
+seqs["30"] = "gcgccg";
+seqs["34"] = "gcgucg";
+seqs["44"] = "gugucg";
+seqs["33"] = "gcggcg";
+seqs["25"] = "gcaacg";
+seqs["43"] = "guggug";
+
+for(key in seqs) {
+  seq = seqs[key];
+  fname = sprintf("%s.pdb", seq);
+  m = arna(seq);
+  printf("Seq = %s, fname = %s\n", seq, fname);
+  for(a in m) {
+    if(substr(a.resname, 1, 1) != "R") {
+      tmp = sprintf("R%s", a.resname);
+      a.resname = tmp;
+    }
+  }
+  putpdb(fname, m);
+}
