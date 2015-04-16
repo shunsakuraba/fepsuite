@@ -1,0 +1,32 @@
+integrator = sd
+nsteps = 50000
+
+dt = 0.001
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+dispcorr = Ener
+
+ref_t = 310
+tau_t = 0.2
+tc_grps = System
+
+free-energy = yes
+fep-lambdas = %LAMBDAS%
+
+init-lambda-state = %STATE%
+calc-lambda-neighbors = -1
+
+sc-alpha = 0.0025
+sc-sigma = 0.1
+sc-r-power = 48
+sc-power = 1
+sc-coul = yes
+dhdl-derivatives = no
+dhdl-print-energy = no
+
