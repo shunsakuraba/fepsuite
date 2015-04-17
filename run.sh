@@ -1,14 +1,20 @@
 #!/bin/zsh
 
-TRUNK=$1
+A=$1
+B=$2
+DIST=$3
 
-if [[ -z $TRUNK ]]; then
+if [[ -z $B ]]; then
     echo "Usage: $0 TRUNK"
     exit 1
 fi
 
-../nucfepgen -A ../$TRUNK.pdb -a ../${TRUNK}_GMX.top -B ../$TRUNK.pdb -b ../${TRUNK}_GMX.top --maxdist 1.0 -O init.pdb -o ab.top
-python ../split_states.py --top ab.top --output-A a.top --output-B b.top --output-fep fep.top
+if [[ -z $DIST ]]; then
+    DIST=1.0
+fi
+
+../nucfepgen -A ../$A.pdb -a ../${A}_GMX.top -B ../$B.pdb -b ../${B}_GMX.top --maxdist $DIST -O init.pdb -o ab.top
+python ../split_states.py --top ab.top --output-A a.top --output-B b.top --output-fep fep.top || exit 1
 gmx_d editconf -f init.pdb -d 1.5 -bt dodecahedron -o init_box
 zsh ../solvate.zsh fep
 gmx_d solvate -cp init_box -p fep_solvated -cs -o init_solvated
