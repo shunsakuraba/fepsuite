@@ -24,7 +24,7 @@ with (open(args.outputA, "w")) as Afh, (
     phantomInB = set()
     for lraw in fh:
         l = lraw.strip()
-        if l == "" or l[0] == ';':
+        if l == "" or l[0] == ';' or l[0] == '#':
             Afh.write(lraw)
             Bfh.write(lraw)
             FEPfh.write(lraw)
@@ -126,7 +126,7 @@ with (open(args.outputA, "w")) as Afh, (
                                  ["%4d" % func] + 
                                  ["%12s" % v for v in Avars] + 
                                  ["%12s" % v for v in Bvars] +
-                                 ["\n"]))                
+                                 ["\n"]))
         else:
             Afh.write(lraw)
             Bfh.write(lraw)
