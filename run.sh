@@ -15,10 +15,7 @@ fi
 
 #trap 'echo \"Error at line $LINENO \!\"; exit 1' ERR
 
-../nucfepgen -A ../$A.pdb -a ../${A}_GMX.top -B ../$B.pdb -b ../${B}_GMX.top --maxdist $DIST -O init.pdb -o ab.top
-
-# split at resid 6
-python ../split_molecule.py --resid 6 --top ab.top --output-1 fep_chain1.top --output-2 fep_chain2.top --pdb init.pdb --pdbout1 init_chain1.pdb --pdbout2 init_chain2.pdb
+../nucfepgen -A ../$A.pdb -a ../${A}_GMX.top -B ../$B.pdb -b ../${B}_GMX.top --maxdist $DIST -O init.pdb -o na.top
 
 solvate(){
     TRUNK=$1
@@ -35,25 +32,20 @@ solvate(){
 }
 
 # set up system for paired fep
-python ../split_states.py --top ab.top --output-A paired-a.top --output-B paired-b.top --output-fep fep.top
-solvate fep init
-zsh ../solvate.zsh paired-a
-cat paired-a_solvated.top <(tail -3 fep_ionized.top) > paired-a_ionized.top
-zsh ../solvate.zsh paired-b
-cat paired-b_solvated.top <(tail -3 fep_ionized.top) > paired-b_ionized.top
+solvate na init
+#gmx_d editconf -f na_ionized.gro -o na_ionized.pdb
+python ../split_molecule.py --resid 6 --top na_ionized.top --output-1 na_chain1.top --output-2 na_chain2.top --pdb na_ionized.gro --pdbout1 fep_chain1.gro --pdbout2 fep_chain2.gro
+python ../split_states.py --top na_chain1.top --output-A a_chain1.top --output-B b_chain1.top --output-fep fep_chain1.top
+python ../split_states.py --top na_chain2.top --output-A a_chain2.top --output-B b_chain2.top --output-fep fep_chain2.top
+python ../split_states.py --top na_ionized.top --output-A a_paired.top --output-B b_paired.top --output-fep fep_paired.top
+
+#zsh ../solvate.zsh paired-a
+#cat paired-a_solvated.top <(tail -3 fep_ionized.top) > paired-a_ionized.top
+#zsh ../solvate.zsh paired-b
+#cat paired-b_solvated.top <(tail -3 fep_ionized.top) > paired-b_ionized.top
+
+# split at resid 6
 
 # set up system for chains
-python ../split_states.py --top fep_chain1.top --output-A chain1-a.top --output-B chain1-b.top --output-fep chain1_fep.top
-solvate fep_chain1 init_chain1
-zsh ../solvate.zsh chain1-a
-cat chain1-a_solvated.top <(tail -3 fep_ionized.top) > chain1-a_ionized.top
-zsh ../solvate.zsh chain1-b
-cat chain1-b_solvated.top <(tail -3 fep_ionized.top) > chain1-b_ionized.top
-
-python ../split_states.py --top fep_chain2.top --output-A chain2-a.top --output-B chain2-b.top --output-fep chain2_fep.top
-solvate fep_chain2 init_chain2
-zsh ../solvate.zsh chain2-a
-cat chain2-a_solvated.top <(tail -3 fep_ionized.top) > chain2-a_ionized.top
-zsh ../solvate.zsh chain2-b
-cat chain2-b_solvated.top <(tail -3 fep_ionized.top) > chain2-b_ionized.top
-
+#python ../split_states.py --top fep_chain1.top --output-A chain1-a.top --output-B chain1-b.top --output-fep chain1_fep.top
+#python ../split_states.py --top fep_chain2.top --output-A chain2-a.top --output-B chain2-b.top --output-fep chain2_fep.top

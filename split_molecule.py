@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import os.path
 
 parser = argparse.ArgumentParser(description='Split topology file into 2 molecules.')
 parser.add_argument('--resid', metavar='resid', type=int,
@@ -13,11 +14,11 @@ parser.add_argument('--output-1', dest='output1', type=str,
 parser.add_argument('--output-2', dest='output2', type=str,
                     help='Output second half molecule', required = True)
 parser.add_argument('--pdb', metavar='pdb', type=str,
-                    help='pdb file for coordinate', required = True)
+                    help='pdb (or gro) file for coordinate', required = True)
 parser.add_argument('--pdbout1', metavar='pdbout1', type=str,
-                    help='pdb file for coordinate', required = True)
+                    help='pdb (or gro) file for coordinate', required = True)
 parser.add_argument('--pdbout2', metavar='pdbout2', type=str,
-                    help='pdb file for coordinate', required = True)
+                    help='pdb (or gro) file for coordinate', required = True)
 
 args = parser.parse_args()
 
@@ -54,13 +55,13 @@ class union_find:
 
 split_of_atoms = {}
 charges = [None, 0.0, 0.0]
+atomptrs = [None, 0, 0]
 with (open(args.top, "r")) as fh, (
       open(args.output1, "w")) as fh1, (
       open(args.output2, "w")) as fh2:
     writeselector = [None, fh1, fh2]
     state = ""
     atomid = 0
-    atomptrs = [None, 0, 0]
     for lraw in fh:
         l = lraw.strip()
         if l == "" or l[0] == ';' or l[0] == '#':
@@ -116,16 +117,32 @@ with (open(args.top, "r")) as fh, (
             fh1.write(lraw)
             fh2.write(lraw)
 
+ispdb = (os.path.splitext(args.pdb)[1] == '.pdb')
 with (open(args.pdb, "r")) as pdbfh, (
       open(args.pdbout1, "w")) as pdb1, (
       open(args.pdbout2, "w")) as pdb2:
+    if not ispdb:
+        header = pdbfh.next()
+        pdb1.write(header)
+        pdb2.write(header)
+        natom = int(pdbfh.next().strip())
+        pdb1.write("%5d\n" % (natom - atomptrs[2] + round(charges[2])))
+        pdb2.write("%5d\n" % (natom - atomptrs[1] + round(charges[1])))
     atomid = 0
     nacount = 0
     for l in pdbfh:
-        if l[0:6] not in ["ATOM  ", "HETATM"]:
+        if ispdb and (l[0:6] not in ["ATOM  ", "HETATM"]):
             continue
+        if (not ispdb) and len(l) > 50:
+            pdb1.write(l)
+            pdb2.write(l)
+            break
         if len(split_of_atoms) <= atomid:
-            if l[17:20].strip() == "NA":
+            if ispdb:
+                resname = l[17:20]
+            else:
+                resname = l[5:10]
+            if resname.strip() == "NA":
                 if -round(charges[2]) <= nacount:
                     pdb1.write(l)
                 if -round(charges[1]) <= nacount:
