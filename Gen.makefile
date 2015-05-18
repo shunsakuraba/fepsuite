@@ -1,7 +1,7 @@
 NAB=$(AMBERHOME)/bin/nab
 LEAP=$(AMBERHOME)/bin/tleap
 
-RNAPDBS = gcaucg.pdb gcgccg.pdb gcgucg.pdb gugucg.pdb gcggcg.pdb gcaacg.pdb guggug.pdb
+RNAPDBS = gcaucg.pdb gcuacg.pdb gccgcg.pdb gcgccg.pdb gcgucg.pdb gugucg.pdb gcggcg.pdb gcaacg.pdb guggug.pdb
 
 all: $(subst .pdb,_GMX.top,$(RNAPDBS))
 

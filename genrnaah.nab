@@ -19,10 +19,12 @@ atom a;
 string tmp;
 
 seqs["26"] = "gcaucg";
+seqs["28"] = "gccgcg";
 seqs["30"] = "gcgccg";
 seqs["34"] = "gcgucg";
 seqs["44"] = "gugucg";
 seqs["33"] = "gcggcg";
+seqs["35"] = "gcuacg";
 seqs["25"] = "gcaacg";
 seqs["43"] = "guggug";
 
