@@ -35,9 +35,9 @@ solvate(){
 solvate na init
 #gmx_d editconf -f na_ionized.gro -o na_ionized.pdb
 python ../split_molecule.py --resid 6 --top na_ionized.top --output-1 na_chain1.top --output-2 na_chain2.top --pdb na_ionized.gro --pdbout1 fep_chain1.gro --pdbout2 fep_chain2.gro
-python ../split_states.py --top na_chain1.top --output-A a_chain1.top --output-B b_chain1.top --output-fep fep_chain1.top
-python ../split_states.py --top na_chain2.top --output-A a_chain2.top --output-B b_chain2.top --output-fep fep_chain2.top
-python ../split_states.py --top na_ionized.top --output-A a_paired.top --output-B b_paired.top --output-fep fep_paired.top
+#python ../split_states.py --top na_chain1.top --output-A a_chain1.top --output-B b_chain1.top --output-fep fep_chain1.top
+#python ../split_states.py --top na_chain2.top --output-A a_chain2.top --output-B b_chain2.top --output-fep fep_chain2.top
+#python ../split_states.py --top na_ionized.top --output-A a_paired.top --output-B b_paired.top --output-fep fep_paired.top
 
 #zsh ../solvate.zsh paired-a
 #cat paired-a_solvated.top <(tail -3 fep_ionized.top) > paired-a_ionized.top

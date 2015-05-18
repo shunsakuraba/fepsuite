@@ -100,7 +100,7 @@ with (open(args.top, "r")) as fh, (
             lout = ""
             for i in range(natomids):
                 (st2, na) = split_of_atoms[int(qs[i]) - 1]
-                assert(st == st2)
+                assert st == st2, "state %s, atoms %s spans multiple sequences. Perhaps you specified wrong resid?" % (state, repr(qs))
                 lout = "%s%5d" % (lout, na + 1)
             lout = "%s %s\n" % (lout, qs[natomids])
             writeselector[st].write(lout)
