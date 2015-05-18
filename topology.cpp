@@ -141,7 +141,7 @@ topology::topology(const string& fname)
       if(is.fail() || is.bad()) {
         throw runtime_error("dihedrals format error");
       }
-      if(diheds.count(make_tuple(a, b, c, d, func)) > 0) {
+      if(diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func)) > 0) {
         throw runtime_error("unsupported: dihedral multiple entries");
       }
       vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func)];
