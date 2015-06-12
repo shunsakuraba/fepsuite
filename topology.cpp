@@ -38,6 +38,10 @@ topology::topology(const string& fname)
       state = cmd;
       continue;
     }
+    if(line[0] == '#') {
+      // currently ignore includes / defines ...
+      continue;
+    }
 
     {
       size_t p = line.find(';');
@@ -141,15 +145,20 @@ topology::topology(const string& fname)
       if(is.fail() || is.bad()) {
         throw runtime_error("dihedrals format error");
       }
-      if(diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func)) > 0) {
-        throw runtime_error("unsupported: dihedral multiple entries");
-      }
-      vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func)];
-      
+      vector<double> vals;
       double v;
       while(is >> v){
-        dihedral.push_back(v);
+        vals.push_back(v);
       }
+      int addendum = 0;
+      if(func == 1) {
+          addendum = (int)vals.back(); // rep values
+      }
+      if(addendum == 0 && diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)) > 0) {
+        throw runtime_error("unsupported: dihedral multiple entries");
+      }
+      vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)];
+      dihedral = vals;
     }else if(state == "system" || state == "molecules") {
       // do nothing
     }else{

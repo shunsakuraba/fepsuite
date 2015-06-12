@@ -579,6 +579,7 @@ int main(int argc, char* argv[])
     int z = std::get<2>(k);
     int w = std::get<3>(k);
     int func = std::get<4>(k);
+    int addendum = std::get<5>(k);
     
     int x_in_O = assignOofA[x];
     int y_in_O = assignOofA[y];
@@ -589,7 +590,8 @@ int main(int argc, char* argv[])
                  assignBofO[y_in_O],
                  assignBofO[z_in_O],
                  assignBofO[w_in_O],
-                 func);
+                 func,
+                 addendum);
     if(func != 1 && func != 3) {
       throw runtime_error("dihed func not in {1, 3} not supported");
     }
@@ -626,6 +628,7 @@ int main(int argc, char* argv[])
     int z = std::get<2>(k);
     int w = std::get<3>(k);
     int func = std::get<4>(k);
+    int addendum = std::get<5>(k);
     
     int x_in_O = assignOofB[x];
     int y_in_O = assignOofB[y];
@@ -636,7 +639,8 @@ int main(int argc, char* argv[])
                  assignAofO[y_in_O],
                  assignAofO[z_in_O],
                  assignAofO[w_in_O],
-                 func);
+                 func,
+                 addendum);
     if(Atop.diheds.count(keyA) > 0) {
       continue;
     }
@@ -758,11 +762,20 @@ int main(int argc, char* argv[])
       }
       crdfs << setw(6) << "ATOM  " 
             << setw(5) << std::right << (i + 1)
-            << " "
-            << (atom.length() == 4 ? atom.substr(3, 1) : " ")
-            << setw(3) << std::left
-            << (atom.length() == 4 ? atom.substr(0, 3) : atom)
-            << " " // altLoc
+            << " ";
+      if(atom.length() == 4) {
+        if(isdigit(atom[3])) {
+          crdfs << atom.substr(3, 1) << setw(3) << std::left
+                << atom.substr(0, 3);
+        }else{
+          crdfs << atom;
+        }
+      }else{
+        crdfs << " "
+              << setw(3) << std::left
+              << atom.substr(0,3);
+      }
+      crdfs << " " // altLoc
             << setw(3) << std::right << resname
             << " "
             << "A" // chainID

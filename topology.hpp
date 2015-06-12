@@ -8,11 +8,11 @@
 struct topology {
   enum topotype { AMBER, CHARMM, OPLS };
 
-  // a, b, (c, d,) func
+  // a, b, (c, d,) func (, addendum)
   // um, i know, it's ugly
   typedef std::tuple<int, int, int> bondkeytype;
   typedef std::tuple<int, int, int, int> anglekeytype;
-  typedef std::tuple<int, int, int, int, int> dihedkeytype;
+  typedef std::tuple<int, int, int, int, int, int> dihedkeytype;
 
   topotype defaults;
   std::string moleculename;
