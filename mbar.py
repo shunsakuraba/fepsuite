@@ -100,6 +100,9 @@ kbt = 1.0 / betas[0]
 print "Delta F (kJ/mol) = "
 for i in range(states):
     print Deltaf_ij[i, 0] * kbt
+
+# FIXME: this might be squared value, so kbt**2 might be appropriate.
+# it is undocumented in pymbar and thus we need to read the source
 print "dDelta F matrix (kJ/mol) = "
 for i in range(states):
     for j in range(states):
