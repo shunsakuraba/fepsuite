@@ -170,6 +170,7 @@ int main(int argc, char* argv[])
   p.add<string>("topologyB", 'b', ".top B", true);
   p.add<string>("structureO", 'O', "PDB structure to output", true);
   p.add<string>("topologyO", 'o', ".top output", true);
+  p.add("connectivity", 0, "match atoms by connectivity");
 
   bool ok = p.parse(argc, argv);
 
@@ -222,10 +223,13 @@ int main(int argc, char* argv[])
 
   double pdist = p.get<double>("maxdist");
   assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
-
+  if(p.exist("connectivity")) {
+    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, pdist);
+  }else{
+    assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+  }
   if(!quiet){
     cout << "Atoms assigned:" << endl;
     cout << "Assigned:" << endl;

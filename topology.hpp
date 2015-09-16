@@ -30,7 +30,7 @@ struct topology {
   std::vector<double> charges;
   std::vector<double> masses;
 
-  // bonds
+  // bonds. keytype atom numbers are 0-origin
   std::map<bondkeytype, std::vector<double>> bonds;
   
   // (1-4) pairs
