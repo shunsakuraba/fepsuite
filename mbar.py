@@ -45,7 +45,14 @@ for f in opts.xvgs:
             if l[0] in ['#', '@']:
                 headers.append(l)
             else:
-                data.append([float(x) for x in l.split()])
+                ls = l.split()
+                tt = float(ls[0])
+                if tt < begintime:
+                    continue
+                if tt >= endtime:
+                    # quick hack
+                    break
+                data.append([float(x) for x in ls])
 
     # get temperature
     pat = re.compile("T = (%s) \(K\)" % floatpat)
