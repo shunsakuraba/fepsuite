@@ -88,19 +88,24 @@ with (open(args.top, "r")) as fh, (
             atomptrs[st] += 1
             charges[st] += charge
             atomid += 1
-        elif state in ["bonds", "angles", "dihedrals", "pairs"]:
+        elif state in ["bonds", "angles", "dihedrals", "pairs", "exclusions"]:
             sp = l.split()
             a = int(sp[0]) - 1
             (st, _) = split_of_atoms[a]
             natomids = {"bonds": 2,
                         "angles": 3,
                         "dihedrals": 4,
-                        "pairs": 2}[state]
+                        "pairs": 2,
+                        "exclusions": 2 }[state]
             qs = l.split(None, natomids)
             lout = ""
             for i in range(natomids):
                 (st2, na) = split_of_atoms[int(qs[i]) - 1]
-                assert st == st2, "state %s, atoms %s spans multiple sequences. Perhaps you specified wrong resid?" % (state, repr(qs))
+                if st != st2:
+                    if state == "exclusions":
+                        continue
+                    else:
+                        assert False, "state %s, atoms %s spans multiple sequences. Perhaps you specified wrong resid?" % (state, repr(qs))
                 lout = "%s%5d" % (lout, na + 1)
             lout = "%s %s\n" % (lout, qs[natomids])
             writeselector[st].write(lout)
