@@ -71,6 +71,18 @@ topology::topology(const string& fname)
          fabs(fudgeLJ - 0.5) < 1e-3 &&
          fabs(fudgeQQ - 0.8333) < 1e-3) {
         defaults = AMBER;
+      }else if(nbfunc == 1 &&
+               comb_rule == 2 &&
+               gen_pairs == "yes" &&
+               fabs(fudgeLJ - 1.0) < 1e-3 &&
+               fabs(fudgeQQ - 1.0) < 1e-3) {
+        defaults = CHARMM;
+      }else if(nbfunc == 1 &&
+               comb_rule == 3 &&
+               gen_pairs == "yes" &&
+               fabs(fudgeLJ - 0.5) < 1e-3 &&
+               fabs(fudgeQQ - 0.5) < 1e-3) {
+        defaults = OPLS;
       }else{
         throw runtime_error("topology::topology: unknown default type");
       }
