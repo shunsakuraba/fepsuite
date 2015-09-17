@@ -10,6 +10,7 @@
 #include <fstream>
 #include <limits>
 #include <set>
+#include <queue>
 #include "disjoint_set.hpp"
 
 using namespace std;
@@ -149,6 +150,40 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
   }
 }
 
+static void find_exclusions(const topology &top,
+                            const vector<int> &assignOofX,
+                            vector<vector<int> >& exclusions)
+{
+  int nexcl = top.nexcl;
+
+  // construct bond table
+  vector<vector<int> > adj;
+  top.convert_bonds_to_adj_list(adj);
+
+  for(int i = 0; i < (int)assignOofX.size(); ++i) {
+    vector<bool> visited(assignOofX.size(), false);
+    queue<pair<int, int> > bfsq;
+    bfsq.emplace(i, 0);
+    while(!bfsq.empty()) {
+      auto e = bfsq.front();
+      int v = e.first;
+      int depth = e.second;
+      bfsq.pop();
+      if(visited[v]) continue;
+      if(depth > 0) {
+        exclusions[i].push_back(v);
+      }
+      visited[v] = true;
+      if(depth < nexcl) {
+        for(int x: adj[v]) {
+          if(visited[x]) continue;
+          bfsq.emplace(x, depth + 1);
+        }
+      }
+    }
+  }
+}
+
  
 int main(int argc, char* argv[])
 {
@@ -171,6 +206,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureO", 'O', "PDB structure to output", true);
   p.add<string>("topologyO", 'o', ".top output", true);
   p.add("connectivity", 0, "match atoms by connectivity");
+  p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
 
   bool ok = p.parse(argc, argv);
 
@@ -320,7 +356,8 @@ int main(int argc, char* argv[])
       if(!(std::includes(As.begin(), As.end(),
                          Bs.begin(), Bs.end()) ||
            std::includes(Bs.begin(), Bs.end(),
-                         As.begin(), As.end()))) {
+                         As.begin(), As.end())) &&
+         !p.exist("connectivity")) {
         errcnt++;
         int Ai = assignAofO[i];
         int Bi = assignBofO[i];
@@ -391,7 +428,13 @@ int main(int argc, char* argv[])
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;
   Ofs << ";name  nrexcl" << endl;
-  Ofs << "merged " << Atop.nexcl << endl;
+  {
+    int nexcl = Atop.nexcl;
+    if(p.exist("gen-exclusion")) {
+      nexcl = 0;
+    }
+    Ofs << "merged " << nexcl << endl;
+  }
   Ofs << endl;
 
   // atoms section
@@ -726,6 +769,42 @@ int main(int argc, char* argv[])
                     Btop, false);
   }
   Ofs << endl;
+
+  if(p.exist("gen-exclusion")) {
+    Ofs << "[ exclusions ]" << endl;
+    vector<vector<int> > exclusions(N);
+    // generate intrinsic exclusions
+    find_exclusions(Atop, assignOofA, exclusions);
+    find_exclusions(Btop, assignOofB, exclusions);
+
+    // generate dummy-dummy exclusions
+    for(int i = 0; i < N; ++i) {
+      if(assignAofO[i] == -1 ||
+         assignBofO[i] == -1) {
+        for(int j = 0; j < N; ++j) {
+          if((assignAofO[i] == -1 &&
+              assignBofO[j] == -1) ||
+             (assignBofO[i] == -1 &&
+              assignAofO[j] == -1)) {
+            // A phantom vs B phantom
+            exclusions[i].emplace_back(j);
+          }
+        }
+      }
+    }
+    
+    for(int i = 0; i < N; ++i) {
+      vector<int> &v = exclusions[i];
+      sort(v.begin(), v.end());
+      v.erase(unique(v.begin(), v.end()), v.end());
+      for(int e: v) {
+        assert(e != i);
+        if(e < i) continue;
+        Ofs << (i + 1) << "\t" << (e + 1) << "\t" << "1" << endl;
+      }
+    }
+    Ofs << endl;
+  }
 
   // Generate footer, way to go!
   Ofs << "[ system ]" << endl;
