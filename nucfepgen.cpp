@@ -49,6 +49,9 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
       if((apt - bpt).squaredNorm() > maxdist * maxdist) {
         continue;
       }
+      if(Atop.resids[assignAofO[x]] != Atop.resids[assignAofO[y]]) {
+        continue;
+      }
       As.join(x, y);
     }
   }
@@ -77,6 +80,10 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
     for(int y = 0; y < N; ++y) {
       if(assignAofO[y] == -1 || assignBofO[y] == -1) {
         // Both A phantom and B phantom are excluded
+        continue;
+      }
+      // different resid ==> rejected
+      if(Atop.resids[assignAofO[y]] != Atop.resids[assignAofO[x]]) {
         continue;
       }
       Vector3d bpt = Acoords.col(assignAofO[y]);
@@ -800,7 +807,33 @@ int main(int argc, char* argv[])
       for(int e: v) {
         assert(e != i);
         if(e < i) continue;
-        Ofs << (i + 1) << "\t" << (e + 1) << "\t" << "1" << endl;
+        int iresid = -1, eresid = -1;
+        string iname, ename;
+        if(assignAofO[i] == -1 &&
+           assignBofO[e] == -1) {
+          int iid = assignBofO[i];
+          int eid = assignAofO[e];
+          iresid = Btop.resids[iid];
+          eresid = Atop.resids[eid];
+          iname = Btop.names[iid];
+          ename = Atop.names[eid];
+        }else if(assignAofO[e] == -1 &&
+                 assignBofO[i] == -1) {
+          int iid = assignAofO[i];
+          int eid = assignBofO[e];
+          iresid = Atop.resids[iid];
+          eresid = Btop.resids[eid];
+          iname = Atop.names[iid];
+          ename = Btop.names[eid];
+        }
+        Ofs << (i + 1) << "\t" << (e + 1) << "\t" << "1";
+        if(iresid >= 0) {
+          Ofs << "\t; excl "
+              << iresid << " " << iname << " - "
+              << eresid << " " << ename << endl;
+        }else{
+          Ofs << endl;
+        }
       }
     }
     Ofs << endl;
