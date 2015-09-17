@@ -191,4 +191,5 @@ topology::write(const string& fname)
   if(ofs.bad()) {
     throw runtime_error("I/O error on topology::write");
   }
+  throw runtime_error("Unimplemented: toplogy::write()");
 }

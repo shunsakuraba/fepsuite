@@ -90,6 +90,7 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
 
   vector<bool> Avisited(Aadjlist.size());
   
+  // um, indeed, this need not be priority queue (BFS suffice)
   priority_queue<pair<int, int>, 
                  vector<pair<int, int> >,
                  greater<pair<int, int> > > pq;
