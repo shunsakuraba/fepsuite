@@ -3,6 +3,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <cmath>
+#include <algorithm>
 #include "topology.hpp"
 
 #include <iostream> // debug
@@ -193,3 +194,21 @@ topology::write(const string& fname)
   }
   throw runtime_error("Unimplemented: toplogy::write()");
 }
+
+void
+topology::convert_bonds_to_adj_list(vector<vector<int> > &adj_list) const
+{
+  adj_list.clear();
+  adj_list.resize(this->names.size());
+  for(const auto& bonditer: this->bonds) {
+    int a = get<0>(bonditer.first);
+    int b = get<1>(bonditer.first);
+    adj_list[a].push_back(b);
+    adj_list[b].push_back(a);
+  }
+  for(auto &v: adj_list) {
+    sort(v.begin(), v.end());
+  }
+}
+
+

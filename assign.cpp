@@ -60,22 +60,6 @@ void assign_atoms(const string& process_atoms,
   }
 }
 
-static void convert_bonds_to_adj_list(const topology &top, vector<vector<int> > &adj_list)
-{
-  adj_list.clear();
-  adj_list.resize(top.names.size());
-  for(const auto& bonditer: top.bonds) {
-    int a = get<0>(bonditer.first);
-    int b = get<1>(bonditer.first);
-    adj_list[a].push_back(b);
-    adj_list[b].push_back(a);
-  }
-  for(auto &v: adj_list) {
-    sort(v.begin(), v.end());
-  }
-}
-
-
 void assign_atoms_connectivity(const MatrixXd& distmat,
                                const topology& Atop,
                                const topology& Btop,
@@ -85,8 +69,8 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
 {
   // Turn bonds into adjacent list
   vector<vector<int> > Aadjlist, Badjlist;
-  convert_bonds_to_adj_list(Atop, Aadjlist);
-  convert_bonds_to_adj_list(Btop, Badjlist);
+  Atop.convert_bonds_to_adj_list(Aadjlist);
+  Btop.convert_bonds_to_adj_list(Badjlist);
 
   vector<bool> Avisited(Aadjlist.size());
   
