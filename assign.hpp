@@ -17,4 +17,5 @@ void assign_atoms_connectivity(const Eigen::MatrixXd& distmat,
                                const topology& Btop,
                                std::vector<int>& assignBofA,
                                std::vector<int>& assignAofB,
+                               std::vector<int>& Adepth,
                                double threshold);

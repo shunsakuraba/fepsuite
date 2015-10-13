@@ -212,3 +212,20 @@ topology::convert_bonds_to_adj_list(vector<vector<int> > &adj_list) const
 }
 
 
+void
+topology::convert_pairs_to_adj_list(vector<vector<int> > &list) const
+{
+  list.clear();
+  list.resize(this->names.size());
+  for(const auto& pairiter: this->pairs) {
+    int a = pairiter.first.first;
+    int b = pairiter.first.second;
+    list[a].push_back(b);
+    list[b].push_back(a);
+  }
+  for(auto &v: list) {
+    sort(v.begin(), v.end());
+  }
+}
+
+

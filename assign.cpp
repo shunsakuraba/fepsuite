@@ -65,14 +65,15 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
                                const topology& Btop,
                                vector<int>& assignBofA,
                                vector<int>& assignAofB,
+                               vector<int>& depth,
                                double threshold)
 {
   // Turn bonds into adjacent list
   vector<vector<int> > Aadjlist, Badjlist;
   Atop.convert_bonds_to_adj_list(Aadjlist);
   Btop.convert_bonds_to_adj_list(Badjlist);
-
-  vector<bool> Avisited(Aadjlist.size());
+  
+  depth = vector<int>(Aadjlist.size(), -1);
   
   // um, indeed, this need not be priority queue (BFS suffice)
   priority_queue<pair<int, int>, 
@@ -89,8 +90,8 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
     pq.pop();
     int Ai = e.second;
 
-    if(Avisited[Ai]) continue;
-    Avisited[Ai] = true;
+    if(depth[Ai] >= 0) continue;
+    depth[Ai] = e.first;
 
     assert(assignBofA[Ai] >= 0);
     int Bi = assignBofA[Ai];
@@ -124,6 +125,7 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
       }
     }
   }
+
 }
 
 

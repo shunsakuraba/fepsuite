@@ -49,5 +49,6 @@ struct topology {
   void write(const std::string& fname);
 
   void convert_bonds_to_adj_list(std::vector<std::vector<int> > &adj_list) const;
+  void convert_pairs_to_adj_list(std::vector<std::vector<int> > &pairs) const;
 };
 
