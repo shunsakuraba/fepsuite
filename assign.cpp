@@ -66,7 +66,8 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
                                vector<int>& assignBofA,
                                vector<int>& assignAofB,
                                vector<int>& depth,
-                               double threshold)
+                               double threshold,
+                               bool must_be_identical_names)
 {
   // Turn bonds into adjacent list
   vector<vector<int> > Aadjlist, Badjlist;
@@ -119,6 +120,10 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
       }
       if(Bn != -1) {
         // found Bn
+        if(must_be_identical_names && 
+           Atop.names[An] != Btop.names[Bn]) {
+          continue;
+        }
         assignBofA[An] = Bn;
         assignAofB[Bn] = An;
         pq.emplace(make_pair(e.first + 1, An));

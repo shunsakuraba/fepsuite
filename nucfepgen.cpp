@@ -353,6 +353,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureO", 'O', "PDB structure to output", true);
   p.add<string>("topologyO", 'o', ".top output", true);
   p.add("connectivity", 0, "match atoms by connectivity");
+  p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
 
   bool ok = p.parse(argc, argv);
@@ -405,10 +406,11 @@ int main(int argc, char* argv[])
   vector<int> assignAofB(Bcoords.cols(), -1);
   vector<int> Adepth;
 
+  bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
   assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  if(p.exist("connectivity")) {
-    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist);
+  if(use_connectivity) {
+    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
     correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
   }else{
     assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
@@ -489,7 +491,7 @@ int main(int argc, char* argv[])
                          Bs.begin(), Bs.end()) ||
            std::includes(Bs.begin(), Bs.end(),
                          As.begin(), As.end())) &&
-         !p.exist("connectivity")) {
+         !use_connectivity) {
         errcnt++;
         int Ai = assignAofO[i];
         int Bi = assignBofO[i];

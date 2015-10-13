@@ -18,4 +18,5 @@ void assign_atoms_connectivity(const Eigen::MatrixXd& distmat,
                                std::vector<int>& assignBofA,
                                std::vector<int>& assignAofB,
                                std::vector<int>& Adepth,
-                               double threshold);
+                               double threshold,
+                               bool must_be_identical_names);
