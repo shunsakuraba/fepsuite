@@ -1,0 +1,2 @@
+dihedral C4' C3' O3' HO3' -60
+dihedral C3' C2' O2' HO2' -120
