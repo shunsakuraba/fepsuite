@@ -95,7 +95,7 @@ with (open(args.top, "r")) as fh, (
             natomids = {"bonds": 2,
                         "angles": 3,
                         "dihedrals": 4,
-                        "pairs": 2}[state]
+                        "pairs": 2 }[state]
             qs = l.split(None, natomids)
             lout = ""
             for i in range(natomids):
@@ -104,6 +104,17 @@ with (open(args.top, "r")) as fh, (
                 lout = "%s%5d" % (lout, na + 1)
             lout = "%s %s\n" % (lout, qs[natomids])
             writeselector[st].write(lout)
+        elif state == "exclusions":
+            sp = l.split()
+            a = int(sp[0]) - 1
+            (st, na) = split_of_atoms[a]
+            lout = "%d" % (na + 1)
+            for bp1 in sp[1:]:
+                b = int(bp1) - 1
+                (st2, nb) = split_of_atoms[b]
+                if st == st2:
+                    lout += "\t%d" % (nb + 1)
+            writeselector[st].write(lout + "\n")
         elif state == "molecules":
             sp = l.split()
             if sp[0] == "NA":

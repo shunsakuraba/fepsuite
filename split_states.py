@@ -12,6 +12,8 @@ parser.add_argument('--output-B', dest='outputB', type=str,
                     help='Output in-state-B spring morphing', required = True)
 parser.add_argument('--output-fep', dest='outputFEP', type=str,
                     help='Output A-to-B morphing', required = True)
+parser.add_argument('--discharge', dest='discharge', action = 'store_true',
+                    help='Zero-out phantom atom charges in FEP')
 
 args = parser.parse_args()
 
@@ -37,6 +39,19 @@ with (open(args.outputA, "w")) as Afh, (
             continue
         if state == 'atoms':
             st = l.split()
+            ph = False
+            if st[1] == "PHA":
+                phantomInA.add(int(st[0]))
+                ph = True
+            if st[8] == "PHA":
+                phantomInB.add(int(st[0]))
+                ph = True
+
+            fep_ch0 = "%12s" % st[6]
+            fep_ch1 = "%12s" % st[9]
+            if args.discharge and ph:
+                fep_ch0 = "%12.5e" % 0.0
+                fep_ch1 = "%12.5e" % 0.0
             Afh.write(" ".join(["%5s" % st[0],
                                 "%4s" % st[1],
                                 "%3s" % st[2],
@@ -46,7 +61,7 @@ with (open(args.outputA, "w")) as Afh, (
                                 "%12s" % st[6],
                                 "%12s" % st[7],
                                 "%4s" % st[1],
-                                "%12s" % st[6], 
+                                fep_ch0,
                                 "%12s" % st[7],
                                 "\n"]))
             Bfh.write(" ".join(["%5s" % st[0],
@@ -55,17 +70,24 @@ with (open(args.outputA, "w")) as Afh, (
                                 "%4s" % st[3],
                                 "%5s" % st[4],
                                 "%4s" % st[5],
-                                "%12s" % st[9],
+                                fep_ch1,
                                 "%12s" % st[10],
                                 "%4s" % st[8],
                                 "%12s" % st[9], 
                                 "%12s" % st[10],
                                 "\n"]))
-            FEPfh.write(lraw)
-            if st[1] == "PHA":
-                phantomInA.add(int(st[0]))
-            if st[8] == "PHA":
-                phantomInB.add(int(st[0]))
+            FEPfh.write(" ".join(["%5s" % st[0],
+                                  "%4s" % st[1],
+                                  "%3s" % st[2],
+                                  "%4s" % st[3],
+                                  "%5s" % st[4],
+                                  "%4s" % st[5],
+                                  fep_ch0,
+                                  "%12s" % st[7],
+                                  "%4s" % st[8],
+                                  fep_ch1,
+                                  "%12s" % st[10],
+                                  "\n"]))
         elif state in ["bonds", "angles", "dihedrals"]:
             l = l.split(";")[0]
             st = l.split()

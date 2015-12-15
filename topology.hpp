@@ -30,7 +30,7 @@ struct topology {
   std::vector<double> charges;
   std::vector<double> masses;
 
-  // bonds
+  // bonds. keytype atom numbers are 0-origin
   std::map<bondkeytype, std::vector<double>> bonds;
   
   // (1-4) pairs
@@ -47,5 +47,8 @@ struct topology {
   topology(const std::string& fname);
   
   void write(const std::string& fname);
+
+  void convert_bonds_to_adj_list(std::vector<std::vector<int> > &adj_list) const;
+  void convert_pairs_to_adj_list(std::vector<std::vector<int> > &pairs) const;
 };
 

@@ -10,6 +10,8 @@
 #include <fstream>
 #include <limits>
 #include <set>
+#include <queue>
+#include <algorithm>
 #include "disjoint_set.hpp"
 
 using namespace std;
@@ -48,6 +50,9 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
       if((apt - bpt).squaredNorm() > maxdist * maxdist) {
         continue;
       }
+      if(Atop.resids[assignAofO[x]] != Atop.resids[assignAofO[y]]) {
+        continue;
+      }
       As.join(x, y);
     }
   }
@@ -76,6 +81,10 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
     for(int y = 0; y < N; ++y) {
       if(assignAofO[y] == -1 || assignBofO[y] == -1) {
         // Both A phantom and B phantom are excluded
+        continue;
+      }
+      // different resid ==> rejected
+      if(Atop.resids[assignAofO[y]] != Atop.resids[assignAofO[x]]) {
         continue;
       }
       Vector3d bpt = Acoords.col(assignAofO[y]);
@@ -149,7 +158,180 @@ void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords,
   }
 }
 
+static void find_exclusions(const topology &top,
+                            const vector<int> &assignOofX,
+                            vector<vector<int> >& exclusions)
+{
+  assert(exclusions.size() != 0);
+  int nexcl = top.nexcl;
+
+  // construct bond table
+  vector<vector<int> > adj;
+  top.convert_bonds_to_adj_list(adj);
+
+  for(int i = 0; i < (int)adj.size(); ++i) {
+    vector<bool> visited(adj.size(), false);
+    queue<pair<int, int> > bfsq;
+    bfsq.emplace(i, 0);
+    while(!bfsq.empty()) {
+      auto e = bfsq.front();
+      int v = e.first;
+      int depth = e.second;
+      bfsq.pop();
+      if(visited[v]) continue;
+      if(depth > 0) {
+        exclusions[assignOofX[i]].push_back(assignOofX[v]);
+      }
+      visited[v] = true;
+      if(depth < nexcl) {
+        for(int x: adj[v]) {
+          if(visited[x]) continue;
+          bfsq.emplace(x, depth + 1);
+        }
+      }
+    }
+  }
+}
+
+static void merge_assigns(const vector<int>& assignBofA,
+                          const vector<int>& assignAofB,
+                          vector<int>& assignOofA,
+                          vector<int>& assignOofB,
+                          vector<int>& assignAofO,
+                          vector<int>& assignBofO,
+                          int &N)
+{
+  int Bunassigned = 0;
+  for(int i = 0; i < (int)assignAofB.size(); ++i) {
+    if(assignAofB[i] == -1) Bunassigned++;
+  }
+  N = assignBofA.size() + Bunassigned;
+  assignOofA = vector<int>(assignBofA.size(), -1);
+  assignOofB = vector<int>(assignAofB.size(), -1);
+  assignAofO = vector<int>(N, -1);
+  assignBofO = vector<int>(N, -1);
+
+  for(int i = 0; i < (int)assignOofA.size(); ++i) {
+    assignOofA[i] = i;
+    assignAofO[i] = i;
+  }
+  for(int j = 0, ptr = (int)assignBofA.size();
+      j < (int)assignOofB.size(); ++j) {
+    if(assignAofB[j] == -1) {
+      assignOofB[j] = ptr;
+      ptr++;
+    }else{
+      assignOofB[j] = assignOofA[assignAofB[j]];
+    }
+    assignBofO[assignOofB[j]] = j;
+  }
+}
  
+void correct_assign_by_exclusion(const topology &Atop,
+                                 const topology &Btop,
+                                 vector<int> &assignBofA,
+                                 vector<int> &assignAofB,
+                                 vector<int> &Adepth)
+{
+  vector<vector<int> > Apairs_A(assignBofA.size()), Bpairs_B(assignAofB.size());
+  Atop.convert_pairs_to_adj_list(Apairs_A);
+  Btop.convert_pairs_to_adj_list(Bpairs_B);
+  bool found;
+  do {
+    found = false;
+    int maxdepth = -1;
+    int Amax, Bmax;
+    vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
+    int N;
+    // try to generate current assign
+    merge_assigns(assignBofA, assignAofB, 
+                  assignOofA, assignOofB,
+                  assignAofO, assignBofO,
+                  N);
+    // generate exclusion
+    vector<vector<int> > Aexclusions(N), Bexclusions(N);
+    find_exclusions(Atop, assignOofA, Aexclusions);
+    find_exclusions(Btop, assignOofB, Bexclusions);
+
+    // generate pairs and convert
+    vector<vector<int> > Apairs(N), Bpairs(N);
+    for(int i = 0; i < (int) Apairs_A.size(); ++i) {
+      for(int v: Apairs_A[i]) {
+        Apairs[assignOofA[i]].push_back(assignOofA[v]);
+      }
+    }
+    for(int i = 0; i < (int) Bpairs_B.size(); ++i) {
+      for(int v: Bpairs_B[i]) {
+        Bpairs[assignOofB[i]].push_back(assignOofB[v]);
+      }
+    }
+    
+    vector<int> xors;
+    for(int i = 0; i < (int)assignOofA.size(); ++i) {
+      if(assignAofO[i] == -1 ||
+         assignBofO[i] == -1){
+        continue;
+      }
+      for(int mode = 0; mode < 2; ++mode) {
+        xors.clear();
+        if(mode == 0) {
+          // excls
+          sort(Aexclusions[i].begin(), Aexclusions[i].end());
+          sort(Bexclusions[i].begin(), Bexclusions[i].end());
+          set_symmetric_difference(Aexclusions[i].begin(),
+                                   Aexclusions[i].end(),
+                                   Bexclusions[i].begin(),
+                                   Bexclusions[i].end(),
+                                   back_inserter(xors));
+        }else if(mode == 1) {
+          sort(Apairs[i].begin(), Apairs[i].end());
+          sort(Bpairs[i].begin(), Bpairs[i].end());
+          set_symmetric_difference(Apairs[i].begin(),
+                                   Apairs[i].end(),
+                                   Bpairs[i].begin(),
+                                   Bpairs[i].end(),
+                                   back_inserter(xors));
+        }else{
+          assert(false);
+        }
+        for(int j: xors) {
+          if(assignAofO[j] == -1 ||
+             assignBofO[j] == -1){
+            continue;
+          }
+          // found unmatching exclusion
+          found = true;
+          int d;
+          d = Adepth[assignAofO[i]];
+          if(d > maxdepth) {
+            maxdepth = d;
+            Amax = assignAofO[i];
+            Bmax = assignBofO[i];
+          }
+          d = Adepth[assignAofO[j]];
+          if(d > maxdepth) {
+            maxdepth = d;
+            Amax = assignAofO[j];
+            Bmax = assignBofO[j];
+          }
+        }
+      }
+    }
+    if(found) {
+      cerr << "Found unmatching exclusion" << endl;
+      cerr << "Removing atom " 
+           << Atop.resnames[Amax] << "_" 
+           << Atop.resids[Amax] << ":"
+           << Atop.names[Amax] << " - "
+           << Btop.resnames[Bmax] << "_" 
+           << Btop.resids[Bmax] << ":"
+           << Btop.names[Bmax] << endl;
+      assignBofA[Amax] = -1;
+      assignAofB[Bmax] = -1;
+    }
+  }while(found);
+}
+
 int main(int argc, char* argv[])
 {
   cmdline::parser p;
@@ -170,6 +352,9 @@ int main(int argc, char* argv[])
   p.add<string>("topologyB", 'b', ".top B", true);
   p.add<string>("structureO", 'O', "PDB structure to output", true);
   p.add<string>("topologyO", 'o', ".top output", true);
+  p.add("connectivity", 0, "match atoms by connectivity");
+  p.add("assign-by-name", 0, "match atoms by both connectivity and name");
+  p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
 
   bool ok = p.parse(argc, argv);
 
@@ -219,13 +404,19 @@ int main(int argc, char* argv[])
   // assign atoms by distance
   vector<int> assignBofA(Acoords.cols(), -1);
   vector<int> assignAofB(Bcoords.cols(), -1);
+  vector<int> Adepth;
 
+  bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
   assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
-
+  if(use_connectivity) {
+    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
+    correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
+  }else{
+    assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+  }
   if(!quiet){
     cout << "Atoms assigned:" << endl;
     cout << "Assigned:" << endl;
@@ -240,6 +431,7 @@ int main(int argc, char* argv[])
              << Bpdb.get_chains()[j] << ":"
              << Bpdb.get_residuenames()[j] << ":"
              << Bpdb.get_resids()[j] << ":" << Bnames[j]
+             << " dist = " << (Acoords.col(i) - Bcoords.col(j)).norm()
              << endl;
       }
     }
@@ -265,32 +457,15 @@ int main(int argc, char* argv[])
     }
   }
 
-  int Bunassigned = 0;
-  for(int i = 0; i < (int)Bnames.size(); ++i) {
-    if(assignAofB[i] == -1) Bunassigned++;
-  }
-  int N = Acoords.cols() + Bunassigned;
-  
-  // Make map from A/B, to/from output
-  vector<int> assignOofA(Acoords.cols(), -1);
-  vector<int> assignOofB(Bcoords.cols(), -1);
-  vector<int> assignAofO(N, -1);
-  vector<int> assignBofO(N, -1);
+  vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
+  int N;
 
-  for(int i = 0; i < (int)assignOofA.size(); ++i) {
-    assignOofA[i] = i;
-    assignAofO[i] = i;
-  }
-  for(int j = 0, ptr = Acoords.cols();
-      j < (int)assignOofB.size(); ++j) {
-    if(assignAofB[j] == -1) {
-      assignOofB[j] = ptr;
-      ptr++;
-    }else{
-      assignOofB[j] = assignOofA[assignAofB[j]];
-    }
-    assignBofO[assignOofB[j]] = j;
-  }
+  // Make map from A/B, to/from output
+  merge_assigns(assignBofA, assignAofB, 
+                assignOofA, assignOofB,
+                assignAofO, assignBofO,
+                N);
+
 
   // Sanity check
   {
@@ -316,7 +491,8 @@ int main(int argc, char* argv[])
       if(!(std::includes(As.begin(), As.end(),
                          Bs.begin(), Bs.end()) ||
            std::includes(Bs.begin(), Bs.end(),
-                         As.begin(), As.end()))) {
+                         As.begin(), As.end())) &&
+         !use_connectivity) {
         errcnt++;
         int Ai = assignAofO[i];
         int Bi = assignBofO[i];
@@ -387,7 +563,13 @@ int main(int argc, char* argv[])
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;
   Ofs << ";name  nrexcl" << endl;
-  Ofs << "merged " << Atop.nexcl << endl;
+  {
+    int nexcl = Atop.nexcl;
+    if(p.exist("gen-exclusion")) {
+      nexcl = 0;
+    }
+    Ofs << "merged " << nexcl << endl;
+  }
   Ofs << endl;
 
   // atoms section
@@ -722,6 +904,63 @@ int main(int argc, char* argv[])
                     Btop, false);
   }
   Ofs << endl;
+
+  if(p.exist("gen-exclusion")) {
+    Ofs << "[ exclusions ]" << endl;
+    vector<vector<int> > exclusions(N);
+    // generate intrinsic exclusions
+    find_exclusions(Atop, assignOofA, exclusions);
+    find_exclusions(Btop, assignOofB, exclusions);
+
+    // generate dummy-dummy exclusions
+    for(int i = 0; i < N; ++i) {
+      if(assignAofO[i] == -1 ||
+         assignBofO[i] == -1) {
+        for(int j = 0; j < N; ++j) {
+          if((assignAofO[i] == -1 &&
+              assignBofO[j] == -1) ||
+             (assignBofO[i] == -1 &&
+              assignAofO[j] == -1)) {
+            // A phantom vs B phantom
+            exclusions[i].emplace_back(j);
+          }
+        }
+      }
+    }
+    
+    for(int i = 0; i < N; ++i) {
+      vector<int> &v = exclusions[i];
+      sort(v.begin(), v.end());
+      v.erase(unique(v.begin(), v.end()), v.end());
+      ostringstream os;
+      Ofs << (i + 1);
+      for(int e: v) {
+        assert(e != i);
+        int iresid = -1, eresid = -1;
+        string iname, ename;
+        if(assignAofO[i] == -1 &&
+           assignBofO[e] == -1) {
+          int iid = assignBofO[i];
+          int eid = assignAofO[e];
+          iresid = Btop.resids[iid];
+          eresid = Atop.resids[eid];
+          iname = Btop.names[iid];
+          ename = Atop.names[eid];
+        }else if(assignAofO[e] == -1 &&
+                 assignBofO[i] == -1) {
+          int iid = assignAofO[i];
+          int eid = assignBofO[e];
+          iresid = Atop.resids[iid];
+          eresid = Btop.resids[eid];
+          iname = Atop.names[iid];
+          ename = Btop.names[eid];
+        }
+        Ofs << "\t" << (e + 1);
+      }
+      Ofs << endl;
+    }
+    Ofs << endl;
+  }
 
   // Generate footer, way to go!
   Ofs << "[ system ]" << endl;
