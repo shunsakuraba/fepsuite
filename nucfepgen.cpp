@@ -431,6 +431,7 @@ int main(int argc, char* argv[])
              << Bpdb.get_chains()[j] << ":"
              << Bpdb.get_residuenames()[j] << ":"
              << Bpdb.get_resids()[j] << ":" << Bnames[j]
+             << " dist = " << (Acoords.col(i) - Bcoords.col(j)).norm()
              << endl;
       }
     }
