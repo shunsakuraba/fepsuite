@@ -51,25 +51,41 @@ cat > $opt2gauin << EOF
 --Link1--
 %oldchk=$opt1check
 %chk=$opt2check
-#PBEPBE/Def2TZVP EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water,Read)
+#PBEPBE/Def2TZVP EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water)
 Geom=Checkpoint Opt
 
 Optimization phase 2
 
 $CHARGE 1
-COORD DUMMY DUMMY DUMMY
 
 
 EOF
 
 python $basedir/add-constraint.py $opt2gauin $basestructure $baseconstraint > $opt2gau
 
-sed -i '/DUMMY/d' $opt2gau
+zsh $basedir/g09run.zsh $basename $opt2gau
 
+opt3gau=${basestructurename}.opt3.gau
+opt3gauin=${basestructurename}.opt3.gau.in
+opt3check=${basestructurename}.opt3.chk
 
 # PBE/Def2TZVPP/COSMO for optimization 2nd phase
+sed "/%oldchk=/c%oldchk=$opt2check
+/%chk=/c%chk=$opt3check
+s/phase 2/phase 3/;s/Def2TZVP/Def2TZVPP/" $opt2gau > $opt3gau
+zsh $basedir/g09run.zsh $basename $opt3gau
 
+
+opt4gau=${basestructurename}.opt4.gau
+opt4gauin=${basestructurename}.opt4.gau.in
+opt4check=${basestructurename}.opt4.chk
 
 # PBE/6-311++G(3df,3pd)/COSMO for final phase
+# Tight optimization & tight integration
 # Unfortunately G09 does not support Def2TZVPPD (as of rev. d01)
+sed "/%oldchk=/c%oldchk=$opt3check
+/%chk=/c%chk=$opt4check
+s/phase 3/phase 4/;s/Def2TZVPP/6-311++G(3df,3pd) Int=UltraFine/;s/\\bpopt\\b/popt=VeryTight/" $opt3gau > $opt4gau
+zsh $basedir/g09run.zsh $basename $opt4gau
+
 

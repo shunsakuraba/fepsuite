@@ -50,20 +50,24 @@ with open(constraintfile, "rt") as fh:
             sys.exit(1)
 
 with open(gaufile, "rt") as fh:
-    have_modredundant = True # FIXME
     for l in fh:
-        if len(l) > 0 and l[0] in "%-#":
-            if l[0] == "#":
-                l = re.sub(r"\bopt\b", "popt", l, flags = re.I)
+        if len(l) == 0 or l[0] != "#":
             sys.stdout.write(l)
             continue
+        # "#" line
+        l = re.sub(r"\bopt\b", "popt", l, flags = re.I)
+        sys.stdout.write(l)
+        break
+
+    for l in fh:
         if l.strip() == "":
             sys.stdout.write("Geom=ModRedundant\n")
-            if not have_modredundant:
-                print >> sys.stderr, "No \"OPT\" detected"
-                sys.exit(1)
             sys.stdout.write("\n")
             break
+        else:
+            l = re.sub(r"\bopt\b", "popt", l, flags = re.I)
+            sys.stdout.write(l)
+            continue
     # comment line
     l = fh.next()
     sys.stdout.write(l)
