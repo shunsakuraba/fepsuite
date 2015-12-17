@@ -2,9 +2,10 @@ import pybel
 import openbabel as ob
 import sys
 import os.path
+import math
 
-if len(sys.argv) != 3:
-    print >> sys.stderr, "Usage: %s [Base mol] [Backbone mol]" % sys.argv[0]
+if len(sys.argv) != 4:
+    print >> sys.stderr, "Usage: %s [Base mol] [Backbone mol] [output file]" % sys.argv[0]
     sys.exit(1)
 
 basefile = sys.argv[1]
@@ -33,48 +34,18 @@ if back == None:
     sys.exit(1)
 backmol = back.OBMol
 
-
-# This seems not necessary at all?
-def repair_sprious_bond(mol):
-    """Repair topology by removing sprious bond b/w H-C of H-O-C"""
-    
-    for a in ob.OBMolAtomIter(mol):
-        if a.GetAtomicNum() == 1:
-            # Hydrogen
-            acrd = a.GetVector()
-            lmin = 1e+5
-            for b in ob.OBAtomAtomIter(a):
-                bcrd = b.GetVector()
-                diff = ob.vector3(acrd)
-                diff -= bcrd
-                lmin = min(lmin, diff.length_2())
-            # This logic may look stupid...
-            for bb in ob.OBAtomBondIter(a):
-                if a.GetIdx() == bb.GetBeginAtomIdx():
-                    bid = bb.GetEndAtomIdx()
-                else:
-                    bid = bb.GetBeginAtomIdx()
-                b = mol.GetAtom(bid)
-                bcrd = b.GetVector()
-                diff = ob.vector3(acrd)
-                diff -= bcrd
-                if diff.length_2() != lmin:
-                    print >> sys.stderr, "Removing bond ", a.GetResidue().GetAtomID(a).strip(), b.GetResidue().GetAtomID(b).strip()
-                    mol.DeleteBond(bb)
-                    break
-
-repair_sprious_bond(bmol)
-repair_sprious_bond(backmol)
-
+def atomid(atom):
+    return atom.GetResidue().GetAtomID(atom).strip()
 def find_D_atoms(mol):
     """Find D atoms or D-starting atoms from mol"""
 
     for a in ob.OBMolAtomIter(mol):
-        atomid = a.GetResidue().GetAtomID(a).strip()
-        if a.GetIsotope() == 2 or atomid[0].upper() == 'D':
+        aid = atomid(a)
+        if a.GetIsotope() == 2 or aid[0].upper() == 'D':
             d = a
-            print >> sys.stderr, "Connector atom: ", a.GetIdx(), atomid
+            print >> sys.stderr, "Connector atom: ", a.GetIdx(), aid
             p = ob.OBAtomAtomIter(a).next()
+            print >> sys.stderr, " Parent atom: ", p.GetIdx(), atomid(p)
             return (d, p)
 
 (base_d, base_p) = find_D_atoms(bmol)
@@ -91,7 +62,7 @@ bmol.Align(base_d, base_p, ppos, dpos)
 bmol.DeleteAtom(base_d)
 backmol.DeleteAtom(backbone_d)
 
-
+# Connect two molecules
 n = backmol.NumAtoms()
 ap = backbone_p.GetIdx()
 bp = base_p.GetIdx() + n
@@ -100,7 +71,63 @@ backmol += bmol
 builder = ob.OBBuilder()
 builder.Connect(backmol, ap, bp)
 
-output = pybel.Outputfile('pdb', "debug.pdb", overwrite=True)
+# Fix "HO" get misunderstood as Holmium (atom number 67)
+for a in ob.OBMolAtomIter(backmol):
+    if a.GetAtomicNum() == 67:
+        a.SetAtomicNum(1)
+
+# Get residue name
+def get_residue_name(mol):
+    a = ob.OBMolAtomIter(bmol).next()
+    return a.GetResidue().GetName()
+
+rn = get_residue_name(bmol)
+for r in ob.OBResidueIter(backmol):
+    r.SetName(rn)
+
+# Topology completed. Evaluate the vdW
+ff = ob.OBForceField.FindForceField("MMFF94")
+def eval_energy(mol):
+    ff.Setup(mol)
+    return ff.E_VDW()
+def find_torsion_of_bond(mol, a, b):
+    for dh in ob.OBMolTorsionIter(mol):
+        if ((dh[1] + 1, dh[2] + 1) == (a, b) or
+            (dh[1] + 1, dh[2] + 1) == (b, a)):
+            return tuple([mol.GetAtom(dh[i] + 1) for i in range(4)])
+            break
+torsion = find_torsion_of_bond(backmol, ap, bp)
+print >> sys.stderr, ("Scanning around %s-%s-%s-%s" %
+                      tuple([atomid(a) for a in torsion]))
+stepsize = 10
+nround = 360 / stepsize
+minenergy = 1e+4
+minangle = -1
+for i in range(nround):
+    newangle = float(i * stepsize)
+    backmol.SetTorsion(torsion[0],
+                       torsion[1],
+                       torsion[2],
+                       torsion[3],
+                       newangle * 2 * math.pi / 360)
+    energy = eval_energy(backmol)
+    print >> sys.stderr, "angle = %4f VDW = %f" % (newangle, energy)
+    if energy < minenergy:
+        minenergy = energy
+        minangle = newangle
+print >> sys.stderr, "--------"
+print >> sys.stderr, "Minimum collision angle = %f" % minangle
+backmol.SetTorsion(torsion[0],
+                   torsion[1],
+                   torsion[2],
+                   torsion[3],
+                   minangle * 2 * math.pi / 360)
+
+outputfile = sys.argv[3]
+outputtype = os.path.splitext(backbonefile)[1]
+outputtype = outputtype.lstrip('.')
+
+output = pybel.Outputfile(outputtype, outputfile, overwrite=True)
 output.write(pybel.Molecule(backmol))
 
 
