@@ -30,7 +30,7 @@ basename=${basestructure:t:r}
 initialgau=${basestructurename}.init.gau
 
 opt1gau=${basestructurename}.opt1.gau
-opt1check=${basestructurename}.opt1.chk
+opt1check=${basename}.opt1.chk
 $ANTECHAMBER \
     -fi $basestructuretype -i $basestructure \
     -fo gcrt -o $initialgau \
@@ -44,7 +44,7 @@ zsh $basedir/g09run.zsh $basename $opt1gau
 
 opt2gau=${basestructurename}.opt2.gau
 opt2gauin=${basestructurename}.opt2.gau.in
-opt2check=${basestructurename}.opt2.chk
+opt2check=${basename}.opt2.chk
 
 # PBE/Def2TZVP/COSMO for optimization
 cat > $opt2gauin << EOF
@@ -52,7 +52,7 @@ cat > $opt2gauin << EOF
 %oldchk=$opt1check
 %chk=$opt2check
 #PBEPBE/Def2TZVP EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water)
-Geom=Checkpoint Opt
+# Geom=Checkpoint Opt
 
 Optimization phase 2
 
@@ -67,7 +67,7 @@ zsh $basedir/g09run.zsh $basename $opt2gau
 
 opt3gau=${basestructurename}.opt3.gau
 opt3gauin=${basestructurename}.opt3.gau.in
-opt3check=${basestructurename}.opt3.chk
+opt3check=${basename}.opt3.chk
 
 # PBE/Def2TZVPP/COSMO for optimization 2nd phase
 sed "/%oldchk=/c%oldchk=$opt2check
@@ -78,7 +78,7 @@ zsh $basedir/g09run.zsh $basename $opt3gau
 
 opt4gau=${basestructurename}.opt4.gau
 opt4gauin=${basestructurename}.opt4.gau.in
-opt4check=${basestructurename}.opt4.chk
+opt4check=${basename}.opt4.chk
 
 # PBE/6-311++G(3df,3pd)/COSMO for final phase
 # Tight optimization & tight integration
