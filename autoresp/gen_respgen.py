@@ -39,7 +39,7 @@ def atomid(atom):
     return atom.GetResidue().GetAtomID(atom).strip()
 
 name2idx = {}
-for a in ob.OBMolAtomIter(backmol):
+for a in ob.OBMolAtomIter(bmol):
     name2idx[atomid(a)] = a.GetIdx()
 
 for (charge, atoms) in restraints:
@@ -47,7 +47,7 @@ for (charge, atoms) in restraints:
         atom = atoms[0]
         print "CHARGE %12.6f %4d %5s" % (charge, name2idx[atom], atom)
     else:
-        print "GROUP %4d %12.6f" % (len(atom), charge)
+        print "GROUP %4d %12.6f" % (len(atoms), charge)
         for atom in atoms:
             print "ATOM %4d %5s" % (name2idx[atom], atom)
 
