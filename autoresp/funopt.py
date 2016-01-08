@@ -91,9 +91,30 @@ def ffun(phases):
     (r, _x) = getlinear(angles, deltaes, weights, phases)
     return r
 cmaret = cma.fmin(ffun, phaseguess, dangle)
+phaseopt = cmaret[0]
 
-print "Initial guess: ", phaseguess
-print "Final result: ", cmaret[0]
+print >> sys.stderr, "Initial phase guess: ", phaseguess
+print >> sys.stderr, "Final phase result: ", phaseopt
+
+(r, facs) = getlinear(angles, deltaes, weights, phaseopt)
+
+# final tweak: 
+# if factor is negative, just shift the phase by pi and flip sign
+# V cos(nx) = -V cos(nx + pi)
+# and round to [-pi, pi]
+phaseopt_tweak = copy.deepcopy(phaseopt)
+for i in range(Nfit):
+    if facs[i + 1] < 0:
+        phaseopt_tweak[i] += 180.0
+        phaseopt_tweak[i] -= 360.0 * round(phaseopt_tweak[i] / 360.0)
+
+(r2, facs2) = getlinear(angles, deltaes, weights, phaseopt_tweak)
+
+print r, facs
+print r2, facs2
+
+for i in range(Nfit):
+    print i + 1, facs2[i + 1], phaseopt_tweak[i]
 
 
 
