@@ -75,18 +75,28 @@ builder.Connect(backmol, ap, bp)
 for a in ob.OBMolAtomIter(backmol):
     if a.GetAtomicNum() == 67:
         a.SetAtomicNum(1)
+    if a.GetAtomicNum() == 0:
+        aid = atomid(a)
+        if len(aid) >= 2 and aid[0:2] == "OP":
+            # OP1 OP2
+            a.SetAtomicNum(8)
 
 # Get residue name
 def get_residue_name(mol):
     a = ob.OBMolAtomIter(bmol).next()
     return a.GetResidue().GetName()
 
+# Reset residue name
 rn = get_residue_name(bmol)
 for r in ob.OBResidueIter(backmol):
     r.SetName(rn)
 
+# Fix atom names
+for a in ob.OBMolAtomIter(backmol):
+    a.GetResidue().SetAtomID(a, "%-4s" % a.GetResidue().GetAtomID(a).strip())
+
 # Topology completed. Evaluate the vdW
-ff = ob.OBForceField.FindForceField("MMFF94")
+ff = ob.OBForceField.FindForceField("UFF")
 def eval_energy(mol):
     ff.Setup(mol)
     return ff.E_VDW()
@@ -101,7 +111,7 @@ print >> sys.stderr, ("Scanning around %s-%s-%s-%s" %
                       tuple([atomid(a) for a in torsion]))
 stepsize = 10
 nround = 360 / stepsize
-minenergy = 1e+4
+minenergy = 1e+9
 minangle = -1
 for i in range(nround):
     newangle = float(i * stepsize)
