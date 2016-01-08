@@ -41,8 +41,9 @@ def test_linear():
              0.3092 * vecbases(angles, 4,  19.09))
     print getlinear(angles, delta, weights, [68.79, 15.64, 171.58, 19.09])
     print getlinear(angles, delta, weights, [70, 15, 170, 19])
+    print delta
 
-test_linear()
+#test_linear()
 
 if len(sys.argv) <= 3:
     print >> sys.stderr, "Usage: %s (qm) (mm) (weight)" % sys.argv[0]
@@ -81,7 +82,7 @@ for i in range(Nfit):
             break
         phaseguess[i] = a
         (sc, _coeffs) = getlinear(angles, deltaes, weights, phaseguess)
-        print i, a, sc
+        # print i, a, sc
         if sc < bestscore:
             bestscore = sc
             bestguess = a
@@ -110,8 +111,8 @@ for i in range(Nfit):
 
 (r2, facs2) = getlinear(angles, deltaes, weights, phaseopt_tweak)
 
-print r, facs
-print r2, facs2
+print >> sys.stderr, r, facs
+print >> sys.stderr, r2, facs2
 
 for i in range(Nfit):
     print i + 1, facs2[i + 1], phaseopt_tweak[i]
