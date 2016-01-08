@@ -31,12 +31,15 @@ initialgau=${basestructurename}.init.gau
 
 opt1gau=${basestructurename}.opt1.gau
 opt1check=${basename}.opt1.chk
-$ANTECHAMBER \
-    -fi $basestructuretype -i $basestructure \
-    -fo gcrt -o $initialgau \
-    -ch $opt1check -gk "# HF/6-31G POPT"
 
-python $basedir/add-constraint.py $initialgau $basestructure $baseconstraint > $opt1gau
+# Use babel, not antechamber (antechamber may swap atoms and emits no information for recovering atom names!)
+$OPENBABEL $basestructure -ogzmat -xk "%chk=$opt1check
+# HF/6-31G POPT(Z-matrix,maxcycle=5000)" $initialgau
+
+# Fix 'Holmium' problem and broken multiplicity
+sed -i "s/Ho/H/;/^0 /c $CHARGE 1" $initialgau
+
+python $basedir/mod-zmatrix.py $initialgau $basestructure $baseconstraint > $opt1gau
 
 # Optimize the structure with constraint
 # HF/6-31G level first to remove large crashes
@@ -51,8 +54,8 @@ cat > $opt2gauin << EOF
 --Link1--
 %oldchk=$opt1check
 %chk=$opt2check
-#PBEPBE/Def2TZVP EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water)
-# Geom=Checkpoint Opt
+#PBEPBE/6-31G* EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water)
+# Geom=Checkpoint popt(Z-matrix,maxcycle=5000)
 
 Optimization phase 2
 
@@ -60,8 +63,6 @@ $CHARGE 1
 
 
 EOF
-
-python $basedir/add-constraint.py $opt2gauin $basestructure $baseconstraint > $opt2gau
 
 zsh $basedir/g09run.zsh $basename $opt2gau
 
@@ -72,7 +73,7 @@ opt3check=${basename}.opt3.chk
 # PBE/Def2TZVPP/COSMO for optimization 2nd phase
 sed "/%oldchk=/c%oldchk=$opt2check
 /%chk=/c%chk=$opt3check
-s/phase 2/phase 3/;s/Def2TZVP/Def2TZVPP/" $opt2gau > $opt3gau
+s/phase 2/phase 3/;s/6-31G\*/Def2TZVPP Int=UltraFine/" $opt2gau > $opt3gau
 zsh $basedir/g09run.zsh $basename $opt3gau
 
 
@@ -83,9 +84,11 @@ opt4check=${basename}.opt4.chk
 # PBE/6-311++G(3df,3pd)/COSMO for final phase
 # Tight optimization & tight integration
 # Unfortunately G09 does not support Def2TZVPPD (as of rev. d01)
+# thus we use LP instead.
 sed "/%oldchk=/c%oldchk=$opt3check
 /%chk=/c%chk=$opt4check
-s/phase 3/phase 4/;s/Def2TZVPP/6-311++G(3df,3pd) Int=UltraFine/;s/\\bpopt\\b/popt=VeryTight/" $opt3gau > $opt4gau
+s/phase 3/phase 4/;s/Def2TZVPP/6-311++G(3df,3pd)/;s/SCRF(/SCRF(Read,/" $opt3gau > $opt4gau
+echo "QConv=VeryTight\n" >> $opt4gau
 zsh $basedir/g09run.zsh $basename $opt4gau
 
 

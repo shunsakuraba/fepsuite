@@ -12,8 +12,8 @@ basestructure=$1
 baserestraint=$2
 
 RESP=${AMBERHOME}/bin/resp
-ESPGEN=${AMBERHOME}/bin/epsgen
-RESPGEN=${AMBERHOME}/bin/repsgen
+ESPGEN=${AMBERHOME}/bin/espgen
+RESPGEN=${AMBERHOME}/bin/respgen
 
 if [[ -z $CHARGE ]]; then
     CHARGE=0
@@ -34,6 +34,7 @@ basename=${basestructure:t:r}
 
 respgau=${basename}.resp.gau
 respcheck=${basename}.resp.chk
+opt4check=${basename}.opt4.chk
 
 # RESP gaussian
 cat >> $respgau <<EOF
@@ -54,10 +55,10 @@ $basename.gesp
 
 EOF
 
-zsh $basedir/g09run.zsh $basename $respgau
-zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
+#zsh $basedir/g09run.zsh $basename $respgau
+#zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
 
-ACFILE=$basestructurename.ac
+ACFILE=$basestructurename.resp.ac
 
 $ANTECHAMBER -i $basestructure -fi pdb -o $ACFILE -fo ac -at amber
 
@@ -84,3 +85,5 @@ $RESPGEN -i $ACFILE -o $RESPIN2 -a $RESPADDIN -f resp2
 $RESP -O -i $RESPIN1 -o $RESPOUT1 -e $ESP -t $QOUT1
 $RESP -O -i $RESPIN2 -o $RESPOUT2 -e $ESP -t $QOUT2 -q $QOUT1
 
+MOLRES=$basestructurename.resp.mol2
+$ANTECHAMBER -i $basestructure -fi pdb -o $MOLRES -fo mol2 -at amber -c rc -cf $QOUT2
