@@ -175,7 +175,7 @@ topology::topology(const string& fname)
     }else if(state == "system" || state == "molecules") {
       // do nothing
     }else{
-      throw runtime_error("Unsupported section");
+      throw runtime_error((string("Unsupported section ") + state).c_str());
     }
   }
 
