@@ -14,6 +14,7 @@ for _i in range(2):
 
 bonds=[]
 atoms=[]
+atom2cg = {}
 atommap={}
 for l in sys.stdin:
     if l.strip() == "":
@@ -24,6 +25,8 @@ for l in sys.stdin:
         continue
     bt = int(l[20:24].strip())
     atommap[an] = len(atoms)
+    cg = float(l[63:].strip())
+    atom2cg[an] = cg
     atoms.append((an, at))
     if bt - 4 >= 0:
         bonds.append((an, atoms[bt - 4][0]))
@@ -50,7 +53,8 @@ while True:
 def name(n):
     i = atommap[n]
     (an, at) = atoms[i]
-    return '"%s(%s)"' % (an, at)
+    cg = atom2cg[an]
+    return '"%s(%s)\\n%.4f"' % (an, at, cg)
 
 def color(t):
     return { "H": "\"#606060\"",
