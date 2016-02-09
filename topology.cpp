@@ -92,6 +92,12 @@ topology::topology(const string& fname)
       string atype;
       is >> atype;
       atomtypes[atype] = line;
+    }else if(state == "pairtypes") {
+      istringstream is(line);
+      string atype, btype;
+      int func;
+      is >> atype >> btype >> func;
+      pairtypes[make_tuple(atype, btype, func)] = line;
     }else if(state == "moleculetype") {
       istringstream is(line);
       is >> moleculename >> nexcl;

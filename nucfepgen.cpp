@@ -560,6 +560,22 @@ int main(int argc, char* argv[])
   Ofs << "PHA PHA 0.0000 0.0000 A 0.0000 0.0000" << endl;
   Ofs << endl;
 
+  // pairtypes section
+  if(Atop.pairtypes.size() + 
+     Btop.pairtypes.size() > 0) {
+    
+    Ofs << "[ pairtypes ]" << endl;
+    
+    for(const auto& v: Atop.pairtypes) {
+      Ofs << v.second << endl;
+    }
+    for(const auto& v: Btop.pairtypes) {
+      if(Atop.pairtypes.count(v.first) == 0) {
+        Ofs << v.second << endl;
+      }
+    }
+  }
+
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;
   Ofs << ";name  nrexcl" << endl;

@@ -13,6 +13,8 @@ struct topology {
   typedef std::tuple<int, int, int> bondkeytype;
   typedef std::tuple<int, int, int, int> anglekeytype;
   typedef std::tuple<int, int, int, int, int, int> dihedkeytype;
+  typedef std::tuple<std::string, std::string, int> pairtype;
+
 
   topotype defaults;
   std::string moleculename;
@@ -21,6 +23,8 @@ struct topology {
   // atomtypes
   // stores lines
   std::map<std::string, std::string> atomtypes;
+  // pairtypes, stores the whole line
+  std::map<pairtype, std::string> pairtypes;
   
   // atoms
   std::vector<std::string> names;
