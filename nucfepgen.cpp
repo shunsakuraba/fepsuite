@@ -502,16 +502,33 @@ int main(int argc, char* argv[])
           continue;
         }
         cerr << "*** Warning: unmatched connectivity ***" << endl;
-        cerr << Atop.names[Ai] << "(A)" << ": ";
+        cerr << Atop.resids[Ai] << ":" << Atop.names[Ai] << "(A)" << ": ";
         for(const auto &e: As) {
           int Ae = assignAofO[e];
           cerr << (Ae == -1 ? "PHA" : Atop.names[Ae]) << " ";
         }
         cerr << endl;
-        cerr << Btop.names[Bi] << "(B)" << ": ";
+        cerr << Btop.resids[Bi] << ":" << Btop.names[Bi] << "(B)" << ": ";
         for(const auto &e: Bs) {
           int Be = assignBofO[e];
           cerr << (Be == -1 ? "PHA" : Btop.names[Be]) << " ";
+        }
+        cerr << endl;
+
+        cerr << "Sanity check: " << endl;
+        cerr << "i = " << i << ", Ai = " << Ai << ", Bi = " << Bi << endl;
+        cerr << "BofA[Ai] = " << assignBofA[Ai] 
+             << ", Anames[Ai] = " << Anames[Ai] << endl;
+        cerr << "AofB[Bi] = " << assignAofB[Bi]
+             << ", Bnames[Bi] = " << Bnames[Bi] << endl;
+        cerr << "Raw As:";
+        for(const auto &e: As) {
+          cerr << " " << e;
+        }
+        cerr << endl;
+        cerr << "Raw Bs:";
+        for(const auto &e: Bs) {
+          cerr << " " << e;
         }
         cerr << endl;
       }
