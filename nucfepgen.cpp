@@ -591,7 +591,171 @@ int main(int argc, char* argv[])
         Ofs << v.second << endl;
       }
     }
+    Ofs << endl;
   }
+
+  // bondtypes
+  if(Atop.bondtypes.size() +
+     Btop.bondtypes.size() > 0) {
+    Ofs << "[ bondtypes ]" << endl;
+
+    vector<int> funcs;
+    for(const auto& v: Atop.bondtypes) {
+      for(const auto &l: v.second) {
+        Ofs << l << endl;
+        istringstream is;
+        string a, b;
+        int func;
+        is >> a >> b >> func;
+        funcs.push_back(func);
+      }
+    }
+    for(const auto& v: Btop.bondtypes) {
+      if(Atop.bondtypes.count(v.first) == 0) {
+        for(const auto &l: v.second) {
+          Ofs << l << endl;
+          istringstream is;
+          string a, b;
+          int func;
+          is >> a >> b >> func;
+          funcs.push_back(func);
+        }
+      }
+    }
+    
+    sort(funcs.begin(), funcs.end());
+    funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
+    
+    for(int f: funcs) {
+      // FIXME: does not suppor morse potential
+      Ofs << "PHA X " << f << " 0.0 0.0" << endl;
+    }
+    Ofs << endl;
+  }
+
+  // angletypes
+  if(Atop.angletypes.size() +
+     Btop.angletypes.size() > 0) {
+    Ofs << "[ angletypes ]" << endl;
+
+    vector<int> funcs;
+    for(const auto& v: Atop.angletypes) {
+      for(const auto &l: v.second) {
+        Ofs << l << endl;
+        istringstream is;
+        string a, b, c;
+        int func;
+        is >> a >> b >> c >> func;
+        funcs.push_back(func);
+      }
+    }
+    for(const auto& v: Btop.angletypes) {
+      if(Atop.angletypes.count(v.first) == 0) {
+        for(const auto &l: v.second) {
+          Ofs << l << endl;
+          istringstream is;
+          string a, b, c;
+          int func;
+          is >> a >> b >> c >> func;
+          funcs.push_back(func);
+        }
+      }
+    }
+    
+    sort(funcs.begin(), funcs.end());
+    funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
+    
+    for(int f: funcs) {
+      // FIXME: does not suppor morse potential
+      int zeros = 2;
+      if(f == 5) { zeros = 4; }
+      
+      Ofs << "PHA X X " << f;
+      for(int i = 0; i < zeros; ++i) {
+        Ofs << " 0.0";
+      }
+      Ofs << endl;
+
+      Ofs << "X PHA X " << f;
+      for(int i = 0; i < zeros; ++i) {
+        Ofs << " 0.0";
+      }
+      Ofs << endl;
+    }
+    Ofs << endl;
+  }
+
+  // dihedraltypes
+  if(Atop.dihedraltypes.size() +
+     Btop.dihedraltypes.size() > 0) {
+    Ofs << "[ dihedraltypes ]" << endl;
+
+    vector<pair<int, int> > funcs;
+    for(const auto& v: Atop.dihedraltypes) {
+      for(const auto &l: v.second) {
+        Ofs << l << endl;
+        istringstream is;
+        string a, b, c, d;
+        int func;
+        int multi = -1;
+        is >> a >> b >> c >> d >> func;
+        if(func == 1 || func == 4 || func == 9) {
+          double dummy;
+          is >> dummy >> dummy >> multi;
+        }
+        funcs.push_back(make_pair(func, multi));
+      }
+    }
+    for(const auto& v: Btop.dihedraltypes) {
+      if(Atop.dihedraltypes.count(v.first) == 0) {
+        for(const auto &l: v.second) {
+          Ofs << l << endl;
+          istringstream is;
+          string a, b, c, d;
+          int func;
+          int multi = -1;
+          is >> a >> b >> c >> d >> func;
+          if(func == 1 || func == 4 || func == 9) {
+            double dummy;
+            is >> dummy >> dummy >> multi;
+          }
+          funcs.push_back(make_pair(func, multi));
+        }
+      }
+    }
+    
+    sort(funcs.begin(), funcs.end());
+    funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
+    
+    for(auto p: funcs) {
+      // FIXME: does not suppor morse potential
+      int f = p.first;
+      int m = p.second;
+      int zeros = 2;
+      if(f == 3) { zeros = 6; }
+      if(f == 5) { zeros = 4; }
+      
+      Ofs << "PHA X X X " << f;
+      for(int i = 0; i < zeros; ++i) {
+        Ofs << " 0.0";
+      }
+      if(m >= 0) {
+        Ofs << " " << m;
+      }
+      Ofs << endl;
+
+      Ofs << "X PHA X X " << f;
+      for(int i = 0; i < zeros; ++i) {
+        Ofs << " 0.0";
+      }
+      if(m >= 0) {
+        Ofs << " " << m;
+      }
+      Ofs << endl;
+    }
+    Ofs << endl;
+  }
+
 
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;

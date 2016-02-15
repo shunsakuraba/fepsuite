@@ -98,6 +98,24 @@ topology::topology(const string& fname)
       int func;
       is >> atype >> btype >> func;
       pairtypes[make_tuple(atype, btype, func)] = line;
+    }else if(state == "bondtypes") {
+      istringstream is(line);
+      string atype, btype;
+      int func;
+      is >> atype >> btype >> func;
+      bondtypes[make_tuple(atype, btype, func)].push_back(line);
+    }else if(state == "angletypes") {
+      istringstream is(line);
+      string atype, btype, ctype;
+      int func;
+      is >> atype >> btype >> ctype >> func;
+      angletypes[make_tuple(atype, btype, ctype, func)].push_back(line);
+    }else if(state == "dihedraltypes") {
+      istringstream is(line);
+      string atype, btype, ctype, dtype;
+      int func;
+      is >> atype >> btype >> ctype >> dtype >> func;
+      dihedraltypes[make_tuple(atype, btype, ctype, dtype, func)].push_back(line);
     }else if(state == "moleculetype") {
       istringstream is(line);
       is >> moleculename >> nexcl;
