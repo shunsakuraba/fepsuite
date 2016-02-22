@@ -117,7 +117,7 @@ with (open(args.top, "r")) as fh, (
             writeselector[st].write(lout + "\n")
         elif state == "molecules":
             sp = l.split()
-            if sp[0] == "NA":
+            if sp[0] in ["NA", "SOD"]:
                 # assumes negatively charged
                 fh1.write("%s %d\n" % (sp[0], int(sp[1]) + round(charges[2])))
                 fh2.write("%s %d\n" % (sp[0], int(sp[1]) + round(charges[1])))
@@ -153,7 +153,7 @@ with (open(args.pdb, "r")) as pdbfh, (
                 resname = l[17:20]
             else:
                 resname = l[5:10]
-            if resname.strip() == "NA":
+            if resname.strip() in ["NA", "SOD"]:
                 if -round(charges[2]) <= nacount:
                     pdb1.write(l)
                 if -round(charges[1]) <= nacount:
