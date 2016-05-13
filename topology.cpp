@@ -188,7 +188,7 @@ topology::topology(const string& fname)
         vals.push_back(v);
       }
       int addendum = 0;
-      if(func == 1) {
+      if(func == 1 || func == 9) {
           addendum = (int)vals.back(); // rep values
       }
       if(addendum == 0 && diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)) > 0) {

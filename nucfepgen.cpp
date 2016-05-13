@@ -226,6 +226,51 @@ static void merge_assigns(const vector<int>& assignBofA,
     assignBofO[assignOofB[j]] = j;
   }
 }
+
+static void parse_push_types_helper(const string& l,
+                                    const string& types_name,
+                                    int nmatch,
+                                    vector<int> *funcs,
+                                    vector<tuple<int, int, string> > *outputs)
+{
+  istringstream is(l);
+  string atype;
+  int Xcounts = 0;
+  int func;
+  for(int i = 0; i < nmatch; ++i) {
+    is >> atype;
+    if(atype == "X") Xcounts++;
+  }
+  is >> func;
+  if(!is) {
+    cerr << "Failed to parse [ " << types_name << " ] line: \"" << l << "\"" << endl;
+    exit(1);
+  }
+  funcs->push_back(func);
+  outputs->push_back(make_tuple(func, Xcounts, l));
+}
+
+template<typename T>
+static void parse_push_types(const T& Atypes,
+                             const T& Btypes,
+                             const string& types_name,
+                             int nmatch,
+                             vector<int> *funcs,
+                             vector<tuple<int, int, string> > *outputs)
+{
+  for(const auto& v: Atypes) {
+    for(const auto &l: v.second) {
+      parse_push_types_helper(l, types_name, nmatch, funcs, outputs);
+    }
+    for(const auto& v: Btypes) {
+      if(Atypes.count(v.first) == 0) {
+        for(const auto &l: v.second) {
+          parse_push_types_helper(l, types_name, nmatch, funcs, outputs);
+        }
+      }
+    }
+  }
+}
  
 void correct_assign_by_exclusion(const topology &Atop,
                                  const topology &Btop,
@@ -553,34 +598,52 @@ int main(int argc, char* argv[])
   Ofs << endl;
   
   // Defaults section
-  if(Atop.defaults != topology::topotype::AMBER ||
-     Btop.defaults != topology::topotype::AMBER) {
+  if(Atop.defaults != Btop.defaults ||
+     !(Atop.defaults == topology::topotype::AMBER ||
+       Atop.defaults == topology::topotype::CHARMM)) {
     cerr << "Unsupported defaults type" << endl;
     exit(1);
   }
   Ofs << "[ defaults ]" << endl;
   Ofs << "; nbfunc        comb-rule       gen-pairs       fudgeLJ fudgeQQ" << endl;
-  Ofs << "1               2               yes             0.5     0.8333" << endl;
+  if(Atop.defaults == topology::topotype::AMBER) {
+    Ofs << "1               2               yes             0.5     0.8333" << endl;
+  }else if(Atop.defaults == topology::topotype::CHARMM) {
+    Ofs << "1 2 yes 1.0 1.0" << endl;
+  }
   Ofs << endl;
 
   // atomtypes section
+  vector<string> atomtypes;
   Ofs << "[ atomtypes ]" << endl;
   for(const auto& v: Atop.atomtypes) {
     Ofs << v.second << endl;
+    {
+      istringstream is(v.second);
+      string at;
+      is >> at;
+      atomtypes.push_back(at);
+    }
   }
   for(const auto& v: Btop.atomtypes) {
     if(Atop.atomtypes.count(v.first) == 0) {
       Ofs << v.second << endl;
+      {
+        istringstream is(v.second);
+        string at;
+        is >> at;
+        atomtypes.push_back(at);
+      }
     }
   }
   // phantom type
   Ofs << "PHA PHA 0.0000 0.0000 A 0.0000 0.0000" << endl;
   Ofs << endl;
+  atomtypes.push_back("PHA");
 
   // pairtypes section
   if(Atop.pairtypes.size() + 
      Btop.pairtypes.size() > 0) {
-    
     Ofs << "[ pairtypes ]" << endl;
     
     for(const auto& v: Atop.pairtypes) {
@@ -600,35 +663,29 @@ int main(int argc, char* argv[])
     Ofs << "[ bondtypes ]" << endl;
 
     vector<int> funcs;
-    for(const auto& v: Atop.bondtypes) {
-      for(const auto &l: v.second) {
-        Ofs << l << endl;
-        istringstream is;
-        string a, b;
-        int func;
-        is >> a >> b >> func;
-        funcs.push_back(func);
-      }
-    }
-    for(const auto& v: Btop.bondtypes) {
-      if(Atop.bondtypes.count(v.first) == 0) {
-        for(const auto &l: v.second) {
-          Ofs << l << endl;
-          istringstream is;
-          string a, b;
-          int func;
-          is >> a >> b >> func;
-          funcs.push_back(func);
-        }
-      }
-    }
-    
+    vector<tuple<int, int, string> > outputs;
+
+    parse_push_types(Atop.bondtypes,
+                     Btop.bondtypes,
+                     "bondtypes",
+                     2,
+                     &funcs,
+                     &outputs);
+   
     sort(funcs.begin(), funcs.end());
     funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
     
     for(int f: funcs) {
       // FIXME: does not suppor morse potential
-      Ofs << "PHA X " << f << " 0.0 0.0" << endl;
+      for(const string& at: atomtypes) {
+        ostringstream os;
+        os << "PHA " << at << " " << f << " 0.0 0.0";
+        outputs.push_back(make_tuple(f, 99, os.str())); // wanna put at the end
+      }
+    }
+    sort(outputs.begin(), outputs.end());
+    for(const auto& tps: outputs) {
+      Ofs << get<2>(tps) << endl;
     }
     Ofs << endl;
   }
@@ -639,62 +696,78 @@ int main(int argc, char* argv[])
     Ofs << "[ angletypes ]" << endl;
 
     vector<int> funcs;
-    for(const auto& v: Atop.angletypes) {
-      for(const auto &l: v.second) {
-        Ofs << l << endl;
-        istringstream is;
-        string a, b, c;
-        int func;
-        is >> a >> b >> c >> func;
-        funcs.push_back(func);
-      }
-    }
-    for(const auto& v: Btop.angletypes) {
-      if(Atop.angletypes.count(v.first) == 0) {
-        for(const auto &l: v.second) {
-          Ofs << l << endl;
-          istringstream is;
-          string a, b, c;
-          int func;
-          is >> a >> b >> c >> func;
-          funcs.push_back(func);
-        }
-      }
-    }
-    
+    vector<tuple<int, int, string> > outputs;
+
+    parse_push_types(Atop.angletypes,
+                     Btop.angletypes,
+                     "angletypes",
+                     3,
+                     &funcs,
+                     &outputs);
+
     sort(funcs.begin(), funcs.end());
     funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
     
     for(int f: funcs) {
-      // FIXME: does not suppor morse potential
       int zeros = 2;
       if(f == 5) { zeros = 4; }
       
-      Ofs << "PHA X X " << f;
-      for(int i = 0; i < zeros; ++i) {
-        Ofs << " 0.0";
+      for(const string& at: atomtypes) {
+        for(const string& at2: atomtypes) {
+          ostringstream os;
+          os << "PHA " << at << " " << at2 << " " << f;
+          for(int i = 0; i < zeros; ++i) {
+            os << " 0.0";
+          }
+          outputs.push_back(make_tuple(f, 99, os.str()));
+        }
       }
-      Ofs << endl;
 
-      Ofs << "X PHA X " << f;
-      for(int i = 0; i < zeros; ++i) {
-        Ofs << " 0.0";
+      for(const string& at: atomtypes) {
+        if(at == "PHA") continue;
+        for(const string& at2: atomtypes) {
+          ostringstream os;
+          os << at << " PHA " << at2 << " " << f;
+          for(int i = 0; i < zeros; ++i) {
+            os << " 0.0";
+          }
+          outputs.push_back(make_tuple(f, 99, os.str()));
+        }
       }
-      Ofs << endl;
     }
+    sort(outputs.begin(), outputs.end());
+    for(const auto& tps: outputs) {
+      Ofs << get<2>(tps) << endl;
+    }
+
     Ofs << endl;
   }
 
   // dihedraltypes
+  // to combat gromacs issue #1901, and to match proper dihedrals,
+  // first list non-improper dihedrals, 
+  // then list improper diherals.
+  // Note that multiplicity matters. 
+  // [ dihedraltypes ]
+  // A B C D 9 ... 1
+  // A B C D 9 ... 2
+  // D E F G 9 ...
+  // X A B X 9 ...
+  // A B D E 2 ...
+  // X X A D 2 ...
   if(Atop.dihedraltypes.size() +
      Btop.dihedraltypes.size() > 0) {
     Ofs << "[ dihedraltypes ]" << endl;
 
+    // func, multiplicity
     vector<pair<int, int> > funcs;
+    // i do know this is a dirrrrrrrrty hack
+    // (is_2, has_X) -> inputs
+    map<pair<bool, bool>, vector<string> > outputs;
+    
     for(const auto& v: Atop.dihedraltypes) {
       for(const auto &l: v.second) {
-        Ofs << l << endl;
-        istringstream is;
+        istringstream is(l);
         string a, b, c, d;
         int func;
         int multi = -1;
@@ -703,14 +776,20 @@ int main(int argc, char* argv[])
           double dummy;
           is >> dummy >> dummy >> multi;
         }
+        if(!is) {
+          cerr << "Failed to parse dihedraltypes line: \"" << l << "\"" << endl;
+          exit(1);
+        }
         funcs.push_back(make_pair(func, multi));
+        bool has_x = (a == "X" || b == "X" || c == "X" || d == "X");
+        bool is_2 = func == 2;
+        outputs[make_pair(is_2, has_x)].push_back(l);
       }
     }
     for(const auto& v: Btop.dihedraltypes) {
       if(Atop.dihedraltypes.count(v.first) == 0) {
         for(const auto &l: v.second) {
-          Ofs << l << endl;
-          istringstream is;
+          istringstream is(l);
           string a, b, c, d;
           int func;
           int multi = -1;
@@ -719,7 +798,14 @@ int main(int argc, char* argv[])
             double dummy;
             is >> dummy >> dummy >> multi;
           }
+          if(!is) {
+            cerr << "Failed to parse dihedraltypes line: \"" << l << "\"" << endl;
+            exit(1);
+          }
           funcs.push_back(make_pair(func, multi));
+          bool has_x = (a == "X" || b == "X" || c == "X" || d == "X");
+          bool is_2 = func == 2;
+          outputs[make_pair(is_2, has_x)].push_back(l);
         }
       }
     }
@@ -728,30 +814,52 @@ int main(int argc, char* argv[])
     funcs.erase(unique(funcs.begin(), funcs.end()), funcs.end());
     
     for(auto p: funcs) {
-      // FIXME: does not suppor morse potential
       int f = p.first;
       int m = p.second;
       int zeros = 2;
       if(f == 3) { zeros = 6; }
       if(f == 5) { zeros = 4; }
       
-      Ofs << "PHA X X X " << f;
-      for(int i = 0; i < zeros; ++i) {
-        Ofs << " 0.0";
+      {
+        ostringstream os;
+        os << "PHA X X X " << f;
+        for(int i = 0; i < zeros; ++i) {
+          os << " 0.0";
+        }
+        if(m >= 0) {
+          os << " " << m;
+        }
+        outputs[make_pair(f, true)].push_back(os.str());
       }
-      if(m >= 0) {
-        Ofs << " " << m;
-      }
-      Ofs << endl;
+    }
 
-      Ofs << "X PHA X X " << f;
-      for(int i = 0; i < zeros; ++i) {
-        Ofs << " 0.0";
+    for(auto p: funcs) {
+      int f = p.first;
+      int m = p.second;
+      int zeros = 2;
+      if(f == 3) { zeros = 6; }
+      if(f == 5) { zeros = 4; }
+
+      {
+        ostringstream os;
+        os << "X PHA X X " << f;
+        for(int i = 0; i < zeros; ++i) {
+          os << " 0.0";
+        }
+        if(m >= 0) {
+          os << " " << m;
+        }
+        outputs[make_pair(f, true)].push_back(os.str());
       }
-      if(m >= 0) {
-        Ofs << " " << m;
+    }
+
+    outputs[make_pair(2, true)].push_back("X X PHA X 2 0.0 0.0");
+    outputs[make_pair(2, true)].push_back("X X X PHA 2 0.0 0.0");
+
+    for(const auto& p: outputs){
+      for(const auto& l: p.second) {
+        Ofs << l << endl;
       }
-      Ofs << endl;
     }
     Ofs << endl;
   }
@@ -834,9 +942,11 @@ int main(int argc, char* argv[])
     vector<double> Bfactors(2, 0);
     if(Btop.bonds.count(keyB) > 0) {
       Bfactors = Btop.bonds[keyB];
-    }else{
+    }else if(Afactors.size() > 0){
       Bfactors[0] = Afactors[0];
       Bfactors[1] = 0.0;
+    }else{
+      Bfactors.clear();
     }
     // output A-listed bonds first
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
@@ -867,9 +977,11 @@ int main(int argc, char* argv[])
     }
     const vector<double>& Bfactors = v.second;
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
-        << func
-        << " " << Bfactors[0]
-        << " " << 0.00;
+        << func;
+    if(Bfactors.size() > 0) {
+      Ofs << " " << Bfactors[0]
+          << " " << 0.00;
+    }
     for(auto v: Bfactors) {
       Ofs << " " << v;
     }
@@ -894,16 +1006,28 @@ int main(int argc, char* argv[])
                  assignBofO[y_in_O],
                  assignBofO[z_in_O],
                  func);
-    if(func != 1) {
-      throw runtime_error("Angle func != 1 not supported");
+    if(func != 1 && func != 5) {
+      throw runtime_error("Angle func != {1, 5} not supported");
     }
     const vector<double>& Afactors = v.second;
-    vector<double> Bfactors(2, 0);
+    vector<double> Bfactors;
     if(Btop.angles.count(keyB) > 0) {
       Bfactors = Btop.angles[keyB];
+    }else if(Afactors.size() > 0){
+      if(func == 1) {
+        Bfactors.resize(2);
+        Bfactors[0] = Afactors[0];
+        Bfactors[1] = 0.0;
+      }else if(func == 5) {
+        // only spring constants affected
+        Bfactors.resize(4);
+        Bfactors[0] = Afactors[0];
+        Bfactors[1] = 0.0;
+        Bfactors[2] = Afactors[2];
+        Bfactors[3] = 0.0;
+      }
     }else{
-      Bfactors[0] = Afactors[0];
-      Bfactors[1] = 0.0;
+      Bfactors.clear();
     }
     // output A-listed angles first
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
@@ -939,9 +1063,18 @@ int main(int argc, char* argv[])
     const vector<double>& Bfactors = v.second;
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << z_in_O + 1 << " " 
-        << func
-        << " " << setw(12) << Bfactors[0]
-        << " " << setw(12) << 0.00;
+        << func;
+    if(Bfactors.size() > 0) {
+      if(func == 1) {
+        Ofs << " " << setw(12) << Bfactors[0]
+            << " " << setw(12) << 0.00;
+      }else{
+        Ofs << " " << setw(12) << Bfactors[0]
+            << " " << setw(12) << 0.00
+            << " " << setw(12) << Bfactors[2]
+            << " " << setw(12) << 0.00;
+      }
+    }
     for(auto v: Bfactors) {
       Ofs << " " << setw(12) << v;
     }
@@ -971,8 +1104,8 @@ int main(int argc, char* argv[])
                  assignBofO[w_in_O],
                  func,
                  addendum);
-    if(func != 1 && func != 3) {
-      throw runtime_error("dihed func not in {1, 3} not supported");
+    if(!(func == 1 || func == 2 || func == 3 || func == 9)) {
+      throw runtime_error("dihed func not in {1, 2, 3, 9} not supported");
     }
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(Afactors);
@@ -982,7 +1115,7 @@ int main(int argc, char* argv[])
       for(auto &&v: Bfactors) {
         v = 0.0;
       }
-      if(func == 1) {
+      if(func == 1 || func == 9) {
         Bfactors[0] = Afactors[0];
         Bfactors[2] = Afactors[2];
       }
@@ -1027,7 +1160,7 @@ int main(int argc, char* argv[])
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << z_in_O + 1 << " " << w_in_O + 1 << " "
         << func;
-    if(func == 1) {
+    if(func == 1 || func == 9) {
       Ofs << " " << setw(12) << Bfactors[0]
           << " " << setw(12) << 0.00
           << " " << setw(12) << Bfactors[2];
