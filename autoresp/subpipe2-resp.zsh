@@ -55,8 +55,8 @@ $basename.gesp
 
 EOF
 
-#zsh $basedir/g09run.zsh $basename $respgau
-#zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
+zsh $basedir/g09run.zsh $basename $respgau
+zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
 
 ACFILE=$basestructurename.resp.ac
 
@@ -87,3 +87,9 @@ $RESP -O -i $RESPIN2 -o $RESPOUT2 -e $ESP -t $QOUT2 -q $QOUT1
 
 MOLRES=$basestructurename.resp.mol2
 $ANTECHAMBER -i $basestructure -fi pdb -o $MOLRES -fo mol2 -at amber -c rc -cf $QOUT2
+
+
+# generate monomer without phos group
+$ANTECHAMBER -i $basestructurename.gesp -fi gesp -o $basestructurename.monomer.pre.ac -fo ac -at amber -c resp -gv 1 -nc $CHARGE
+$ANTECHAMBER -i $basestructurename.monomer.pre.ac -fi ac -a $basestructure -fa pdb -ao name -o $basestructurename.monomer.ac -fo ac -at amber -rn $RESNAME
+

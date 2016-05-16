@@ -41,12 +41,21 @@ sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
 RESNAME=$(grep '^ATOM' $ACFILE | head -1 | cut -c18-20)
 
 $PREPGEN -i $ACFILE -o $basestructurename.final.prep -m rna.mainchain -f int -rn $RESNAME && echo
-$PREPGEN -i $ACFILE -o $basestructurename.monomer.prep -f int -rn $RESNAME && echo
 
 python $basedir/prep2dot.py < $basestructurename.final.prep > $basestructurename.final.dot
 neato $basestructurename.final.dot -Tps -o $basestructurename.final.ps
+
+# ANTECHAMBER overwrites atomtypes, prevent it with -ao type
+#$ANTECHAMBER -i $basestructurename.monomer.ac -fi ac -o $basestructurename.monomer.prep -fo prepi -a $basestructurename.monomer.ac -fa ac -ao type
+
+# doing it by prepgen
+$PREPGEN -i $basestructurename.monomer.ac -o $basestructurename.monomer.prep -f int -rn $RESNAME && echo
+
+
+unset -x
 
 echo "*********************************"
 echo "Subpipe 4 finished"
 echo "Check $basestructurename.final.ps, and (if necessary) manually update atomtypes of $basestructurename.final.prep / $basestructure.monomer.prep."
 echo "*********************************"
+
