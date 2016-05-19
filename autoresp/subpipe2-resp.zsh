@@ -90,6 +90,7 @@ $ANTECHAMBER -i $basestructure -fi pdb -o $MOLRES -fo mol2 -at amber -c rc -cf $
 
 
 # generate monomer without phos group
-$ANTECHAMBER -i $basestructurename.gesp -fi gesp -o $basestructurename.monomer.pre.ac -fo ac -at amber -c resp -gv 1 -nc $CHARGE
-$ANTECHAMBER -i $basestructurename.monomer.pre.ac -fi ac -a $basestructure -fa pdb -ao name -o $basestructurename.monomer.ac -fo ac -at amber -rn $RESNAME
+# This part is now performed in genac
+#$ANTECHAMBER -i $basestructurename.gesp -fi gesp -o $basestructurename.monomer.pre.ac -fo ac -at amber -c resp -gv 1 -nc $CHARGE
+#$ANTECHAMBER -i $basestructurename.monomer.pre.ac -fi ac -a $basestructure -fa pdb -ao name -o $basestructurename.monomer.ac -fo ac -at amber -rn $RESNAME
 

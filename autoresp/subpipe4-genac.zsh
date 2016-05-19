@@ -4,16 +4,17 @@ exit 1
 # Resp charge fitting final phase
 # Assumes subpipe2-opt is done
 if [[ -z $4 ]]; then
-    echo "Usage: $0 (base-only structure) (backbone) (charge overwrite file) (mainchain specification)" 1>&2
-    echo "Example: $0 inosine.pdb RNA.pdb rna_charges.txt rna.mainchain" 1>&2
+    echo "Usage: $0 (base-only structure) (backbone) (charge overwrite file) (charge monomer file) (mainchain specification)" 1>&2
+    echo "Example: $0 inosine.pdb RNA.pdb rna_charges.txt rna_monomer_charges.txt rna.mainchain" 1>&2
     exit 1
 fi
 
 basedir=${0:h}
 basestructure=$1
-basecharge=$2
+backbone=$2
 chargefile=$3
-mainchain=$4
+chargemonomerfile=$4
+mainchain=$5
 
 basestructuretype=${basestructure:e}
 if [[ $basestructuretype = "gau" ]]; then
@@ -30,11 +31,11 @@ trap 'echo "Error returned at previous execution"; exit 1' ZERR
 set -x
 
 ACFILE=$basestructurename.final.ac
-python $basedir/merger.py $basestructure RNA.pdb $basestructurename.full.pdb 
+python $basedir/merger.py $basestructure $backbone $basestructurename.full.pdb 
+
+python copycharge.py $basestructurename.full.pdb $basestructurename.resp.mol2 $chargefile $basestructurename.final.charge
 
 $ANTECHAMBER -i $basestructurename.full.pdb -fi pdb -o $ACFILE -fo ac -at amber -c rc -cf $basestructurename.final.charge
-
-python copycharge.py inosine.full.pdb inosine.resp.mol2 $basecharge inosine.final.charge
 
 # special treatment for RNA, what to do in general??
 sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
@@ -45,12 +46,21 @@ $PREPGEN -i $ACFILE -o $basestructurename.final.prep -m rna.mainchain -f int -rn
 python $basedir/prep2dot.py < $basestructurename.final.prep > $basestructurename.final.dot
 neato $basestructurename.final.dot -Tps -o $basestructurename.final.ps
 
+
+
 # ANTECHAMBER overwrites atomtypes, prevent it with -ao type
 #$ANTECHAMBER -i $basestructurename.monomer.ac -fi ac -o $basestructurename.monomer.prep -fo prepi -a $basestructurename.monomer.ac -fa ac -ao type
+
+python copycharge.py $basestructurename.resp.mol2 $basestructurename.resp.mol2 $chargemonomerfile $basestructurename.monomer.charge
+
+MONOMERAC=$basestructurename.monomer.ac
+
+$ANTECHAMBER -i $basestructurename.resp.log -fi gout -o $MONOMERAC -fo ac -at amber -c rc -cf $basestructurename.monomer.charge -a $basestructure -fa pdb -ao name -rn $RESNAME
 
 # doing it by prepgen
 $PREPGEN -i $basestructurename.monomer.ac -o $basestructurename.monomer.prep -f int -rn $RESNAME && echo
 
+$ANTECHAMBER -i $MONOMERAC -fi ac -j 0 -o $basestructurename.optstructure.pdb -fo pdb
 
 unset -x
 
