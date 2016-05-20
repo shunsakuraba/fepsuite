@@ -82,9 +82,9 @@ natom=$(wc -l < $basestructurename.gaussian.atoms)
     cat $basestructurename.gaussian.atoms
 } > $basestructurename.ext.parameter
 
-
-# XXX: dihedral assignment may be in incorrect order
 zsh $basedir/g09fetch.zsh $basename $basename.resp.log $basename.resp.log
+
+optstructure=$basestructurename.optstructure.pdb
 
 template=$basestructurename.dihopt.templ.gau
 babel -i g09 $basename.resp.log -o gzmat -xk "%chk=@check@
@@ -98,7 +98,7 @@ for i in {0..35}; do
 	echo "dihedral $diheds "$((i * 10))
     } > $basestructurename.cons$i.txt
     optgau=$basestructurename.dihopt.gau$i.gau
-    python $basedir/mod-zmatrix.py $template $basestructure $basestructurename.cons$i.txt > $optgau
+    python $basedir/mod-zmatrix.py $template $optstructure $basestructurename.cons$i.txt > $optgau
     echo "QConv=VeryTight\n" >> $optgau
     sed -i "s/@check@/$basename.dih$i.chk/" $optgau
 done
