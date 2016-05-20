@@ -26,6 +26,9 @@ ambfrcfile = "force.txt"
 # You want: hartree
 # 	* 0.0015946679
 kcal_to_hartree = 0.0015946679
+#
+aa_to_atomiclength = 1.8897261
+atomiclength_to_aa = 1. / aa_to_atomiclength
 
 with open(msgfile, "w") as msg:
     natom = None
@@ -62,12 +65,12 @@ with open(msgfile, "w") as msg:
         derivative = int(derivative)
         for i in range(natom):
             l = ifh.next()
-            [_anum, x, y, z, _mmcrg, _mmtype] = l.split()
+            [_anum, x, y, z, _mmcrg] = l.split()[0:5]
             gaussiancrd[i] = [float(e) for e in [x, y, z]]
 
     mmcrd = [None for i in range(natom)]
     for i in range(natom):
-        mmcrd[mm_of_gaussian[i]] = gaussiancrd[i]
+        mmcrd[mm_of_gaussian[i]] = [x * atomiclength_to_aa for x in gaussiancrd[i]]
     
     # Amber and Gaussian shares same coordinate unit (angstrom)
     with open(ambcrdfile, "w") as crdfh:
@@ -126,7 +129,7 @@ with open(msgfile, "w") as msg:
         for l in lfh:
             l = l.rstrip()
             for i in range(0, len(l), 8):
-                frcs.append(kcal_to_hartree * float(l[i:i+8].strip()))
+                frcs.append(kcal_to_hartree / aa_to_atomiclength * float(l[i:i+8].strip()))
         for i in range(natom):
             imm = mm_of_gaussian[i]
             resblk = frcs[imm*3:(imm+1)*3]
@@ -147,7 +150,8 @@ with open(msgfile, "w") as msg:
         writefs([etot, 0., 0., 0.])
         if derivative >= 1:
             for i in range(natom):
-                writefs(result_forces[i])
+                # gradient wanted
+                writefs([-x for x in result_forces[i]])
             # polarlizability
             for i in range(2):
                 writefs([0., 0., 0.])

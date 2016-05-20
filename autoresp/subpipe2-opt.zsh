@@ -92,3 +92,18 @@ echo "QConv=VeryTight\n" >> $opt4gau
 zsh $basedir/g09run.zsh $basename $opt4gau
 
 
+# work around Gaussian bug (?)
+logfile=${opt4gau:r}.log
+
+while true; do
+    zsh $basedir/g09fetch.zsh $basename $logfile ${logfile:t}
+    has_error=n
+    tail -4 ${opt4gau:r}.log | grep -q 'link 9999' && has_error=y || true
+    if [[ $has_error = n ]]; then
+	break
+    fi
+    opt4gauretry=${basestructurename}.opt4r1.gau
+    sed '/oldchk/d;s/popt(/popt(restart,/' $opt4gau > $opt4gauretry
+    zsh $basedir/g09run.zsh $basename $opt4gauretry
+    logfile=${opt4gauretry:r}.log
+done

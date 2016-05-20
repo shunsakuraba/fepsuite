@@ -2,17 +2,18 @@
 
 # Assumes subpipe4-genac is done
 if [[ -z $4 ]]; then
-    echo "Usage: $0 (base-only structure) (dihedral) (atomtype) (resname)" 1>&2
-    echo "Example: $0 inosine.pdb O4\'-C1\'-N9-C8 CP INO" 1>&2
+    echo "Usage: $0 (base-only structure) (base constraint) (dihedral) (atomtype) (resname)" 1>&2
+    echo "Example: $0 inosine.pdb constraint-rna-opt2.txt O4\'-C1\'-N9-C8 CP INO" 1>&2
     echo "The final atom in dihedral angle specification will be given the new atom type"
     exit 1
 fi
 
 basedir=${0:h}
 basestructure=$1
-dihedral=$2
-newatomtype=$3
-resname=$4
+baseconstraint=$2
+dihedral=$3
+newatomtype=$4
+resname=$5
 
 basestructurename=${basestructure:r}
 basename=${basestructure:t:r}
@@ -82,6 +83,23 @@ natom=$(wc -l < $basestructurename.gaussian.atoms)
 } > $basestructurename.ext.parameter
 
 
-opt4gau=${basestructurename}.opt4.gau
-opt4check=${basename}.opt4.chk
+# XXX: dihedral assignment may be in incorrect order
+zsh $basedir/g09fetch.zsh $basename $basename.resp.log $basename.resp.log
+
+template=$basestructurename.dihopt.templ.gau
+babel -i g09 $basename.resp.log -o gzmat -xk "%chk=@check@
+#PBEPBE/6-311++G(3df,3pd) Int=UltraFine
+# EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water,Read)
+# popt(Z-matrix,maxcycle=9999)" $template
+
+for i in {0..35}; do
+    {
+	cat $baseconstraint
+	echo "dihedral $diheds "$((i * 10))
+    } > $basestructurename.cons$i.txt
+    optgau=$basestructurename.dihopt.gau$i.gau
+    python $basedir/mod-zmatrix.py $template $basestructure $basestructurename.cons$i.txt > $optgau
+    echo "QConv=VeryTight\n" >> $optgau
+    sed -i "s/@check@/$basename.dih$i.chk/" $optgau
+done
 
