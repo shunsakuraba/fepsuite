@@ -42,6 +42,7 @@ for a in ob.OBMolAtomIter(obmol):
     atomid = a.GetResidue().GetAtomID(a).strip()
     index = a.GetIdx()
     print >> sys.stderr, index, atomid
+    # 1-origin
     name2idx[atomid] = index
 
 def getangle(i, j, k):
@@ -96,4 +97,4 @@ with open(constraintout, 'w') as fh:
     for c in constraints:
         if c[0] == "dihedral":
             fh.write("f tors %3d %3d %3d %3d\n" %
-                     (c[1] + 1, c[2] + 1, c[3] + 1, c[4] + 1))
+                     (c[1], c[2], c[3], c[4]))
