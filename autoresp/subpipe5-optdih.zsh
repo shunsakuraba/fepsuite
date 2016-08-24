@@ -19,8 +19,10 @@ basestructurename=${basestructure:r}
 basename=${basestructure:t:r}
 
 monomerprep=$basestructurename.monomer.prep
+monomermol2=$basestructurename.monomer.opt.mol2
+monomerpdb=$basestructurename.monomer.opt.pdb
 
-if [[ ! -e $monomerprep ]]; then
+if [[ ! -e $monomerprep ]] || [[ ! -e $monomermol2 ]] || [[ ! -e $monomerpdb ]]; then
     echo "Error: monomer prep file is not available" 1>&2
     exit 1
 fi
@@ -41,11 +43,10 @@ prevatomtype=$(atomtype $repatm $monomerprep)
 
 # generate modified prep file
 dihoptprep=$basestructurename.dihopt.prep
-dihoptfrcpre=$basestructurename.dihopt.frcpre
 dihoptfrcmod=$basestructurename.dihopt.frcmod
 baseparm=$AMBERHOME/dat/leap/parm/parm10.dat
 
-python copydih.py $monomerprep $dihedral $newatomtype $baseparm > $dihoptfrcpre
+python copydih.py $monomerprep $dihedral $newatomtype $baseparm > $dihoptfrcmod
 python replace_prep.py $monomerprep $dihedral $newatomtype > $dihoptprep
 
 if [[ ! -e $basestructurename.extra.frcmod ]]; then
@@ -82,24 +83,26 @@ natom=$(wc -l < $basestructurename.gaussian.atoms)
     cat $basestructurename.gaussian.atoms
 } > $basestructurename.ext.parameter
 
-zsh $basedir/g09fetch.zsh $basename $basename.resp.log $basename.resp.log
-
-optstructure=$basestructurename.optstructure.pdb
-
-template=$basestructurename.dihopt.templ.gau
-babel -i g09 $basename.resp.log -o gzmat -xk "%chk=@check@
-#PBEPBE/6-311++G(3df,3pd) Int=UltraFine
-# EmpiricalDispersion=GD3 SCRF(CPCM,Solvent=Water,Read)
-# popt(Z-matrix,maxcycle=9999)" $template
+optmonomermol2=$basestructurename.monomer.optfin.mol2
 
 for i in {0..35}; do
+    opttmol=$basestructurename.dihopt$i.tmol
+    optdihf=$basestructurename.dihopt$i.txt
     {
 	cat $baseconstraint
 	echo "dihedral $diheds "$((i * 10))
     } > $basestructurename.cons$i.txt
-    optgau=$basestructurename.dihopt.gau$i.gau
-    python $basedir/mod-zmatrix.py $template $optstructure $basestructurename.cons$i.txt > $optgau
-    echo "QConv=VeryTight\n" >> $optgau
-    sed -i "s/@check@/$basename.dih$i.chk/" $optgau
+    python $basedir/constrain-tm.py $optmonomermol2 $basestructure $basestructurename.cons$i.txt $opttmol $optdihf
+done
+    
+DIRS=()
+for i in {0..35}; do
+    opttmol=$basestructurename.dihopt$i.tmol
+    optdihf=$basestructurename.dihopt$i.txt
+    rundir=$basestructurename/optdih$i
+    DIRS+=$rundir
+    NOWAIT=y zsh $basedir/turborun.zsh $rundir TITLE="Optimization" CONSTRAINTS=$optdihf BASIS="6-311++G(3df,3pd)" CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=78.4 DISP3=bj ENERGY_CONV=7 COORD_CONV=4 CYCLE=1000 NEWBASIS=y $opttmol
+    sleep 60
 done
 
+zsh $basedir/turbowait.zsh $DIRS
