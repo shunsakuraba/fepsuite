@@ -32,22 +32,18 @@ fi
 basestructurename=${basestructure:r}
 basename=${basestructure:t:r}
 
-respgau=${basename}.resp.gau
+optfintmol=${basestructurename}.opt2fin.tmol
+respgau=${basestructurename}.resp.gau
 respcheck=${basename}.resp.chk
-opt4check=${basename}.opt4.chk
+
+$OPENBABEL $optfintmol -o gau -xk "%chk=$respcheck
+#HF/6-31G* SCF=tight Test Pop=MK iop(6/33=2) iop(6/42=6) sp
+# iop(6/50=1)" $respgau
+
+sed "7c $CHARGE 1/" -i $respgau
 
 # RESP gaussian
 cat >> $respgau <<EOF
---Link1--
-%oldchk=$opt4check
-%chk=$respcheck
-#HF/6-31G* SCF=tight Test Pop=MK iop(6/33=2) iop(6/42=6) sp
-# iop(6/50=1) GEOM=Checkpoint
-
-RESP calculation
-
-$CHARGE 1
-
 $basename.gesp
 
 $basename.gesp
