@@ -16,7 +16,7 @@ dir=$remotedirbase/$rundir
 
 script=${input:t}
 
-thost=magnolia.kudpc.kyoto-u.ac.jp
+thost=automation-magnolia01.kudpc.kyoto-u.ac.jp
 subg09='~/'$remotedirbase/subg09
 subopt="-W 168:00"
 
@@ -60,7 +60,7 @@ trapoff() {
 trapon
 set -x
 
-ssh magnolia.kudpc.kyoto-u.ac.jp 'mkdir -p '$dir'; cd '$dir'; awk "/^%/ && !x {print \"%nprocShared=28\"; x=1} 1" > '$script < $input
+ssh $thost 'mkdir -p '$dir'; cd '$dir'; awk "/^%/ && !x {print \"%nprocShared=28\"; x=1} 1" > '$script < $input
 perform "{ set -x; module load gaussian09/d01; $subg09 $queue $script $subopt |& tee jobid.txt } |& tee run.log"
 wait_completion jobid.txt
 
