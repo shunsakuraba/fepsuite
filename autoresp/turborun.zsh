@@ -85,7 +85,7 @@ for e in $ENVS; do
 	CONSTRAINTFILE=$V
 	continue
     fi
-    echo "$K=\"${V:q}\""
+    echo "$K=\"${V}\""
 done > $ENVF
 
 trapon

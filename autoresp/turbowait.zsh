@@ -1,6 +1,6 @@
 #!/usr/bin/zsh
 # -*- Shell-script -*-
-# submit turbomole job to magnolia
+# submit turbomole job
 
 if [[ -z $1 ]]; then
     echo "Usage: $0 (dirname) [(dirname2)...]" 1>&2
@@ -53,10 +53,10 @@ perform() {
 wait_completion() {
     trapoff
     while true; do
-        perform "for d in $rundirs; do [[ -e $jobid/GEO_OPT_CONVERGED ]] || exit 1; done"
+        perform "for d in $rundirs; do [[ -e \$d/GEO_OPT_CONVERGED ]] || exit 1; done"
         ecode=$?
         echo "DEBUG: wait_completion returned $ecode" 1>&2
-        if (( ecode == 1 )); then 
+        if (( ecode == 0 )); then 
 	    trapon
             return 0
         fi

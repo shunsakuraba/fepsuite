@@ -1,6 +1,7 @@
 #!/usr/bin/zsh
 echo "FIXME THIS SCRIPT IS INCOMPLETE (file names should be replaced correctly)"
 exit 1
+
 # Resp charge fitting final phase
 # Assumes subpipe2-opt is done
 if [[ -z $4 ]]; then
@@ -13,8 +14,7 @@ basedir=${0:h}
 basestructure=$1
 backbone=$2
 chargefile=$3
-chargemonomerfile=$4
-mainchain=$5
+mainchain=$4
 
 basestructuretype=${basestructure:e}
 if [[ $basestructuretype = "gau" ]]; then
@@ -31,7 +31,7 @@ trap 'echo "Error returned at previous execution"; exit 1' ZERR
 set -x
 
 ACFILE=$basestructurename.final.ac
-python $basedir/merger.py $basestructure $backbone $basestructurename.full.pdb 
+python $basedir/merger.py $basestructurename.base.pdb $backbone $basestructurename.full.pdb 
 
 python copycharge.py $basestructurename.full.pdb $basestructurename.resp.mol2 $chargefile $basestructurename.final.charge
 
@@ -48,19 +48,6 @@ neato $basestructurename.final.dot -Tps -o $basestructurename.final.ps
 
 
 
-# ANTECHAMBER overwrites atomtypes, prevent it with -ao type
-#$ANTECHAMBER -i $basestructurename.monomer.ac -fi ac -o $basestructurename.monomer.prep -fo prepi -a $basestructurename.monomer.ac -fa ac -ao type
-
-python copycharge.py $basestructurename.resp.mol2 $basestructurename.resp.mol2 $chargemonomerfile $basestructurename.monomer.charge
-
-MONOMERAC=$basestructurename.monomer.ac
-
-$ANTECHAMBER -i $basestructurename.resp.log -fi gout -o $MONOMERAC -fo ac -at amber -c rc -cf $basestructurename.monomer.charge -a $basestructure -fa pdb -ao name -rn $RESNAME
-
-# doing it by prepgen
-$PREPGEN -i $basestructurename.monomer.ac -o $basestructurename.monomer.prep -f int -rn $RESNAME && echo
-
-$ANTECHAMBER -i $MONOMERAC -fi ac -j 0 -o $basestructurename.optstructure.pdb -fo pdb
 
 unset -x
 
