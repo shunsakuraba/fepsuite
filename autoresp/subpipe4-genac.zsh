@@ -33,20 +33,42 @@ set -x
 ACFILE=$basestructurename.final.ac
 python $basedir/merger.py $basestructurename.base.pdb $backbone $basestructurename.full.pdb 
 
-python copycharge.py $basestructurename.full.pdb $basestructurename.resp.mol2 $chargefile $basestructurename.final.charge
+python $basedir/copycharge.py $basestructurename.full.pdb $basestructurename.resp.mol2 $chargefile $basestructurename.final.charge
 
 $ANTECHAMBER -i $basestructurename.full.pdb -fi pdb -o $ACFILE -fo ac -at amber -c rc -cf $basestructurename.final.charge
 
 # special treatment for RNA, what to do in general??
 sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
+
 RESNAME=$(grep '^ATOM' $ACFILE | head -1 | cut -c18-20)
 
 $PREPGEN -i $ACFILE -o $basestructurename.final.prep -m rna.mainchain -f int -rn $RESNAME && echo
 
+#---------------------------------------------------
+# Generate dot file for visual inspection
 python $basedir/prep2dot.py < $basestructurename.final.prep > $basestructurename.final.dot
 neato $basestructurename.final.dot -Tps -o $basestructurename.final.ps
 
 
+RESSHORT=${RESNAME%?}
+
+#---------------------------------------------------
+# Generate 5' and 3' terminus version (5'-OH, 3'-OH)
+
+for terminus in 3 5; do
+    ACFILE=$basestructurename.$terminus.ac
+    python $basedir/merger.py $basestructurename.base.pdb ${backbone:r}$terminus.${backbone:e} $basestructurename.$terminus.pdb 
+
+    python $basedir/copycharge.py -nonint $basestructurename.$terminus.pdb $basestructurename.resp.mol2 ${chargefile:r}$terminus.${backbone:e} $basestructurename.$terminus.charge
+
+    $ANTECHAMBER -i $basestructurename.$terminus.pdb -fi pdb -o $ACFILE -fo ac -at amber -c rc -cf $basestructurename.$terminus.charge
+
+    # hack
+    sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
+
+    $PREPGEN -i $ACFILE -o $basestructurename.$terminus.prep -m rna$terminus.mainchain -f int -rn ${RESSHORT}$terminus && echo
+
+done
 
 
 unset -x
