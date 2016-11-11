@@ -101,8 +101,14 @@ for i in {0..35}; do
     optdihf=$basestructurename.dihopt$i.txt
     rundir=$basestructurename/optdih$i
     DIRS+=$rundir
-    NOWAIT=y zsh $basedir/turborun.zsh $rundir TITLE="Optimization" CONSTRAINTS=$optdihf BASIS="6-311++G(3df,3pd)" CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=78.4 DISP3=bj ENERGY_CONV=7 COORD_CONV=4 CYCLE=1000 NEWBASIS=y $opttmol
+    NOWAIT=y zsh $basedir/turborun.zsh $rundir TITLE="Optimization" CONSTRAINTS=$optdihf BASIS="6-311++G(3df,3pd)" CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=78.4 DISP3=bj ENERGY_CONV=6 COORD_CONV=3 SCF_CONV=7 CYCLE=1000 NEWBASIS=y $opttmol
     sleep 60
 done
 
 zsh $basedir/turbowait.zsh $DIRS
+
+for i in {0..35}; do
+    zsh $basedir/turbofetch.zsh $basestructurename/optdih$i $basestructurename.dihopt$i.done.tmol
+    sleep 60
+done
+
