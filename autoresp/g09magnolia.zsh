@@ -37,7 +37,7 @@ wait_completion() {
     jobid=$1
     trapoff
     while true; do
-        perform "ID=\$(tr '<>' '  ' < $jobid | tail -1 | cut -f3 -d' '); qjobs | grep -q \"^\$ID \""
+        perform "qjobs | grep -q \"^$jobid \""
         ecode=$?
         echo "DEBUG: wait_completion returned $ecode" 1>&2
         if (( ecode == 1 )); then 
@@ -60,8 +60,14 @@ trapoff() {
 trapon
 set -x
 
-ssh $thost 'mkdir -p '$dir'; cd '$dir'; awk "/^%/ && !x {print \"%nprocShared=28\"; x=1} 1" > '$script < $input
-perform "{ set -x; module load gaussian09/d01; $subg09 $queue $script $subopt |& tee jobid.txt } |& tee run.log"
-wait_completion jobid.txt
+ssh $thost 'mkdir -p '$dir'; cd '$dir'; awk "/^%/ && !x {print \"%nprocShared=28\n%mem=28GB\"; x=1} 1" > '$script < $input
+
+JOBID=$(perform "{ set -x; module load gaussian09/d01; $subg09 $queue $script $subopt |& tee jobid.txt } |& tee run.log | tail -1")
+if [[ -n $NOWAIT ]]; then
+    exit 0
+fi
+JOBID=$(tr '<>' '  ' <<< $JOBID | cut -f3 -d' ')
+
+wait_completion $JOBID
 
 
