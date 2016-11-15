@@ -1,5 +1,7 @@
 #!/usr/bin/zsh
 
+# Make a structure with 5'-OH replaced with H (H53)
+
 # Assumes subpipe4-genac is done
 if [[ -z $4 ]]; then
     echo "Usage: $0 (base-only structure) (base constraint) (dihedral) (atomtype) (resname)" 1>&2
@@ -83,8 +85,6 @@ natom=$(wc -l < $basestructurename.gaussian.atoms)
     cat $basestructurename.gaussian.atoms
 } > $basestructurename.ext.parameter
 
-optmonomermol2=$basestructurename.monomer.optfin.mol2
-
 for i in {0..35}; do
     opttmol=$basestructurename.dihopt$i.tmol
     optdihf=$basestructurename.dihopt$i.txt
@@ -92,9 +92,10 @@ for i in {0..35}; do
 	cat $baseconstraint
 	echo "dihedral $diheds "$((i * 10))
     } > $basestructurename.cons$i.txt
-    python $basedir/constrain-tm.py $optmonomermol2 $basestructure $basestructurename.cons$i.txt $opttmol $optdihf
+    # monomermol2 should be properly named, no need to hassle
+    python $basedir/constrain-tm.py $monomerpdb $monomermol2 $basestructurename.cons$i.txt $opttmol $optdihf
 done
-    
+
 DIRS=()
 for i in {0..35}; do
     opttmol=$basestructurename.dihopt$i.tmol

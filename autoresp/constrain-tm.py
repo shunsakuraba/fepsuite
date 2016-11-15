@@ -30,15 +30,20 @@ def typeoffn(f):
 basetype = typeoffn(basefile)
 nametype = typeoffn(namefile)
 
-m = pybel.readfile(nametype, namefile).next()
+m = pybel.readfile(basetype, basefile).next()
 if m == None:
     print >> sys.stderr, "Failed to read from %s" % basefile
     sys.exit(1)
 obmol = m.OBMol
+m_name = pybel.readfile(nametype, namefile).next()
+if m == None:
+    print >> sys.stderr, "Failed to read from %s" % namefile
+    sys.exit(1)
+obmol_name = m_name.OBMol
 
 name2idx = {}
 print >> sys.stderr, "Index, AtomID:"
-for a in ob.OBMolAtomIter(obmol):
+for a in ob.OBMolAtomIter(obmol_name):
     atomid = a.GetResidue().GetAtomID(a).strip()
     index = a.GetIdx()
     print >> sys.stderr, index, atomid
