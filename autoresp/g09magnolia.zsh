@@ -61,7 +61,12 @@ set -x
 
 ssh $thost 'mkdir -p '$dir'; cd '$dir'; awk "/^%/ && !x {print \"%nprocShared=28\n%mem=28GB\"; x=1} 1" > '$script < $input
 
-JOBID=$(perform "{ set -x; module load gaussian09/d01; $subg09 $queue $script $subopt |& tee jobid.txt } |& tee run.log | tail -1")
+if [[ -n $EXTRA ]]; then
+    FILES=($(tr ',' ' ' <<< $EXTRA))
+    scp $FILES $thost:$dir
+fi
+
+JOBID=$(perform "{ set -x; $CMD; module load gaussian09/d01; $subg09 $queue $script $subopt |& tee jobid.txt } |& tee run.log | tail -1")
 if [[ -n $NOWAIT ]]; then
     exit 0
 fi
