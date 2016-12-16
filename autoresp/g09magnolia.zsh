@@ -12,9 +12,8 @@ input=$2
 
 remotedirbase=LARGE2.asai/g09queue
 queue=gr10341d
-dir=$remotedirbase/$rundir
-
 script=${input:t}
+dir=$remotedirbase/$rundir/${script:r}
 
 thost=automation-magnolia01.kudpc.kyoto-u.ac.jp
 subg09='~/'$remotedirbase/subg09
@@ -37,7 +36,7 @@ wait_completion() {
     jobid=$1
     trapoff
     while true; do
-        perform "qjobs | grep -q \"^$jobid \""
+        perform "while true; do sleep 300; qjobs | grep -q \"^$jobid \" && continue; exit 1; done"
         ecode=$?
         echo "DEBUG: wait_completion returned $ecode" 1>&2
         if (( ecode == 1 )); then 
