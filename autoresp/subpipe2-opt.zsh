@@ -7,12 +7,13 @@
 
 if [[ -z $2 ]]; then
     echo "Usage: $0 (structure) (constraint file)" 1>&2
+    echo "Example: $0 inosine.pdb constraint-RNA.txt" 1>&2
     exit 1
 fi
 
 basedir=${0:h}
 basestructure=$1
-baseconstraint=$2
+baseconstraint=${basedir}/$2
 
 if [[ -z $CHARGE ]]; then
     CHARGE=0
@@ -60,10 +61,10 @@ rundir=${basename}/opt2
 
 # Switch to Turbomole
 # Define constraints
-python $basedir/constrain-tm.py $opt1log $basestructure $constraintfile $opt2tmol $opt2dihf
+python $basedir/constrain-tm.py $opt1log $basestructure $baseconstraint $opt2tmol $opt2dihf
 
 # PBE/TZVPP (as in Zgarbova et al. 2011)
-zsh $basedir/turborun.zsh $rundir TITLE="Optimization" CONSTRAINTS=$opt2dihf BASIS="TZVPP" CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=78.4 DISP3=bj ENERGY_CONV=7 COORD_CONV=4 CYCLE=1000 $opt2tmol 
+zsh $basedir/turborun.zsh $rundir TITLE="Optimization" CONSTRAINTS=$opt2dihf BASIS="TZVPP" CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=78.4 DISP3=bj ENERGY_CONV=6 COORD_CONV=3 SCF_CONV=7 CYCLE=1000 $opt2tmol 
 
 zsh $basedir/turbofetch.zsh $rundir $optfintmol
 

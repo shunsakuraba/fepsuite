@@ -12,7 +12,7 @@ fi
 
 basedir=${0:h}
 basestructure=$1
-baseconstraint=$2
+baseconstraint=$basedir/$2
 dihedral=$3
 newatomtype=$4
 resname=$5
@@ -20,7 +20,7 @@ resname=$5
 basestructurename=${basestructure:r}
 basename=${basestructure:t:r}
 
-monomerprep=$basestructurename.monomer.prep
+monomerprep=$basestructurename.monomer.opt.prep
 monomermol2=$basestructurename.monomer.opt.mol2
 monomerpdb=$basestructurename.monomer.opt.pdb
 
@@ -48,8 +48,8 @@ dihoptprep=$basestructurename.dihopt.prep
 dihoptfrcmod=$basestructurename.dihopt.frcmod
 baseparm=$AMBERHOME/dat/leap/parm/parm10.dat
 
-python copydih.py $monomerprep $dihedral $newatomtype $baseparm > $dihoptfrcmod
-python replace_prep.py $monomerprep $dihedral $newatomtype > $dihoptprep
+python $basedir/copydih.py $monomerprep $dihedral $newatomtype $baseparm > $dihoptfrcmod
+python $basedir/replace_prep.py $monomerprep $dihedral $newatomtype > $dihoptprep
 
 if [[ ! -e $basestructurename.extra.frcmod ]]; then
     echo "$basestructurename.extra.frcmod does not exist, making dummy file" 2>&1

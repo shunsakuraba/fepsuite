@@ -4,12 +4,13 @@
 # Assumes subpipe2-opt is done
 if [[ -z $2 ]]; then
     echo "Usage: $0 (structure) (charge restraint file)" 1>&2
+    echo "Example: $0 inosine.pdb resp-rna.txt" 1>&2
     exit 1
 fi
 
 basedir=${0:h}
 basestructure=$1
-baserestraint=$2
+baserestraint=$basedir/$2
 
 RESP=${AMBERHOME}/bin/resp
 ESPGEN=${AMBERHOME}/bin/espgen
@@ -40,7 +41,9 @@ $OPENBABEL $optfintmol -o gau -xk "%chk=$respcheck
 #HF/6-31G* SCF=tight Test Pop=MK iop(6/33=2) iop(6/42=6) sp
 # iop(6/50=1)" $respgau
 
-sed "7c $CHARGE 1/" -i $respgau
+sed "5c Comment line" -i $respgau
+
+sed "7c $CHARGE 1" -i $respgau
 
 # RESP gaussian
 cat >> $respgau <<EOF
@@ -52,7 +55,7 @@ $basename.gesp
 EOF
 
 zsh $basedir/g09run.zsh $basename $respgau
-zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
+log=$respgau zsh $basedir/g09fetch.zsh $basename $basename.gesp $basestructurename.gesp
 
 ACFILE=$basestructurename.resp.ac
 

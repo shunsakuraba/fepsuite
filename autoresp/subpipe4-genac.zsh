@@ -1,6 +1,4 @@
 #!/usr/bin/zsh
-echo "FIXME THIS SCRIPT IS INCOMPLETE (file names should be replaced correctly)"
-exit 1
 
 # Resp charge fitting final phase
 # Assumes subpipe2-opt is done
@@ -12,9 +10,9 @@ fi
 
 basedir=${0:h}
 basestructure=$1
-backbone=$2
-chargefile=$3
-mainchain=$4
+backbone=$basedir/$2
+chargefile=$basedir/$3
+mainchain=$basedir/$4
 
 basestructuretype=${basestructure:e}
 if [[ $basestructuretype = "gau" ]]; then
@@ -32,6 +30,9 @@ set -x
 
 ACFILE=$basestructurename.final.ac
 python $basedir/merger.py $basestructurename.base.pdb $backbone $basestructurename.full.pdb 
+
+# hack. Quite often merger's connectivity information is wrong
+sed -i '/\(CONECT\|MASTER\)/d' $basestructurename.full.pdb
 
 python $basedir/copycharge.py $basestructurename.full.pdb $basestructurename.resp.mol2 $chargefile $basestructurename.final.charge
 
@@ -58,20 +59,25 @@ RESSHORT=${RESNAME%?}
 for terminus in 3 5; do
     ACFILE=$basestructurename.$terminus.ac
     python $basedir/merger.py $basestructurename.base.pdb ${backbone:r}$terminus.${backbone:e} $basestructurename.$terminus.pdb 
+    
+    # hack
+    sed -i '/\(CONECT\|MASTER\)/d' $basestructurename.$terminus.pdb
 
-    python $basedir/copycharge.py -nonint $basestructurename.$terminus.pdb $basestructurename.resp.mol2 ${chargefile:r}$terminus.${backbone:e} $basestructurename.$terminus.charge
+    python $basedir/copycharge.py -nonint $basestructurename.$terminus.pdb $basestructurename.resp.mol2 ${chargefile:r}$terminus.${chargefile:e} $basestructurename.$terminus.charge
 
     $ANTECHAMBER -i $basestructurename.$terminus.pdb -fi pdb -o $ACFILE -fo ac -at amber -c rc -cf $basestructurename.$terminus.charge
 
-    # hack
-    sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
+    # hack. What to do in general ... ?
+    if [[ $terminus = 5 ]]; then
+	sed -i "/O3\'/s/ O$/OS/" $ACFILE || true
+    fi
 
-    $PREPGEN -i $ACFILE -o $basestructurename.$terminus.prep -m rna$terminus.mainchain -f int -rn ${RESSHORT}$terminus && echo
+    $PREPGEN -i $ACFILE -o $basestructurename.$terminus.prep -m ${basedir}/rna$terminus.mainchain -f int -rn ${RESSHORT}$terminus && echo
 
 done
 
 
-unset -x
+unsetopt -x
 
 echo "*********************************"
 echo "Subpipe 4 finished"
