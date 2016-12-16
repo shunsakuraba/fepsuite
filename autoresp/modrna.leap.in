@@ -1,0 +1,10 @@
+source leaprc.ff14SB
+# 
+loadAmberparams %base%.dihopt.frcmod
+loadAmberparams %base%.extra.frcmod
+loadAmberPrep %base%.dihopt.prep
+
+mol = loadPDB %base%.monomer.opt.pdb
+check mol
+saveAmberParm mol %base%.dihopt.ambtop %base%.dihopt.crd
+quit
