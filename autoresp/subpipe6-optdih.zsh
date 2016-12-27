@@ -71,20 +71,9 @@ $TLEAP -f $dihoptleap
 # Say f%!k to the hard-coded PB radii
 newatomtype=$(atomtype $repatm $dihoptprep)
 sed -i '/%FLAG AMBER_ATOM_TYPE/,/%FLAG/ {s/'$newatomtype'  /'$prevatomtype'  /}' $basestructurename.dihopt.ambtop
+# remaining MM thingies are in subpipe9
 
-
-sed -n '/DUMM/,/^$/p' $basestructurename.dihopt.prep | sed '$d' |grep -v 'DUMM' | cut -c 7-10 | tr -d ' ' > $basestructurename.mm.atoms
-
-grep '^ATOM' $basestructure  | cut -c 13-16 | tr -d ' ' > $basestructurename.gaussian.atoms
-
-natom=$(wc -l < $basestructurename.gaussian.atoms)
-{
-    echo $basestructurename.dihopt.ambtop
-    echo $natom
-    cat $basestructurename.mm.atoms
-    cat $basestructurename.gaussian.atoms
-} > $basestructurename.ext.parameter
-
+# Run TMOL optimization
 for i in {0..35}; do
     opttmol=$basestructurename.dihopt$i.tmol
     optdihf=$basestructurename.dihopt$i.txt

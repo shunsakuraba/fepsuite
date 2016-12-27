@@ -40,7 +40,7 @@ mo='~/opt/pg/mo'
 perform() {
     cmd=$1
     while true; do
-        ssh $thost $ZSH -i -l <<< "set -x; $cmd"
+        ssh $thost $ZSH -i -l <<< "set -x; cd $dir; $cmd"
         ecode=$?
         if (( ecode != 255 )); then
             echo "DEBUG: perform returned $ecode" 1>&2

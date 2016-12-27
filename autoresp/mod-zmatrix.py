@@ -3,6 +3,14 @@ import pybel
 import openbabel as ob
 import os.path
 import re
+from collections import OrderedDict
+
+# XXX: quick hack
+redundant = False
+if len(sys.argv) >= 2 and sys.argv[1] == '--redundant':
+    redundant = True
+    # whoa
+    del sys.argv[1]
 
 if len(sys.argv) != 4:
     print >> sys.stderr, "Usage: %s [Gaussian(Z-matrix)] [pdb (or mol2)] [Constraint file]" % sys.argv[0]
@@ -74,7 +82,8 @@ with open(gaufile, "rt") as fh:
             sys.stdout.write(l)
             continue
         # "#" line
-        l = re.sub(r"\bopt\b", "popt(Z-matrix)", l, flags = re.I)
+        if not redundant:
+            l = re.sub(r"\bopt\b", "popt(Z-matrix)", l, flags = re.I)
         sys.stdout.write(l)
         break
 
@@ -99,8 +108,8 @@ with open(gaufile, "rt") as fh:
     sys.stdout.write(l)
     
     # coordinates
-    dihmaps = {}
-    fixvars = {}
+    dihmaps = OrderedDict()
+    fixvars = OrderedDict()
     modvars = {}
     aid = 1
     for l in fh:
@@ -147,21 +156,31 @@ with open(gaufile, "rt") as fh:
         print >> sys.stderr, "Not all constraints are covered!"
         sys.exit(1)
 
+    lastislf = False
     for l in fh:
         ls = l.split('=')
         if ls == []:
             sys.stdout.write(l)
+            lastislf = True
             break
         variable = ls[0].strip()
         if variable in fixvars:
-            sys.stdout.write("%s= %12.5f F\n" % (ls[0], fixvars[variable]))
+            sys.stdout.write("%s= %12.5f%s\n" % (ls[0], fixvars[variable], [" F", ""][redundant]))
             continue
         elif variable in modvars:
             sys.stdout.write("%s= %12.5f\n" % (ls[0], modvars[variable]))
         else:
             sys.stdout.write(l)
+            lastislf = (l.strip() == "")
 
     for l in fh:
         sys.stdout.write(l)
+        lastislf = (l.strip() == "")
 
-
+    if redundant:
+        if (not lastislf):
+            sys.stdout.write("\n") 
+        for (k, v) in dihmaps.iteritems():
+            if v in fixvars:
+                (a1, a2, a3, a4) = k
+                sys.stdout.write("D %d %d %d %d F\n" % (a1, a2, a3, a4))

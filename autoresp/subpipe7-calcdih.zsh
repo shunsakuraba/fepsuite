@@ -22,13 +22,15 @@ trap 'echo "Error returned at previous execution"; exit 1' ZERR
 set -x
 
 declare -A methmap
+declare -A multiplicity
 
-methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  mp2631g "MP2/6-31+G(d)"  ccsd631g "CCSD(T)/6-31+G(d)")
+methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ")
+multiplicity=(mp2pvdz 2  mp2pvtz 4  mp2pvqz 3  ccsdpvdz 12)
 
-sep=2
 N=36
 for k in ${(k)methmap}; do
     meth=${methmap[$k]}
+    sep=${multiplicity[$k]}
     for iter in {1..$sep}; do
 	(( beg = (iter - 1) * N / sep )) || true
 	(( end = iter * N / sep - 1 )) || true
@@ -45,7 +47,7 @@ for k in ${(k)methmap}; do
 5c \ $CHARGE 1" $rungau
 	    zsh $basedir/g09run.zsh $basename $rungau
 	done &
-	sleep 10
+	sleep 60
     done
 done
 wait
