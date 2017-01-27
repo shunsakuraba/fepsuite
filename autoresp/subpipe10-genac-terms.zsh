@@ -18,6 +18,9 @@ resname=$5
 basestructurename=${basestructure:r}
 basename=${basestructure:t:r}
 
+trap 'echo "Error returned at previous execution"; exit 1' ZERR
+set -x
+
 for i in {0..35}; do
     runlog=$basestructurename.optmm.$i.log
     locallog=$runlog
@@ -49,6 +52,19 @@ for i in {0..35}; do
 done > $weight
 
 
-python funopt.py $qme $mme $weight --hartree
+result=$basestructurename.funopt.txt
+python $basedir/funopt.py $qme $mme $weight $result --hartree
+frcmodbase=$basestructurename.dihopt.frcmod
+frcmodopt=$basestructurename.frcmod
+python $basedir/replace_frcmod_opt_target.py $result $frcmodbase > $frcmodopt
 
+for suf in final 3 5; do
+    python $basedir/replace_prep.py $basestructurename.$suf.prep $dihedral $newatomtype > $basestructurename.$suf.tmp.prep
+    # bsc0
+    K=.$suf
+    if [[ $suf = final ]]; then
+	K=
+    fi
+    python $basedir/replace_prep.py $basestructurename.$suf.tmp.prep C2\'-C3\'-C4\'-C5\' CI > $basestructurename.opted$K.prep
+done
 
