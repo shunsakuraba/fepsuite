@@ -1,1 +1,1 @@
-g09magnolia.zsh
+g09laurel.zsh

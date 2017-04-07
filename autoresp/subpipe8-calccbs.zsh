@@ -24,7 +24,8 @@ set -x
 
 declare -A methmap
 
-methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ")
+#methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ") # MP2/cc-pVDZ is no longer necessary since CCSD(T) already includes it
+methmap=(mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ")
 
 fetches=()
 for k in ${(k)methmap}; do
@@ -38,6 +39,6 @@ zsh $basedir/g09fetch.zsh $fetches
 
 dihsummary=$basestructurename.dihsummary.txt
 for i in {0..35}; do
-    python calcCBS.py $basestructurename.dihcalc.%s.$i.log
+    python $basedir/calcCBS.py $basestructurename.dihcalc.%s.$i.log
 done > $basestructurename.dihcalc.ccsdtcbs.log
 

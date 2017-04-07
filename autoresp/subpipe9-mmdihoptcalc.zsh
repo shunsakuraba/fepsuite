@@ -8,8 +8,9 @@ if [[ -z $4 ]]; then
     exit 1
 fi
 
-echo TODO transplant the program to Laurel
-exit 1
+# Better to be run on RCCS atm (2017 Feb)! This is because I am going to use camphor from Apr.
+#echo TODO transplant the program to Laurel
+#exit 1
 
 basedir=${0:h}
 basestructure=$1
@@ -40,6 +41,9 @@ fi
 
 source $basedir/defaults.zsh
 
+trap 'echo "Error returned at previous execution"; exit 1' ZERR
+set -x
+
 # generate pdb
 dihoptpdb=$basestructurename.dihopt.pdb
 $AMBPDB -p $ambtop < $ambcrd > $dihoptpdb
@@ -60,7 +64,7 @@ natom=$(wc -l < $basestructurename.gaussian.atoms)
 
 # generate "External" Gaussian inputs
 mmoptpre=$basestructurename.optmmpre.gau
-$OPENBABEL $dihoptpdb -ogzmat -xk "#OPT(ModRedundant,MaxCyc=9999) External=\"../../external_sander.py inosine.ext.parameter\"" $mmoptpre
+$OPENBABEL $dihoptpdb -ogzmat -xk "#OPT(ModRedundant,MaxCyc=9999) External=\"../../external_sander.py $basestructurename.ext.parameter\"" $mmoptpre
 sed -i "/^0 /c $CHARGE 1" $mmoptpre
 
 for i in {0..35}; do

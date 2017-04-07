@@ -26,7 +26,7 @@ for i in {0..35}; do
     locallog=$runlog
     fetches+=($basename $runlog $locallog)
 done
-#zsh $basedir/g09fetch.zsh $fetches
+zsh $basedir/g09rccsfetch.zsh $fetches
 
 qme=$basestructurename.dihcalc.ccsdtcbs.log
 mme=$basestructurename.mm.txt

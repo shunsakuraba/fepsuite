@@ -39,7 +39,7 @@ if basetype == "":
     sys.exit(1)
 
 if bbtype == "pdb":
-    print >> sys.stderr, "Uncharged mol file must not be pdb (must have charges, mol2 recommended)"
+    print >> sys.stderr, "Warning: Uncharged mol file must not be pdb (must have charges, mol2 recommended); This feature is only useful to generate the charge list; continue running"
     #sys.exit(1)
 
 if basetype == "pdb":

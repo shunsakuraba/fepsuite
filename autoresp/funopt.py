@@ -45,8 +45,8 @@ def test_linear():
 
 #test_linear()
 
-if len(sys.argv) <= 3:
-    print >> sys.stderr, "Usage: %s (qm) (mm) (weight) [--hartree]" % sys.argv[0]
+if len(sys.argv) <= 4:
+    print >> sys.stderr, "Usage: %s (qm) (mm) (weight) (output) [--hartree]" % sys.argv[0]
     sys.exit(1)
 
 
@@ -58,8 +58,8 @@ qms = [float(x.strip()) for x in qms]
 mms = [float(x.strip()) for x in mms]
 weights = [float(x.strip()) for x in weights]
 
-if len(sys.argv) > 4:
-    if sys.argv[4] == "--hartree":
+if len(sys.argv) > 5:
+    if sys.argv[5] == "--hartree":
         # You have: (1 hartree * avogadro) / (kcal_th/mol)
         # You want: 
         #        Definition: 627.50947
@@ -67,7 +67,7 @@ if len(sys.argv) > 4:
         qms = [conversion * x for x in qms]
         mms = [conversion * x for x in mms]
     else:
-        print >> sys.stderr, "Unknown option: \"%s\"" % sys.argv[4]
+        print >> sys.stderr, "Unknown option: \"%s\"" % sys.argv[5]
         sys.exit(1)
 
 
@@ -128,8 +128,10 @@ for i in range(Nfit):
 print >> sys.stderr, r, facs
 print >> sys.stderr, r2, facs2
 
-for i in range(Nfit):
-    print i + 1, facs2[i + 1], phaseopt_tweak[i]
+with open(sys.argv[4], "w") as fh:
+    for i in range(Nfit):
+        print >> fh, i + 1, facs2[i + 1], phaseopt_tweak[i]
+        print i + 1, facs2[i + 1], phaseopt_tweak[i]
 
 
 

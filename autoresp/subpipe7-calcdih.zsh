@@ -24,7 +24,8 @@ set -x
 declare -A methmap
 declare -A multiplicity
 
-methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ")
+#methmap=(mp2pvdz "MP2(SemiDirect)/cc-pVDZ"  mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ") # MP2/cc-pVDZ is no longer necessary since CCSD(T) includes it
+methmap=(mp2pvtz "MP2(SemiDirect)/cc-pVTZ"  mp2pvqz "MP2(SemiDirect)/cc-pVQZ"  ccsdpvdz "CCSD(T)/cc-pVDZ")
 multiplicity=(mp2pvdz 2  mp2pvtz 4  mp2pvqz 3  ccsdpvdz 12)
 
 N=36
@@ -45,7 +46,8 @@ for k in ${(k)methmap}; do
 3c \ Remark
 
 5c \ $CHARGE 1" $rungau
-	    zsh $basedir/g09run.zsh $basename $rungau
+            # Laurel is unstable. Copy only
+	    COPY_ONLY=y zsh $basedir/g09run.zsh $basename $rungau
 	done &
 	sleep 60
     done
