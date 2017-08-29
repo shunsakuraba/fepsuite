@@ -73,6 +73,8 @@ for a in ob.OBMolAtomIter(basemol):
     chargemap_base[aid] = a.GetPartialCharge()
 
 chargemap_used = []
+max_abs_atoms = []
+max_abs = 0.
 bbmol.SetAutomaticPartialCharge(False)
 for a in ob.OBMolAtomIter(bbmol):
     aid = atomid(a)
@@ -89,11 +91,38 @@ for a in ob.OBMolAtomIter(bbmol):
             print >> sys.stderr, "Atom %s does not found in base mol" % aid
             sys.exit(1)
         c = chargemap_base[aid]
+        if abs(c) > max_abs:
+            max_abs_atoms = []
+            max_abs = abs(c)
+        if abs(c) == max_abs:
+            max_abs_atoms.append(a)
         a.SetPartialCharge(c)
 for aid in chargemap:
     if aid not in chargemap_used:
         print >> sys.stderr, "Predefined atom %s does not appear" % aid
         sys.exit(1)
+
+# Check total charges
+total = 0.0
+for a in ob.OBMolAtomIter(bbmol):
+    total += a.GetPartialCharge()
+print >> sys.stderr, "Total charges = %.6f" % total
+
+if integral and abs(total - round(total)) > 0.05:
+    print >> sys.stderr, "Total charge is not integral"
+    sys.exit(1)
+
+reimbursement = - (total - round(total))
+a = max_abs_atoms[0]
+oldcharge = a.GetPartialCharge()
+newcharge = oldcharge + reimbursement
+print >> sys.stderr, "Adjust atom \"%s\" charge from %.7f to %.7f" % (atomid(a), oldcharge, newcharge)
+a.SetPartialCharge(newcharge)
+
+total = 0.0
+for a in ob.OBMolAtomIter(bbmol):
+    total += a.GetPartialCharge()
+print >> sys.stderr, "Final total charges = %.6f" % total
 
 if outputtype == "charge":
     with open(outputfile, "wt") as fh:
@@ -103,14 +132,6 @@ else:
     output = pybel.Outputfile(outputtype, outputfile, overwrite=True)
     output.write(pybel.Molecule(bbmol))
 
-total = 0.0
-for a in ob.OBMolAtomIter(bbmol):
-    total += a.GetPartialCharge()
-print >> sys.stderr, "Total charges = %.6f" % total
-
-if integral and abs(total - round(total)) > 0.05:
-    print >> sys.stderr, "Total charge is not integral"
-    sys.exit(1)
 
 
 

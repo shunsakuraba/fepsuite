@@ -2,31 +2,37 @@
 
 # Resp charge fitting final phase
 # Assumes subpipe2-opt is done
-if [[ -z $4 ]]; then
-    echo "Usage: $0 (base-only structure) (backbone) (charge overwrite file) (charge monomer file) (mainchain specification)" 1>&2
-    echo "Example: $0 inosine.pdb RNA.pdb rna_charges.txt rna_monomer_charges.txt rna.mainchain" 1>&2
+if [[ -z $1 ]]; then
+    echo "Usage: $0 (base-only structure)" 1>&2
+    echo "Example: $0 inosine.pdb " 1>&2
     exit 1
 fi
 
 basedir=${0:h}
 basestructure=$1
-backbone=$basedir/$2
-chargefile=$basedir/$3
-mainchain=$basedir/$4
+backbone=$basedir/RNA.pdb
+chargefile=$basedir/rna_charges.txt
+mainchain=$basedir/rna.mainchain
 
-basestructuretype=${basestructure:e}
-if [[ $basestructuretype = "gau" ]]; then
-    echo "Base structure file name must not be gau" 1>&2
-    exit 1
-fi
-basestructurename=${basestructure:r}
-basename=${basestructure:t:r}
+#backbone=$basedir/$2
+#chargefile=$basedir/$3
+#mainchain=$basedir/$4
 
 PREPGEN=${AMBERHOME}/bin/prepgen
 ANTECHAMBER=${AMBERHOME}/bin/antechamber
 
 trap 'echo "Error returned at previous execution"; exit 1' ZERR
 set -x
+
+basestructuretype=${basestructure:e}
+if [[ $basestructuretype = "gau" ]]; then
+    echo "Base structure file name must not be gau" 1>&2
+    exit 1
+fi
+
+basestructurename=${basestructure:r}
+basename=${basestructure:t:r}
+
 
 ACFILE=$basestructurename.final.ac
 python $basedir/merger.py $basestructurename.base.pdb $backbone $basestructurename.full.pdb 
@@ -49,6 +55,8 @@ $PREPGEN -i $ACFILE -o $basestructurename.final.prep -m rna.mainchain -f int -rn
 # Generate dot file for visual inspection
 python $basedir/prep2dot.py < $basestructurename.final.prep > $basestructurename.final.dot
 neato $basestructurename.final.dot -Tps -o $basestructurename.final.ps
+
+
 
 
 RESSHORT=${RESNAME%?}

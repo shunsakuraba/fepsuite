@@ -1,6 +1,6 @@
 #!/usr/bin/zsh
 # -*- Shell-script -*-
-# submit turbomole job to magnolia
+# submit turbomole job to RCCS
 
 if [[ -z $2 ]]; then
     echo "Usage: $0 (dirname) FOO=BAR BAR=BAZ (turbomole script)" 1>&2
