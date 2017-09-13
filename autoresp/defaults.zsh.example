@@ -1,0 +1,12 @@
+#!/usr/bin/zsh
+
+# set AMBERHOME if necessary
+
+# modify the following parameters for new environment
+ANTECHAMBER=$AMBERHOME/bin/antechamber
+AMBPDB=$AMBERHOME/bin/ambpdb
+OPENBABEL=$(which babel)
+OBMINIMIZE=$(which obminimize)
+
+# if necessary modify PYTHONPATH for pybel / openbabel
+
