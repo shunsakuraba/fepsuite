@@ -13,6 +13,10 @@ thost=automation-ccfep.ims.ac.jp
 remotedirbase=save/turbomolequeue
 dir=$remotedirbase/$rundir
 
-ssh $thost "[ -e $dir/GEO_OPT_CONVERGED ]" || { echo "tmole not converged" && exit 1 }
-scp $thost:$dir/coord $output
+if [[ $ENERGYONLY = Y ]]; then
+    scp $thost:$dir/'turbo.log' $output
+else
+    ssh $thost "[ -e $dir/GEO_OPT_CONVERGED ]" || { echo "tmole not converged" && exit 1 }
+    scp $thost:$dir/coord $output
+fi
 

@@ -53,7 +53,11 @@ perform() {
 wait_completion() {
     trapoff
     while true; do
-        perform "for d in $rundirs; do [[ -e \$d/GEO_OPT_CONVERGED ]] || exit 1; done"
+	CHECKFILE=GEO_OPT_CONVERGED
+	if [[ $ENERGYONLY = Y ]]; then
+	    CHECKFILE=turbo.log
+	fi
+        perform "for d in $rundirs; do [[ -e \$d/$CHECKFILE ]] || exit 1; done"
         ecode=$?
         echo "DEBUG: wait_completion returned $ecode" 1>&2
         if (( ecode == 0 )); then 

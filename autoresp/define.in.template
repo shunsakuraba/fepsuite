@@ -1,0 +1,42 @@
+
+{{TITLE}}
+a {{COORD}}
+# define redundant
+idef
+{{CONSTRAINTS}}
+
+
+
+# redundant
+ired
+*
+# basis sets
+# choose library (usually 1)
+# for new basis add a line "basis=/foo/bar" at the end of ~/.definerc
+lib
+{{LIBNUM}}
+# choose basis set
+b all {{BASIS}}
+*
+# initials
+eht
+
+# Charge
+{{CHARGE}}
+# Accept
+
+# DFT-functionals
+dft
+on
+func
+{{FUNCTIONAL}}
+grid
+{{GRID}}
+*
+# SCF. This should be AFTER the DFT grid
+scf
+conv
+{{SCF_CONV}}
+
+# End everything
+*

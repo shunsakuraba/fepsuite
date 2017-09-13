@@ -28,7 +28,8 @@ done
 
 remotedirbase=save/turbomolequeue
 queue=PG
-tsubmit=/home/users/rq0/$remotedirbase/run.csh
+tscriptdir=/home/users/rq0/$remotedirbase
+tsubmit=run.csh
 dir=$remotedirbase/$rundir
 
 script=${input:t}
@@ -85,6 +86,10 @@ for e in $ENVS; do
 	CONSTRAINTFILE=$V
 	continue
     fi
+    if [[ $K = SCRIPT ]]; then
+	tsubmit=$V
+	continue
+    fi
     echo "$K=\"${V}\""
 done > $ENVF
 
@@ -98,7 +103,7 @@ if [[ ! -z $CONSTRAINTFILE ]]; then
     scp $CONSTRAINTFILE $thost:$dir/constraints
 fi
 
-perform "{ set -x; cd $dir; rm -f GEO_OPT_CONVERGED; $tsubmit } |& tee run.log"
+perform "{ set -x; cd $dir; rm -f GEO_OPT_CONVERGED; $tscriptdir/$tsubmit } |& tee run.log"
 if [[ -z $NOWAIT ]]; then
     wait_completion GEO_OPT_CONVERGED
 fi

@@ -87,6 +87,10 @@ for state in RNA DNA; do
     TLEAP=$AMBERHOME/bin/tleap
 
     $TLEAP -f $dihoptleap
+    if [[ ! -e $basestructurename.dihopt.ambtop ]]; then
+	echo "Failed to generate ambtop" 1>&2
+	false
+    fi
 
     # dirty hack: revert exchanged atomtype back only in ambtop
     # This is necessary to set correct PB radii in pbsa

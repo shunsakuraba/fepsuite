@@ -1,0 +1,29 @@
+
+{{TITLE}}
+a {{COORD}}
+*
+# Cartesian
+no
+# basis sets
+# choose library (usually 1)
+# for new basis add a line "basis=/foo/bar" at the end of ~/.definerc
+lib
+{{LIBNUM}}
+# choose basis set
+b all {{BASIS}}
+*
+# initials
+eht
+
+# Charge
+{{CHARGE}}
+# Accept
+
+# SCF setting.
+scf
+conv
+{{SCF_CONV}}
+
+*
+# End everything
+*

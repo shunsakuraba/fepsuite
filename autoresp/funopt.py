@@ -1,11 +1,15 @@
 # function optimization
 # determines both angle and coefficients
+import matplotlib
+matplotlib.use('Agg')
 
 import sys
 import numpy as np
 import cma
 import math
 import copy
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
 
 Nfit = 4
 
@@ -31,6 +35,16 @@ def getlinear(angles, delta_es, weights, phases):
     residsum = np.linalg.norm(residuals)
     return (residsum, x)
 
+def geteval(angles, facs, phases):
+    allevals = np.zeros_like(np.array(angles))
+    allevals += facs[0] # constants
+    for i in range(len(phases)):
+        n = i + 1
+        p = phases[i]
+        bases = vecbases(angles, n, p)
+        allevals += facs[i + 1] * bases
+    return allevals
+
 def test_linear():
     angles = np.array(range(36)) * 10.0
     weights = [1.0] * 36
@@ -49,13 +63,29 @@ if len(sys.argv) <= 4:
     print >> sys.stderr, "Usage: %s (qm) (mm) (weight) (output) [--hartree]" % sys.argv[0]
     sys.exit(1)
 
+def read_values(fn):
+    energies = {}
+    with open(fn) as fh:
+        for l in fh:
+            (state, angle, val) = l.split()
+            angle = int(angle)
+            val = float(val)
+            energies[(state, angle)] = val
 
-qms = file(sys.argv[1]).readlines()
-mms = file(sys.argv[2]).readlines()
+    ret = []
+    adjust_dna = energies[("RNA", 3)] - energies[("DNA", 3)]
+    for i in range(36):
+        if i >= 3 and i <= 15:
+            energy = adjust_dna + energies[("DNA", i)]
+        else:
+            energy = energies[("RNA", i)]
+        ret.append(energy)
+    return ret
+
+qms = read_values(sys.argv[1])
+mms = read_values(sys.argv[2])
 weights = file(sys.argv[3]).readlines()
 
-qms = [float(x.strip()) for x in qms]
-mms = [float(x.strip()) for x in mms]
 weights = [float(x.strip()) for x in weights]
 
 if len(sys.argv) > 5:
@@ -133,6 +163,23 @@ with open(sys.argv[4], "w") as fh:
         print >> fh, i + 1, facs2[i + 1], phaseopt_tweak[i]
         print i + 1, facs2[i + 1], phaseopt_tweak[i]
 
+# Generate plot
+(fig, axs) = plt.subplots(2, 1, figsize=(10,10), dpi=120)
 
+fev = geteval(angles, facs2, phaseopt_tweak)
+
+ax = axs[0]
+ax.plot(angles, deltaes, 'o')
+ax.plot(angles, fev, '-')
+ax.set_xlim([0, 360])
+
+ax = axs[1]
+ax.plot(angles, qms, 'or')
+ax.plot(angles, mms, 'xb')
+ax.plot(angles, mms + fev, '-b')
+ax.set_xlim([0, 360])
+
+plt.tight_layout()
+plt.savefig("funopt.png", format="png")
 
         

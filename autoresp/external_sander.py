@@ -5,14 +5,22 @@ import os
 import os.path
 import re
 
-[ _exe,
-  parameter, 
-  _layer,
-  inputfile,
-  outputfile,
-  msgfile,
-  _fchkfile,
-  _matelfile ] = sys.argv
+if len(sys.argv) == 5:
+    [ _exe,
+      parameter,
+      _layer,
+      inputfile,
+      outputfile ] = sys.argv
+    msgfile = "debug.msg"
+else:
+    [ _exe,
+      parameter, 
+      _layer,
+      inputfile,
+      outputfile,
+      msgfile,
+      _fchkfile,
+      _matelfile ] = sys.argv
 
 sander = os.path.join(os.environ["AMBERHOME"], "bin/sander")
 sanderin = "sander_pb.in"
@@ -21,16 +29,17 @@ ambtop = None
 ambcrdfile = "coord.crd"
 ambenefile = "energy.txt"
 ambfrcfile = "force.txt"
+ambdumpfrcfile = "forcedump.dat"
 
-# You have: kcal / mol / avogadro
+# You have: kcal_th / mol / avogadro
 # You want: hartree
 # 	* 0.0015946679
-kcal_to_hartree = 0.0015946679
+kcal_to_hartree = 0.0015936014
 #
 aa_to_atomiclength = 1.8897261
 atomiclength_to_aa = 1. / aa_to_atomiclength
 
-with open(msgfile, "w") as msg:
+with open(msgfile, "a") as msg:
     natom = None
     mm_of_gaussian = {}
     gaussian_of_mm = {}
@@ -85,6 +94,9 @@ with open(msgfile, "w") as msg:
             crdfh.write(outbuf + "\n")
 
     # run
+    if os.path.exists(ambdumpfrcfile):
+        # Amber does not overwrite ...
+        os.unlink(ambdumpfrcfile)
     args = [ sander, "-O",
              "-i", sanderin,
              "-o", sanderlog,
@@ -100,40 +112,58 @@ with open(msgfile, "w") as msg:
     msg.write("Stdout:\n%s\nStderr:\n%s\n" % (stdout, stderr))
 
     # parse output - first, ene file
-    with open(ambenefile, "r") as lfh:
-        labels = []
-        backindex = {}
-        results = []
-        for l in lfh:
-            ls = l.split()
-            li = int(ls[0][1:])
-            if len(labels) <= li:
-                labels.append(ls[1:])
-                for i in range(1, len(ls)):
-                    backindex[ls[i]] = (li, i - 1)
-            else:
-                results.append([float(x) for x in ls[1:]])
-        for i in range(len(labels)):
-            for j in range(len(labels[i])):
-                name = labels[i][j]
-                value = results[i][j]
-                msg.write("%s = %s\n" % (name, value))
-        (ei, ej) = backindex["Etot"]
-        etot = results[ei][ej] * kcal_to_hartree
+    if False:
+        with open(ambenefile, "r") as lfh:
+            labels = []
+            backindex = {}
+            results = []
+            for l in lfh:
+                ls = l.split()
+                li = int(ls[0][1:])
+                if len(labels) <= li:
+                    labels.append(ls[1:])
+                    for i in range(1, len(ls)):
+                        backindex[ls[i]] = (li, i - 1)
+                else:
+                    results.append([float(x) for x in ls[1:]])
+            for i in range(len(labels)):
+                for j in range(len(labels[i])):
+                    name = labels[i][j]
+                    value = results[i][j]
+                    msg.write("%s = %s\n" % (name, value))
+            (ei, ej) = backindex["Etot"]
+            etot = results[ei][ej] * kcal_to_hartree
 
     # parse output - second, frc file
-    with open(ambfrcfile, "r") as lfh:
-        _header = lfh.next()
-        frcs = []
-        result_forces = []
-        for l in lfh:
-            l = l.rstrip()
-            for i in range(0, len(l), 8):
-                frcs.append(kcal_to_hartree / aa_to_atomiclength * float(l[i:i+8].strip()))
+    with open(ambdumpfrcfile, "r") as lfh:
+        header = lfh.next().strip()
+        assert natom == int(header)
+        # skip coordinates part
         for i in range(natom):
-            imm = mm_of_gaussian[i]
-            resblk = frcs[imm*3:(imm+1)*3]
-            result_forces.append(resblk)
+            lfh.next()
+        l = lfh.next()
+        ls = l.split()
+        assert ls == ["0", "START", "of", "Energies"]
+        energies = []
+        for l in lfh:
+            ls = l.split()
+            if ls == ["1", "START", "of", "VIRIALS"]:
+                break
+            energies.append([float(x) for x in ls])
+        etot = energies[0][0] * kcal_to_hartree
+        msg.write("Energies:\n")
+        for e in energies:
+            msg.write("  %s\n" % repr(e))
+        # skip until "2 Total Force"
+        for l in lfh:
+            ls = l.split()
+            if ls == ["2", "Total", "Force"]:
+                break
+        result_forces = []
+        for i in range(natom):
+            l = lfh.next()
+            ls = l.split()
+            result_forces.append([kcal_to_hartree / aa_to_atomiclength * float(x) for x in ls])
 
     print >> msg, result_forces
 
