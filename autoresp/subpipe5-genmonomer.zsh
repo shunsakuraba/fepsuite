@@ -29,8 +29,7 @@ ANTECHAMBER=${AMBERHOME}/bin/antechamber
 trap 'echo "Error returned at previous execution"; exit 1' ZERR
 set -x
 
-#for state in RNA DNA; do
-for state in DNA; do
+for state in RNA DNA; do
     case $state in
 	RNA)
 	    basestructure=$basestructure_save
