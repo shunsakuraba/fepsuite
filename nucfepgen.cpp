@@ -17,6 +17,23 @@
 using namespace std;
 using namespace Eigen;
 
+enum {
+  HAM_CHARGE = 0,
+  HAM_VDW,
+  HAM_BONDANGLE,
+  HAM_DIHEDRAL,
+  HAM_DUMMY_RESTRAINT,
+  HAM_NR
+};
+
+struct cluster_parameters
+{
+  double cluster_maxdist;
+  double force_to_cluster;
+  double force_within_cluster;
+  
+};
+
 bool verbose = false;
 bool quiet = false;
 
@@ -377,222 +394,44 @@ void correct_assign_by_exclusion(const topology &Atop,
   }while(found);
 }
 
-int main(int argc, char* argv[])
+// linear interpolation
+// x = 0 -> a
+// x = 1 -> b
+double li(double x, double a, double b)
 {
-  cmdline::parser p;
-  
-  p.add("help", 0, "Print this message");
-  p.add("verbose", 'v', "Be more verbose");
-  p.add("quiet", 'q', "Suppress unnecessary information");
-  p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
-  p.add<double>("cluster-dist", 0, "Maximum distances for phantom atoms clustering", false, 2.0);
-  p.add<double>("force-constant", 0, "Cluster fixing force constants", false, 5e+4);
-  p.add<double>("force-within-cluster", 0, "Cluster force constants", false, 5e+4);
-  p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
-  p.add("debug", 0, "Debug");
+  return a * (1 - x) + b * x;
+}
 
-  p.add<string>("structureA", 'A', "PDB structure A", true);
-  p.add<string>("structureB", 'B', "PDB structure B", true);
-  p.add<string>("topologyA", 'a', ".top A", true);
-  p.add<string>("topologyB", 'b', ".top B", true);
-  p.add<string>("structureO", 'O', "PDB structure to output", true);
-  p.add<string>("topologyO", 'o', ".top output", true);
-  p.add("connectivity", 0, "match atoms by connectivity");
-  p.add("assign-by-name", 0, "match atoms by both connectivity and name");
-  p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
-
-  bool ok = p.parse(argc, argv);
-
-  if (!ok || p.exist("help")) {
-    cerr << p.usage();
-    return ((ok && p.exist("help")) ? 0 : 1);
-  }
-  verbose = p.exist("verbose");
-  quiet = p.exist("quiet");
-
-  pdb Apdb(p.get<string>("structureA"));
-  pdb Bpdb(p.get<string>("structureB"));
-  topology Atop(p.get<string>("topologyA"));
-  topology Btop(p.get<string>("topologyB"));
-
-  Matrix3Xd Acoords, Bcoords;
-  Acoords = Apdb.get_coords();
-  Bcoords = Bpdb.get_coords();
-
-  const vector<string>& Anames = Apdb.get_atomnames();
-  const vector<string>& Bnames = Bpdb.get_atomnames();
-
-  // fit Bpdb structure into Apdb by comparing P-coordinates
-  {
-    
-    VectorXd Amass = set_selected_mass(Anames, "P");
-    VectorXd Bmass = set_selected_mass(Bnames, "P");
-
-    fit_selected(Amass, Bmass, Acoords, Bcoords);
-  }
-
-  // make a distance matrix
-  MatrixXd distmat(Acoords.cols(), Bcoords.cols());
-
-  for(int ia = 0; ia < Acoords.cols(); ++ia) {
-    char chainA = Apdb.get_chains()[ia];
-    for(int jb = 0; jb < Bcoords.cols(); ++jb) {
-      char chainB = Bpdb.get_chains()[jb];
-      // Quick hack: prevent different chain atoms to be assigned the same atom
-      distmat(ia, jb) = 
-        (chainA == chainB ? 
-         (Acoords.col(ia) - Bcoords.col(jb)).norm()
-         : numeric_limits<double>::max());
-    }
-  }
-
-  // assign atoms by distance
-  vector<int> assignBofA(Acoords.cols(), -1);
-  vector<int> assignAofB(Bcoords.cols(), -1);
-  vector<int> Adepth;
-
-  bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
-  double pdist = p.get<double>("maxdist");
-  assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-  if(use_connectivity) {
-    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
-    correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
-  }else{
-    assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
-  }
-  if(!quiet){
-    cout << "Atoms assigned:" << endl;
-    cout << "Assigned:" << endl;
-    for(int i = 0; i < (int)Anames.size(); ++i) {
-      if(assignBofA[i] != -1) {
-        int j = assignBofA[i];
-        cout << " " 
-             << Apdb.get_chains()[i] << ":"
-             << Apdb.get_residuenames()[i] << ":"
-             << Apdb.get_resids()[i] << ":" << Anames[i] 
-             << " -> " 
-             << Bpdb.get_chains()[j] << ":"
-             << Bpdb.get_residuenames()[j] << ":"
-             << Bpdb.get_resids()[j] << ":" << Bnames[j]
-             << " dist = " << (Acoords.col(i) - Bcoords.col(j)).norm()
-             << endl;
-      }
-    }
-    cout << "Unssigned in A:" << endl;
-    for(int i = 0; i < (int)Anames.size(); ++i) {
-      if(assignBofA[i] == -1) {
-        cout << " "
-             << Apdb.get_chains()[i] << ":"
-             << Apdb.get_residuenames()[i] << ":"
-             << Apdb.get_resids()[i] << ":" << Anames[i] 
-             << endl;
-      }
-    }
-    cout << "Unassigned in B:" << endl;
-    for(int i = 0; i < (int)Bnames.size(); ++i) {
-      if(assignAofB[i] == -1) {
-        cout << " " 
-             << Bpdb.get_chains()[i] << ":"
-             << Bpdb.get_residuenames()[i] << ":"
-             << Bpdb.get_resids()[i] << ":" << Bnames[i] 
-             << endl;
-      }
-    }
-  }
-
-  vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
-  int N;
-
-  // Make map from A/B, to/from output
-  merge_assigns(assignBofA, assignAofB, 
-                assignOofA, assignOofB,
-                assignAofO, assignBofO,
-                N);
-
-
-  // Sanity check
-  {
-    map<int, set<int> > Aconnectivity, Bconnectivity;
-    for(const auto &Abond: Atop.bonds) {
-      int Aa = assignOofA[std::get<0>(Abond.first)];
-      int Ab = assignOofA[std::get<1>(Abond.first)];
-      Aconnectivity[Aa].insert(Ab);
-      Aconnectivity[Ab].insert(Aa);
-    }
-    
-    for(const auto &Bbond: Btop.bonds) {
-      int Ba = assignOofB[std::get<0>(Bbond.first)];
-      int Bb = assignOofB[std::get<1>(Bbond.first)];
-      Bconnectivity[Ba].insert(Bb);
-      Bconnectivity[Bb].insert(Ba);
-    }
-
-    int errcnt = 0;
-    for(int i = 0; i < N; ++i) {
-      const set<int> &As = Aconnectivity[i];
-      const set<int> &Bs = Bconnectivity[i];
-      if(!(std::includes(As.begin(), As.end(),
-                         Bs.begin(), Bs.end()) ||
-           std::includes(Bs.begin(), Bs.end(),
-                         As.begin(), As.end())) &&
-         !use_connectivity) {
-        errcnt++;
-        int Ai = assignAofO[i];
-        int Bi = assignBofO[i];
-        if(Ai == -1 || Bi == -1) {
-          cerr << "Unknown error: Ai / Bi = -1 in sanity check" << endl;
-          cerr << "Ai = " << Ai << ", Bi = " << Bi << ", i = " << i << endl;
-          continue;
-        }
-        cerr << "*** Warning: unmatched connectivity ***" << endl;
-        cerr << Atop.resids[Ai] << ":" << Atop.names[Ai] << "(A)" << ": ";
-        for(const auto &e: As) {
-          int Ae = assignAofO[e];
-          cerr << (Ae == -1 ? "PHA" : Atop.names[Ae]) << " ";
-        }
-        cerr << endl;
-        cerr << Btop.resids[Bi] << ":" << Btop.names[Bi] << "(B)" << ": ";
-        for(const auto &e: Bs) {
-          int Be = assignBofO[e];
-          cerr << (Be == -1 ? "PHA" : Btop.names[Be]) << " ";
-        }
-        cerr << endl;
-
-        cerr << "Sanity check: " << endl;
-        cerr << "i = " << i << ", Ai = " << Ai << ", Bi = " << Bi << endl;
-        cerr << "BofA[Ai] = " << assignBofA[Ai] 
-             << ", Anames[Ai] = " << Anames[Ai] << endl;
-        cerr << "AofB[Bi] = " << assignAofB[Bi]
-             << ", Bnames[Bi] = " << Bnames[Bi] << endl;
-        cerr << "Raw As:";
-        for(const auto &e: As) {
-          cerr << " " << e;
-        }
-        cerr << endl;
-        cerr << "Raw Bs:";
-        for(const auto &e: Bs) {
-          cerr << " " << e;
-        }
-        cerr << endl;
-      }
-    }
-    if(errcnt > p.get<int>("max-warning")) {
-      cerr << "Number of warning exceeds max-warning" << endl;
-      exit(1);
-    }
-  }
+// Hey, could you clean up this mess?
+void generate_topology(const string& outfilename,
+                       const vector<string>& argv,
+                       const string& title,
+                       const topology &Atop,
+                       const topology &Btop,
+                       const Matrix3Xd &Acoords,
+                       const Matrix3Xd &Bcoords,
+                       const vector<double>& stateA_weights,
+                       const vector<double>& stateB_weights,
+                       const vector<int> &assignOofA,
+                       const vector<int> &assignOofB, 
+                       const vector<int> &assignAofO,
+                       const vector<int> &assignBofO,
+                       const struct cluster_parameters& cparams,
+                       double rest_weighting,
+                       const vector<string> &rest_exclude_atomtypes,
+                       bool gen_exclusion)
+{
+  int N = assignAofO.size();
 
   // output 
-  ofstream Ofs(p.get<string>("topologyO"));
+  ofstream Ofs(outfilename.c_str());
   Ofs.setf(ios::scientific);
   Ofs.setf(ios::right);
   Ofs << setprecision(5);
 
   Ofs << "; generated by:" << endl;
   Ofs << ";  " << argv[0];
-  for(int i = 1; i < argc; ++i) {
+  for(int i = 1; i < argv.size(); ++i) {
     Ofs << " " << argv[i];
   }
   Ofs << endl;
@@ -870,7 +709,7 @@ int main(int argc, char* argv[])
   Ofs << ";name  nrexcl" << endl;
   {
     int nexcl = Atop.nexcl;
-    if(p.exist("gen-exclusion")) {
+    if(gen_exclusion) {
       nexcl = 0;
     }
     Ofs << "merged " << nexcl << endl;
@@ -941,7 +780,7 @@ int main(int argc, char* argv[])
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(2, 0);
     if(Btop.bonds.count(keyB) > 0) {
-      Bfactors = Btop.bonds[keyB];
+      Bfactors = Btop.bonds.at(keyB);
     }else if(Afactors.size() > 0){
       Bfactors[0] = Afactors[0];
       Bfactors[1] = 0.0;
@@ -1012,7 +851,7 @@ int main(int argc, char* argv[])
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors;
     if(Btop.angles.count(keyB) > 0) {
-      Bfactors = Btop.angles[keyB];
+      Bfactors = Btop.angles.at(keyB);
     }else if(Afactors.size() > 0){
       if(func == 1) {
         Bfactors.resize(2);
@@ -1110,7 +949,7 @@ int main(int argc, char* argv[])
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(Afactors);
     if(Btop.diheds.count(keyB) > 0) {
-      Bfactors = Btop.diheds[keyB];
+      Bfactors = Btop.diheds.at(keyB);
     }else{
       for(auto &&v: Bfactors) {
         v = 0.0;
@@ -1218,24 +1057,24 @@ int main(int argc, char* argv[])
   {
     Ofs << "; Atoms existing in A state" << endl;
     output_clusters(Ofs, Acoords, 
-                    p.get<double>("cluster-dist"),
-                    p.get<double>("force-constant"),
-                    p.get<double>("force-within-cluster"),
+                    cparams.cluster_maxdist,
+                    cparams.force_to_cluster,
+                    cparams.force_within_cluster,
                     assignAofO,
                     assignBofO,
                     Atop, true);
     Ofs << "; Atoms existing in B state" << endl;
     output_clusters(Ofs, Bcoords, 
-                    p.get<double>("cluster-dist"),
-                    p.get<double>("force-constant"),
-                    p.get<double>("force-within-cluster"),
+                    cparams.cluster_maxdist,
+                    cparams.force_to_cluster,
+                    cparams.force_within_cluster,
                     assignBofO,
                     assignAofO,
                     Btop, false);
   }
   Ofs << endl;
 
-  if(p.exist("gen-exclusion")) {
+  if(gen_exclusion) {
     Ofs << "[ exclusions ]" << endl;
     vector<vector<int> > exclusions(N);
     // generate intrinsic exclusions
@@ -1295,15 +1134,253 @@ int main(int argc, char* argv[])
   // Generate footer, way to go!
   Ofs << "[ system ]" << endl;
   Ofs << "Merged structure from " 
-      << p.get<string>("topologyA") 
-      << " and " 
-      << p.get<string>("topologyB")
+      << title
       << endl;
   Ofs << endl;
 
   Ofs << "[ molecules ]" << endl;
   Ofs << "merged 1" << endl;
   Ofs << endl;
+
+}
+
+
+int main(int argc, char* argv[])
+{
+  cmdline::parser p;
+  
+  p.add("help", 0, "Print this message");
+  p.add("verbose", 'v', "Be more verbose");
+  p.add("quiet", 'q', "Suppress unnecessary information");
+  p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
+  p.add<double>("cluster-dist", 0, "Maximum distances for phantom atoms clustering", false, 2.0);
+  p.add<double>("force-constant", 0, "Cluster fixing force constants", false, 5e+4);
+  p.add<double>("force-within-cluster", 0, "Cluster force constants", false, 5e+4);
+  p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
+  p.add("debug", 0, "Debug");
+
+  p.add<string>("structureA", 'A', "PDB structure A", true);
+  p.add<string>("structureB", 'B', "PDB structure B", true);
+  p.add<string>("topologyA", 'a', ".top A", true);
+  p.add<string>("topologyB", 'b', ".top B", true);
+  p.add<string>("structureO", 'O', "PDB structure to output", true);
+  p.add<string>("topologyO", 'o', ".top output", true);
+  p.add("connectivity", 0, "match atoms by connectivity");
+  p.add("assign-by-name", 0, "match atoms by both connectivity and name");
+  p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
+
+  bool ok = p.parse(argc, argv);
+
+  if (!ok || p.exist("help")) {
+    cerr << p.usage();
+    return ((ok && p.exist("help")) ? 0 : 1);
+  }
+  verbose = p.exist("verbose");
+  quiet = p.exist("quiet");
+
+  pdb Apdb(p.get<string>("structureA"));
+  pdb Bpdb(p.get<string>("structureB"));
+  topology Atop(p.get<string>("topologyA"));
+  topology Btop(p.get<string>("topologyB"));
+
+  Matrix3Xd Acoords, Bcoords;
+  Acoords = Apdb.get_coords();
+  Bcoords = Bpdb.get_coords();
+
+  const vector<string>& Anames = Apdb.get_atomnames();
+  const vector<string>& Bnames = Bpdb.get_atomnames();
+
+  // fit Bpdb structure into Apdb by comparing P-coordinates
+  {
+    
+    VectorXd Amass = set_selected_mass(Anames, "P");
+    VectorXd Bmass = set_selected_mass(Bnames, "P");
+
+    fit_selected(Amass, Bmass, Acoords, Bcoords);
+  }
+
+  // make a distance matrix
+  MatrixXd distmat(Acoords.cols(), Bcoords.cols());
+
+  for(int ia = 0; ia < Acoords.cols(); ++ia) {
+    char chainA = Apdb.get_chains()[ia];
+    for(int jb = 0; jb < Bcoords.cols(); ++jb) {
+      char chainB = Bpdb.get_chains()[jb];
+      // Quick hack: prevent different chain atoms to be assigned the same atom
+      distmat(ia, jb) = 
+        (chainA == chainB ? 
+         (Acoords.col(ia) - Bcoords.col(jb)).norm()
+         : numeric_limits<double>::max());
+    }
+  }
+
+  // assign atoms by distance
+  vector<int> assignBofA(Acoords.cols(), -1);
+  vector<int> assignAofB(Bcoords.cols(), -1);
+  vector<int> Adepth;
+
+  bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
+  double pdist = p.get<double>("maxdist");
+  assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  if(use_connectivity) {
+    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
+    correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
+  }else{
+    assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+  }
+  if(!quiet){
+    cout << "Atoms assigned:" << endl;
+    cout << "Assigned:" << endl;
+    for(int i = 0; i < (int)Anames.size(); ++i) {
+      if(assignBofA[i] != -1) {
+        int j = assignBofA[i];
+        cout << " " 
+             << Apdb.get_chains()[i] << ":"
+             << Apdb.get_residuenames()[i] << ":"
+             << Apdb.get_resids()[i] << ":" << Anames[i] 
+             << " -> " 
+             << Bpdb.get_chains()[j] << ":"
+             << Bpdb.get_residuenames()[j] << ":"
+             << Bpdb.get_resids()[j] << ":" << Bnames[j]
+             << " dist = " << (Acoords.col(i) - Bcoords.col(j)).norm()
+             << endl;
+      }
+    }
+    cout << "Unssigned in A:" << endl;
+    for(int i = 0; i < (int)Anames.size(); ++i) {
+      if(assignBofA[i] == -1) {
+        cout << " "
+             << Apdb.get_chains()[i] << ":"
+             << Apdb.get_residuenames()[i] << ":"
+             << Apdb.get_resids()[i] << ":" << Anames[i] 
+             << endl;
+      }
+    }
+    cout << "Unassigned in B:" << endl;
+    for(int i = 0; i < (int)Bnames.size(); ++i) {
+      if(assignAofB[i] == -1) {
+        cout << " " 
+             << Bpdb.get_chains()[i] << ":"
+             << Bpdb.get_residuenames()[i] << ":"
+             << Bpdb.get_resids()[i] << ":" << Bnames[i] 
+             << endl;
+      }
+    }
+  }
+
+  vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
+  int N;
+
+  // Make map from A/B, to/from output
+  merge_assigns(assignBofA, assignAofB, 
+                assignOofA, assignOofB,
+                assignAofO, assignBofO,
+                N);
+
+
+  // Sanity check
+  {
+    map<int, set<int> > Aconnectivity, Bconnectivity;
+    for(const auto &Abond: Atop.bonds) {
+      int Aa = assignOofA[std::get<0>(Abond.first)];
+      int Ab = assignOofA[std::get<1>(Abond.first)];
+      Aconnectivity[Aa].insert(Ab);
+      Aconnectivity[Ab].insert(Aa);
+    }
+    
+    for(const auto &Bbond: Btop.bonds) {
+      int Ba = assignOofB[std::get<0>(Bbond.first)];
+      int Bb = assignOofB[std::get<1>(Bbond.first)];
+      Bconnectivity[Ba].insert(Bb);
+      Bconnectivity[Bb].insert(Ba);
+    }
+
+    int errcnt = 0;
+    for(int i = 0; i < N; ++i) {
+      const set<int> &As = Aconnectivity[i];
+      const set<int> &Bs = Bconnectivity[i];
+      if(!(std::includes(As.begin(), As.end(),
+                         Bs.begin(), Bs.end()) ||
+           std::includes(Bs.begin(), Bs.end(),
+                         As.begin(), As.end())) &&
+         !use_connectivity) {
+        errcnt++;
+        int Ai = assignAofO[i];
+        int Bi = assignBofO[i];
+        if(Ai == -1 || Bi == -1) {
+          cerr << "Unknown error: Ai / Bi = -1 in sanity check" << endl;
+          cerr << "Ai = " << Ai << ", Bi = " << Bi << ", i = " << i << endl;
+          continue;
+        }
+        cerr << "*** Warning: unmatched connectivity ***" << endl;
+        cerr << Atop.resids[Ai] << ":" << Atop.names[Ai] << "(A)" << ": ";
+        for(const auto &e: As) {
+          int Ae = assignAofO[e];
+          cerr << (Ae == -1 ? "PHA" : Atop.names[Ae]) << " ";
+        }
+        cerr << endl;
+        cerr << Btop.resids[Bi] << ":" << Btop.names[Bi] << "(B)" << ": ";
+        for(const auto &e: Bs) {
+          int Be = assignBofO[e];
+          cerr << (Be == -1 ? "PHA" : Btop.names[Be]) << " ";
+        }
+        cerr << endl;
+
+        cerr << "Sanity check: " << endl;
+        cerr << "i = " << i << ", Ai = " << Ai << ", Bi = " << Bi << endl;
+        cerr << "BofA[Ai] = " << assignBofA[Ai] 
+             << ", Anames[Ai] = " << Anames[Ai] << endl;
+        cerr << "AofB[Bi] = " << assignAofB[Bi]
+             << ", Bnames[Bi] = " << Bnames[Bi] << endl;
+        cerr << "Raw As:";
+        for(const auto &e: As) {
+          cerr << " " << e;
+        }
+        cerr << endl;
+        cerr << "Raw Bs:";
+        for(const auto &e: Bs) {
+          cerr << " " << e;
+        }
+        cerr << endl;
+      }
+    }
+    if(errcnt > p.get<int>("max-warning")) {
+      cerr << "Number of warning exceeds max-warning" << endl;
+      exit(1);
+    }
+  }
+
+  vector<double> stateA_weights(HAM_NR, 0.);
+  vector<double> stateB_weights(HAM_NR, 1.);
+  struct cluster_parameters cparams;
+  cparams.cluster_maxdist = p.get<double>("cluster-dist");
+  cparams.force_to_cluster = p.get<double>("force-constant");
+  cparams.force_within_cluster = p.get<double>("force-within-cluster");
+
+  vector<string> rest_excluded_atoms;
+  string outfname = p.get<string>("topologyO");
+  string title = p.get<string>("topologyA") + string(" and ") + p.get<string>("topologyB");
+  vector<string> args(argv, argv + argc);
+    
+  generate_topology(outfname,
+                    args,
+                    title,
+                    Atop,
+                    Btop,
+                    Acoords,
+                    Bcoords,
+                    stateA_weights,
+                    stateB_weights,
+                    assignOofA,
+                    assignOofB, 
+                    assignAofO,
+                    assignBofO,
+                    cparams,
+                    1.0,
+                    rest_excluded_atoms,
+                    p.exist("gen-exclusion"));
 
   // Generate PDB
   {
