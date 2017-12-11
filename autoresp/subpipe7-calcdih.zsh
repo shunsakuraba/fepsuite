@@ -75,7 +75,8 @@ for state in RNA DNA; do
 		    ;;
 	    esac
 	    rundir=$basestructurename/sp.$k.dih$i
-	    NOWAIT=y zsh $basedir/turborun.zsh $rundir TITLE="$k" CONSTRAINTS=dummy.constraint BASIS=$basis CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=$COSMO ENERGY_CONV=6 COORD_CONV=3 SCF_CONV=7 CYCLE=0 NEWBASIS=$NEWBASIS SCRIPT=$SCRIPT DISP3=$DISP3 $tmol
+# SCF_CONV=8 is required for some mp2 calculations.
+	    NOWAIT=y zsh $basedir/turborun.zsh $rundir TITLE="$k" CONSTRAINTS=dummy.constraint BASIS=$basis CHARGE=$CHARGE FUNCTIONAL=pbe GRID=m4 COSMO=$COSMO ENERGY_CONV=6 COORD_CONV=3 SCF_CONV=8 CYCLE=0 NEWBASIS=$NEWBASIS SCRIPT=$SCRIPT DISP3=$DISP3 $tmol
 	    DIRS+=$rundir
 
 	    RECLAIM+=($rundir,$basestructurename.dihcalc$i.$k.log)
