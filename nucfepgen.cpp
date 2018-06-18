@@ -1164,6 +1164,8 @@ int main(int argc, char* argv[])
   p.add<string>("topologyA", 'a', ".top A", true);
   p.add<string>("topologyB", 'b', ".top B", true);
   p.add<string>("structureO", 'O', "PDB structure to output", true);
+  p.add<string>("structureOA", 0, "PDB structure to output (optional, for stateA)", false);
+  p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
@@ -1383,29 +1385,68 @@ int main(int argc, char* argv[])
                     p.exist("gen-exclusion"));
 
   // Generate PDB
-  {
-    ofstream crdfs(p.get<string>("structureO"));
+  enum { OPDB_MERGED, OPDB_A, OPDB_B, OPDB_END };
+  const char *options[OPDB_END] = { "structureO", "structureOA", "structureOB" };
+  for(int opdbtype = 0; opdbtype < OPDB_END; opdbtype++) {
+    if(!p.exist(options[opdbtype])) continue;
+    ofstream crdfs(p.get<string>(options[opdbtype]));
     crdfs.setf(ios::fixed);
 
     for(int i = 0; i < N; ++i) {
       Vector3d crd;
       int resid;
       string atom, resname;
-      
-      if(assignAofO[i] != -1) {
-        int acrd = assignAofO[i];
-        crd = Acoords.col(acrd);
-        atom = Atop.names[acrd];
-        resid = Atop.resids[acrd];
-        resname = Atop.resnames[acrd];
-      }else{
-        int bcrd = assignBofO[i];
-        assert(bcrd >= 0);
-        crd = Bcoords.col(bcrd);
-        atom = Btop.names[bcrd];
-        resid = Btop.resids[bcrd];
-        resname = Btop.resnames[bcrd];
+
+      int acrd = assignAofO[i];
+      int bcrd = assignBofO[i];
+      switch(opdbtype) {
+      case OPDB_MERGED:
+        if(assignAofO[i] != -1) {
+          crd = Acoords.col(acrd);
+          atom = Atop.names[acrd];
+          resid = Atop.resids[acrd];
+          resname = Atop.resnames[acrd];
+        }else{
+          assert(bcrd >= 0);
+          crd = Bcoords.col(bcrd);
+          atom = Btop.names[bcrd];
+          resid = Btop.resids[bcrd];
+          resname = Btop.resnames[bcrd];
+        }
+        break;
+      case OPDB_A:
+        if(assignAofO[i] != -1) {
+          crd = Acoords.col(acrd);
+          atom = Atop.names[acrd];
+          resid = Atop.resids[acrd];
+          resname = Atop.resnames[acrd];
+        }else{
+          assert(bcrd >= 0);
+          crd = Bcoords.col(bcrd);
+          atom = "DU";
+          resid = Btop.resids[bcrd];
+          resname = "DUM";
+        }
+        break;
+      case OPDB_B:
+        if(assignBofO[i] != -1) {
+          crd = Bcoords.col(bcrd);
+          atom = Btop.names[bcrd];
+          resid = Btop.resids[bcrd];
+          resname = Btop.resnames[bcrd];
+        }else{
+          assert(acrd >= 0);
+          crd = Acoords.col(acrd);
+          atom = "DU";
+          resid = Atop.resids[acrd];
+          resname = "DUM";
+        }
+        break;
+      default:
+        // do nothing
+        break;
       }
+
       crdfs << setw(6) << "ATOM  " 
             << setw(5) << std::right << (i + 1)
             << " ";
