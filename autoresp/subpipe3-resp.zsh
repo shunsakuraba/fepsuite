@@ -77,6 +77,7 @@ for iter in 1 2; do
 
     # generate respgen input (input of input)
     RESPADDIN=$basestructurename.respadd
+# FIXME TODO: respgen output discards precision. This problem is (miraclously) avoided in current condition, but we need to fix...
     python $basedir/gen_respgen.py $basestructure $baserestraint > $RESPADDIN
 
     RESPIN1=$basestructurename.respin1
