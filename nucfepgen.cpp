@@ -4,6 +4,7 @@
 #include "topology.hpp"
 #include "assign.hpp"
 #include "select.hpp"
+#include "angle_dihedral.hpp"
 
 #include <iostream>
 #include <iomanip>
@@ -26,153 +27,292 @@ enum {
   HAM_NR
 };
 
-struct cluster_parameters
+struct dummy_anchoring_parameters
 {
-  double cluster_maxdist;
-  double force_to_cluster;
-  double force_within_cluster;
-  
+  double force_bond;
+  double force_angular;
+  double force_dihedral;
 };
 
 bool verbose = false;
 bool quiet = false;
 
-void output_clusters(ofstream &Ofs, const Matrix3Xd &Acoords, 
-                     double maxdist,
-                     double force_connect,
-                     double force_within_cluster,
-                     const vector<int>& assignAofO,
-                     const vector<int>& assignBofO,
-                     const topology &Atop, 
-                     bool isA)
+/*
+  Returns all indices that has distance exactly n.
+  Note that for the case of 5-membered ring with n=3 there are none.
+  Returned array is indexed by 'A' notation, so you might have to lift it to 'O' by AofO / OofA.
+ */
+vector<int> list_n_step_adjacency(const vector<vector<int> >& adj,
+                                  int n,
+                                  int atomix)
+{
+  vector<int> ret;
+  vector<bool> pushed(adj.size(), false);
+
+  queue<pair<int, int> > bfs_queue;
+
+  pushed[atomix] = true;
+  bfs_queue.push(make_pair(atomix, 0));
+
+  while(!bfs_queue.empty()) {
+    pair<int, int> e = bfs_queue.front();
+    bfs_queue.pop();
+    int v = e.first;
+    int dist = e.second;
+    if(dist == n) {
+      ret.push_back(v);
+      continue;
+    }
+    for(int x: adj[v]) {
+      if(pushed[x]) continue;
+      int newdist = dist + 1;
+      bfs_queue.push(make_pair(x, newdist));
+      pushed[x] = true;
+    }
+  }
+
+  return ret;
+}
+
+/*
+  Calculate the integer distance to non-phantom atoms for each atom.
+  [top] is the topology and [phantoms] are indices of phantom atoms that do not exist in the /other/ state.
+  i.e., if top is Atop, [phantoms] are atoms existing in A only and not in state B.
+  Returned array is indexed by 'A' notation, so you might have to lift it to 'O' by AofO / OofA.
+ */
+vector<int> calculate_int_distance_nonphantom(const topology& top,
+                                              const vector<int>& phantoms)
+{
+  int large = 9999;
+  vector<int> distances(top.names.size(), 0);
+  for(int p: phantoms){
+    distances[p] = large;
+  }
+  
+  vector<vector<int>> adj;
+  top.convert_bonds_to_adj_list(adj);
+
+  // um, I know this is a bad implementation but it should not be[TM] so bad...
+  // FIXME TODO: rewrite as a BFS from non-phantoms
+  queue<int> to_be_processed;
+  for(int p: phantoms) {
+    to_be_processed.push(p);
+  }
+
+  while(!to_be_processed.empty()) {
+    int p = to_be_processed.front();
+    to_be_processed.pop();
+    int lowest_level = large;
+    for(int v: adj[p]) {
+      if(distances[v] < lowest_level) {
+        lowest_level = distances[v];
+      }
+    }
+    if(lowest_level == large) {
+      to_be_processed.push(p); // repush to the end
+    }else{
+      distances[p] = lowest_level + 1;
+    }
+  }
+  
+  return distances;
+}
+
+array<int, 3> find_zmat_like_connectivity(const vector<vector<int> > &adj,
+                                          const vector<int>& phantoms,
+                                          const vector<int>& int_distances,
+                                          int atomix)
+{
+  array<int, 3> ret;
+  int curdist = int_distances[atomix];
+  for(int b: adj[atomix]) {
+    if(b == atomix || !(int_distances[b] == 0 || int_distances[b] < curdist)) {
+      continue;
+    }
+    ret[0] = b;
+    for(int a: adj[b]) {
+      if(a == atomix || a == b || !(int_distances[a] == 0 || int_distances[a] < int_distances[b])) {
+        continue;
+      }
+      ret[1] = a;
+      for(int d: adj[a]) {
+        if(d == atomix || d == a || d == b || !(int_distances[d] == 0 || int_distances[d] < int_distances[a])) {
+          continue;
+        }
+        ret[2] = d;
+        return ret;
+      }
+    }
+  }
+  // Not found
+  throw runtime_error("find_zmat_like_connectivity: not found");
+}
+                   
+
+template<typename F>
+int find_closest(const Matrix3Xd &Acoords, 
+                 const vector<int>& assignAofO,
+                 int x,
+                 const F& filter)
+{
+  int N = (int)assignAofO.size();
+  int curmin = -1;
+  double distmin = numeric_limits<double>::max();
+  Vector3d xpt = Acoords.col(assignAofO[x]);
+  for(int y = 0; y < N; ++y) {
+    if(!filter(y)) {
+      continue;
+    }
+    Vector3d pt = Acoords.col(assignAofO[y]);
+    double d = (xpt - pt).norm();
+    
+    if(d < distmin) {
+      distmin = d;
+      curmin = y;
+    }
+  }
+  return curmin;
+}
+
+void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords, 
+                    double force_bond,
+                    double force_angluar,
+                    double force_dihedral,
+                    const vector<int>& assignAofO,
+                    const vector<int>& assignBofO,
+                    const vector<int>& assignOofA,
+                    const topology &Atop, 
+                    bool isA)
 {
   int N = (int)assignAofO.size();
   vector<int> Aphantoms; // A's atoms which is phantom in state B, numbered in O
+  vector<int> Aphantoms_A; // numbered in A
 
   for(int i = 0; i < N; ++i) {
     if(assignBofO[i] == -1) {
       Aphantoms.push_back(i);
+      Aphantoms_A.push_back(assignAofO[i]);
     }
   }
 
-  // make clusters of phantom atoms
-  disjoint_set As(N);
-  for(int x: Aphantoms) {
-    assert(assignAofO[x] >= 0);
-    Vector3d apt = Acoords.col(assignAofO[x]);
-    for(int y: Aphantoms) {
-      assert(assignAofO[y] >= 0);
-      Vector3d bpt = Acoords.col(assignAofO[y]);
-      if(x == y) continue;
-      if((apt - bpt).squaredNorm() > maxdist * maxdist) {
-        continue;
-      }
-      if(Atop.resids[assignAofO[x]] != Atop.resids[assignAofO[y]]) {
-        continue;
-      }
-      As.join(x, y);
-    }
-  }
-  
-  // Turn to clusters
-  multimap<int, int> Aclusters;
-  for(int x: Aphantoms) {
-    const int p = As.find_parent(x);
-    Aclusters.insert(make_pair(p, x));
-  }
+  // Get adjacency list to find "parent" atoms
+  vector<vector<int> > adj;
+  Atop.convert_bonds_to_adj_list(adj);
 
-  // find the closest cluster-to-non-phantom-atom distance
-  map<int, pair<int, double> > Aclusterdist;
+  // Get distances from non-phantom atoms
+  vector<int> distance_A =
+    calculate_int_distance_nonphantom(Atop, Aphantoms_A);
 
-  for(const auto &x: Aclusters) {
-    Aclusterdist[x.first] = 
-      make_pair(-1, numeric_limits<double>::max());
-  }
+  // z-matrix like connectivity information. Note that it's indexed in "O" notation.
+  vector<int> bond_atom(N, -1), angle_atom(N, -1), dihedral_atom(N, -1);
+
+  for(int p: Aphantoms) {
+    int p_of_a = assignAofO[p];
+
+    // This conn is indexed in A
+    array<int, 3> conn =
+      find_zmat_like_connectivity(adj,
+                                  Aphantoms_A,
+                                  distance_A,
+                                  p_of_a);
     
-  for(int x: Aphantoms) {
-    const int p = As.find_parent(x);
-    int curminfrom = Aclusterdist[p].first;
-    double curmin  = Aclusterdist[p].second;
+    int bond_o = assignOofA[conn[0]];
+    int angle_o = assignOofA[conn[1]];
+    int dihed_o = assignOofA[conn[2]];
+    assert(bond_o >= 0);
+    assert(angle_o >= 0);
+    assert(dihed_o >= 0);
+    bond_atom[p] = bond_o;
+    angle_atom[p] = angle_o;
+    dihedral_atom[p] = dihed_o;
+  }
 
-    Vector3d apt = Acoords.col(assignAofO[x]);
-    for(int y = 0; y < N; ++y) {
-      if(assignAofO[y] == -1 || assignBofO[y] == -1) {
-        // Both A phantom and B phantom are excluded
-        continue;
-      }
-      // different resid ==> rejected
-      if(Atop.resids[assignAofO[y]] != Atop.resids[assignAofO[x]]) {
-        continue;
-      }
-      Vector3d bpt = Acoords.col(assignAofO[y]);
-      double d = (apt - bpt).norm();
-      if(d < curmin) {
-        curminfrom = y;
-        curmin = d;
-      }
-    }
-    Aclusterdist[p] = make_pair(curminfrom, curmin);
+  // Here we treat atoms that exist in A and phantom in state B.
+  // Thus the force constant is multiplied as in the following factors.
+  double factorA = isA ? 0.0 : 1.0;
+  double factorB = isA ? 1.0 : 0.0;
+
+  Ofs << "[ bonds ]" << endl;
+  
+  for(int p: Aphantoms) {
+    int pa = assignAofO[p];
+    int bond_o = bond_atom[p];
+    int ba = assignAofO[bond_o];
+
+    double d = (Acoords.col(pa) - Acoords.col(ba)).norm();
+    Ofs << setw(6) << p + 1 << " "
+        << setw(6) << bond_o + 1 << " "
+        << setw(4) << 6 << " " // Harmonic, non-excl
+        << setw(8) << d << " "
+        << setw(8) << factorA * force_bond << " "
+        << setw(8) << d << " "
+        << setw(8) << factorB * force_bond << " "
+        << "; (dummy conn.) " 
+        << setw(3) << Atop.resids[pa] << " "
+        << setw(5) << Atop.names[pa] << " - "
+        << setw(3) << Atop.resids[ba] << " "
+        << setw(5) << Atop.names[ba]
+        << endl;
+  }
+
+  Ofs << "[ angles ]" << endl;
+
+  for(int p: Aphantoms) {
+    int pa = assignAofO[p];
+    int bond_o = bond_atom[p];
+    int ba = assignAofO[bond_o];
+    int angle_o = angle_atom[p];
+    int aa = assignAofO[angle_o];
+
+    double ang_rad = angle(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa));
+
+    Ofs << setw(6) << p + 1 << " "
+        << setw(6) << bond_o + 1 << " "
+        << setw(6) << angle_o + 1 << " "
+        << setw(4) << 1 << " " // harmonic
+        << setw(8) << ang_rad * 180.0 / M_PI << " "
+        << setw(8) << factorA * force_angluar << " "
+        << setw(8) << ang_rad * 180.0 / M_PI << " "
+        << setw(8) << factorB * force_angluar << " "
+        << "; (dummy conn.) " 
+        << setw(3) << Atop.resids[pa] << " "
+        << setw(5) << Atop.names[pa] << "-"
+        << setw(5) << Atop.names[ba] << "-"
+        << setw(5) << Atop.names[aa]
+        << endl;
+  }
+
+  Ofs << "[ dihedrals ]" << endl;
+
+  for(int p: Aphantoms) {
+    int pa = assignAofO[p];
+    int bond_o = bond_atom[p];
+    int ba = assignAofO[bond_o];
+    int angle_o = angle_atom[p];
+    int aa = assignAofO[angle_o];
+    int dihed_o = dihedral_atom[p];
+    int da = assignAofO[dihed_o];
+
+    double dih_rad = dihedral(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa), Acoords.col(da));
+    
+    Ofs << setw(6) << p + 1 << " "
+        << setw(6) << bond_o + 1 << " "
+        << setw(6) << angle_o + 1 << " "
+        << setw(6) << dihed_o + 1 << " "
+        << setw(4) << 2 << " " // "improper" to constrain angle with harmonic
+        << setw(8) << dih_rad * 180.0 / M_PI << " "
+        << setw(8) << factorA * force_dihedral << " "
+        << setw(8) << dih_rad * 180.0 / M_PI << " "
+        << setw(8) << factorB * force_dihedral << " "
+        << "; (dummy conn.) " 
+        << setw(3) << Atop.resids[pa] << " "
+        << setw(5) << Atop.names[pa] << "-"
+        << setw(5) << Atop.names[ba] << "-"
+        << setw(5) << Atop.names[aa] << "-"
+        << setw(5) << Atop.names[da]
+        << endl;
   }
   
-  for(const auto& x: Aclusterdist) {
-    const double scale = 0.1; // angstrom to nm
-    int xa = assignAofO[x.second.first];
-    int par = x.first;
-    auto ar = Aclusters.equal_range(par);
-    for(auto it = ar.first; it != ar.second; ++it) {
-      {
-        int ya = assignAofO[it->second];
-        double d = (Acoords.col(xa) - Acoords.col(ya)).norm();
-        Ofs << setw(6) << x.second.first + 1 << " "
-            << setw(6) << it->second + 1 << " "
-            << setw(4) << 6 << " ";
-        if(isA) {
-          Ofs << setw(8) << d * scale << " "
-              << setw(8) << 0.0 << " ";
-        }
-        Ofs << setw(8) << d * scale << " "
-            << setw(8) << force_connect << " ";
-        if(!isA) {
-          Ofs << setw(8) << d * scale << " "
-              << setw(8) << 0.0 << " ";
-        }        
-        Ofs << "; (to-cluster) " 
-            << setw(3) << Atop.resids[xa] << " "
-            << setw(5) << Atop.names[xa] << " - "
-            << setw(3) << Atop.resids[ya] << " "
-            << setw(5) << Atop.names[ya]
-            << endl;
-      }
-      
-      for(auto it2 = ar.first; it2 != ar.second; ++it2) {
-        if(it->second >= it2->second) continue;
-        int xa = assignAofO[it->second];
-        int ya = assignAofO[it2->second];
-        double d = (Acoords.col(xa) - 
-                    Acoords.col(ya)).norm();
-        
-        Ofs << setw(6) << it->second + 1 << " "
-            << setw(6) << it2->second + 1 << " "
-            << setw(4) << 6 << " ";
-        if(isA) {
-          Ofs << setw(8) << d * scale << " "
-              << setw(8) << 0.0 << " ";
-        }
-        Ofs << setw(8) << d * scale << " "
-            << setw(8) << force_within_cluster << " ";
-        if(!isA) {
-          Ofs << setw(8) << d * scale << " "
-              << setw(8) << 0.0 << " ";
-        }
-        Ofs << "; (in-cluster) " 
-            << setw(3) << Atop.resids[xa] << " "
-            << setw(5) << Atop.names[xa] << " - "
-            << setw(3) << Atop.resids[ya] << " "
-            << setw(5) << Atop.names[ya]
-            << endl;
-      }
-    }
-  }
 }
 
 static void find_exclusions(const topology &top,
@@ -416,7 +556,7 @@ void generate_topology(const string& outfilename,
                        const vector<int> &assignOofB, 
                        const vector<int> &assignAofO,
                        const vector<int> &assignBofO,
-                       const struct cluster_parameters& cparams,
+                       const struct dummy_anchoring_parameters& cparams,
                        double rest_weighting,
                        const vector<string> &rest_exclude_atomtypes,
                        bool gen_exclusion)
@@ -431,7 +571,7 @@ void generate_topology(const string& outfilename,
 
   Ofs << "; generated by:" << endl;
   Ofs << ";  " << argv[0];
-  for(int i = 1; i < argv.size(); ++i) {
+  for(int i = 1; i < (int)argv.size(); ++i) {
     Ofs << " " << argv[i];
   }
   Ofs << endl;
@@ -1052,25 +1192,26 @@ void generate_topology(const string& outfilename,
   }
   Ofs << endl;
 
-  // bonds for phantom atoms
-  Ofs << "[ bonds ]" << endl;
+  // bonded forces for phantom atoms
   {
     Ofs << "; Atoms existing in A state" << endl;
-    output_clusters(Ofs, Acoords, 
-                    cparams.cluster_maxdist,
-                    cparams.force_to_cluster,
-                    cparams.force_within_cluster,
-                    assignAofO,
-                    assignBofO,
-                    Atop, true);
+    output_dummies(Ofs, Acoords, 
+                   cparams.force_bond,
+                   cparams.force_angular,
+                   cparams.force_dihedral,
+                   assignAofO,
+                   assignBofO,
+                   assignOofA,
+                   Atop, true);
     Ofs << "; Atoms existing in B state" << endl;
-    output_clusters(Ofs, Bcoords, 
-                    cparams.cluster_maxdist,
-                    cparams.force_to_cluster,
-                    cparams.force_within_cluster,
-                    assignBofO,
-                    assignAofO,
-                    Btop, false);
+    output_dummies(Ofs, Bcoords, 
+                   cparams.force_bond,
+                   cparams.force_angular,
+                   cparams.force_dihedral,
+                   assignBofO,
+                   assignAofO,
+                   assignOofB,
+                   Btop, false);
   }
   Ofs << endl;
 
@@ -1153,9 +1294,9 @@ int main(int argc, char* argv[])
   p.add("verbose", 'v', "Be more verbose");
   p.add("quiet", 'q', "Suppress unnecessary information");
   p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
-  p.add<double>("cluster-dist", 0, "Maximum distances for phantom atoms clustering", false, 2.0);
-  p.add<double>("force-constant", 0, "Cluster fixing force constants", false, 5e+4);
-  p.add<double>("force-within-cluster", 0, "Cluster force constants", false, 5e+4);
+  p.add<double>("force-bond", 0, "Cluster bond force constants", false, 5e+4);
+  p.add<double>("force-angular", 0, "Cluster rotation fixing force constants", false, 5e+2);
+  p.add<double>("force-dihedral", 0, "Cluster rotation fixing force constants", false, 5e+1);
   p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
   p.add("debug", 0, "Debug");
 
@@ -1356,10 +1497,10 @@ int main(int argc, char* argv[])
 
   vector<double> stateA_weights(HAM_NR, 0.);
   vector<double> stateB_weights(HAM_NR, 1.);
-  struct cluster_parameters cparams;
-  cparams.cluster_maxdist = p.get<double>("cluster-dist");
-  cparams.force_to_cluster = p.get<double>("force-constant");
-  cparams.force_within_cluster = p.get<double>("force-within-cluster");
+  struct dummy_anchoring_parameters cparams;
+  cparams.force_bond = p.get<double>("force-bond");
+  cparams.force_angular = p.get<double>("force-angular");
+  cparams.force_dihedral = p.get<double>("force-dihedral");
 
   vector<string> rest_excluded_atoms;
   string outfname = p.get<string>("topologyO");
@@ -1394,7 +1535,7 @@ int main(int argc, char* argv[])
 
     for(int i = 0; i < N; ++i) {
       Vector3d crd;
-      int resid;
+      int resid = 0;
       string atom, resname;
 
       int acrd = assignAofO[i];
