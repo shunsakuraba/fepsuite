@@ -1090,21 +1090,29 @@ void generate_topology(const string& outfilename,
     vector<double> Bfactors(Afactors);
     if(Btop.diheds.count(keyB) > 0) {
       Bfactors = Btop.diheds.at(keyB);
+      if(func == 1 || func == 9) {
+        Bfactors.pop_back(); // multiplicity does not appear in B state
+      }
     }else{
       for(auto &&v: Bfactors) {
         v = 0.0;
       }
       if(func == 1 || func == 9) {
         Bfactors[0] = Afactors[0];
-        Bfactors[2] = Afactors[2];
+        Bfactors.pop_back(); // multiplicity does not appear in B state
       }
     }
     // output A-listed angles first
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << z_in_O + 1 << " " << w_in_O + 1 << " "
         << func;
-    for(auto v: Afactors) {
-      Ofs << " " << setw(12) << v;
+    for(size_t i = 0; i < Afactors.size(); ++i) {
+      double v = Afactors[i];
+      if((func == 1 || func == 9) && i == 2) {
+        Ofs << " " << setw(2) << (int) v;
+      }else{
+        Ofs << " " << setw(12) << v;
+      }
     }
     for(auto v: Bfactors) {
       Ofs << " " << setw(12) << v;
@@ -1142,14 +1150,17 @@ void generate_topology(const string& outfilename,
     if(func == 1 || func == 9) {
       Ofs << " " << setw(12) << Bfactors[0]
           << " " << setw(12) << 0.00
-          << " " << setw(12) << Bfactors[2];
+          << " " << setw(2) << (int)Bfactors[2];
     }else{
       for(double v: Bfactors) {
         (void) v;
         Ofs << " " << setw(12) << 0.00;
       }
     }
-    for(auto v: Bfactors) {
+    vector<double> Bfactors_stB(Bfactors);    
+    // multiplicity does not appear in B state
+    for(size_t i = 0; i < Bfactors.size() - (func == 1 || func == 9); ++i) {
+      double v = Bfactors[i];
       Ofs << " " << setw(12) << v;
     }
     Ofs << endl;
