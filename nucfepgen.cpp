@@ -442,7 +442,7 @@ void correct_assign_by_exclusion(const topology &Atop,
   do {
     found = false;
     int maxdepth = -1;
-    int Amax, Bmax;
+    int Amax, Bmax = -1;
     vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
     int N;
     // try to generate current assign
@@ -861,6 +861,15 @@ void generate_topology(const string& outfilename,
   Ofs << ";   nr  type  resi  res  atom  cgnr     charge      mass       typeB chargeB massB" << endl;
 
   for(int i = 0; i < N; ++i) {
+    double mass;
+    if(assignAofO[i] != -1 && assignBofO[i] != -1) {
+      mass = std::max(Atop.masses[assignAofO[i]], Btop.masses[assignBofO[i]]);
+    }else if(assignAofO[i] != -1) {
+      mass = Atop.masses[assignAofO[i]];
+    }else{
+      mass = Btop.masses[assignBofO[i]];
+    }
+    
     // Fill in A-state
     if(assignAofO[i] != -1) {
       int aptr = assignAofO[i];
@@ -871,7 +880,7 @@ void generate_topology(const string& outfilename,
           << " " << setw(6) << Atop.names[aptr]
           << " " << setw(4) << (i + 1) // cgnr
           << " " << setw(12) << Atop.charges[aptr]
-          << " " << setw(12) << Atop.masses[aptr];
+          << " " << setw(12) << mass;
     }else{
       int bptr = assignBofO[i];
       assert(bptr != -1);
@@ -882,7 +891,7 @@ void generate_topology(const string& outfilename,
           << " " << setw(6) << Btop.names[bptr]
           << " " << setw(4) << (i + 1) // cgnr
           << " " << setw(12) << 0.000
-          << " " << setw(12) << 12.000;
+          << " " << setw(12) << mass;
     }
 
     // Fill in B-state
@@ -890,11 +899,11 @@ void generate_topology(const string& outfilename,
       int bptr = assignBofO[i];
       Ofs << " " << setw(3) << Btop.types[bptr]
           << " " << setw(12) << Btop.charges[bptr]
-          << " " << setw(12) << Btop.masses[bptr];
+          << " " << setw(12) << mass;
     }else{
       Ofs << " " << "PHA"
           << " " << setw(12) << 0.000
-          << " " << setw(12) << 12.000;
+          << " " << setw(12) << mass;
     }
     Ofs << endl;
   }
@@ -1257,22 +1266,22 @@ void generate_topology(const string& outfilename,
       Ofs << (i + 1);
       for(int e: v) {
         assert(e != i);
-        int iresid = -1, eresid = -1;
+        //int iresid = -1, eresid = -1;
         string iname, ename;
         if(assignAofO[i] == -1 &&
            assignBofO[e] == -1) {
           int iid = assignBofO[i];
           int eid = assignAofO[e];
-          iresid = Btop.resids[iid];
-          eresid = Atop.resids[eid];
+          // iresid = Btop.resids[iid];
+          // eresid = Atop.resids[eid];
           iname = Btop.names[iid];
           ename = Atop.names[eid];
         }else if(assignAofO[e] == -1 &&
                  assignBofO[i] == -1) {
           int iid = assignAofO[i];
           int eid = assignBofO[e];
-          iresid = Atop.resids[iid];
-          eresid = Btop.resids[eid];
+          // iresid = Atop.resids[iid];
+          // eresid = Btop.resids[eid];
           iname = Atop.names[iid];
           ename = Btop.names[eid];
         }
