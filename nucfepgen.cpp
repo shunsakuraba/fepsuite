@@ -37,6 +37,8 @@ struct dummy_anchoring_parameters
 bool verbose = false;
 bool quiet = false;
 
+const double nm_of_angstrom = 0.1;
+
 /*
   Returns all indices that has distance exactly n.
   Note that for the case of 5-membered ring with n=3 there are none.
@@ -243,9 +245,9 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
     Ofs << setw(6) << p + 1 << " "
         << setw(6) << bond_o + 1 << " "
         << setw(4) << 6 << " " // Harmonic, non-excl
-        << setw(8) << d << " "
+        << setw(8) << d * nm_of_angstrom << " "
         << setw(8) << factorA * force_bond << " "
-        << setw(8) << d << " "
+        << setw(8) << d * nm_of_angstrom << " "
         << setw(8) << factorB * force_bond << " "
         << "; (dummy conn.) " 
         << setw(3) << Atop.resids[pa] << " "
