@@ -1093,22 +1093,20 @@ void generate_topology(const string& outfilename,
                  func,
                  addendum);
     if(!(func == 1 || func == 2 || func == 3 || func == 9)) {
+      // FIXME TODO: func == 4 should be supported below but untested
       throw runtime_error("dihed func not in {1, 2, 3, 9} not supported");
     }
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(Afactors);
     if(Btop.diheds.count(keyB) > 0) {
       Bfactors = Btop.diheds.at(keyB);
-      if(func == 1 || func == 9) {
-        Bfactors.pop_back(); // multiplicity does not appear in B state
-      }
     }else{
       for(auto &&v: Bfactors) {
         v = 0.0;
       }
-      if(func == 1 || func == 9) {
+      if(func == 1 || func == 4 || func == 9) {
         Bfactors[0] = Afactors[0];
-        Bfactors.pop_back(); // multiplicity does not appear in B state
+        Bfactors[2] = Afactors[2];
       }
     }
     // output A-listed angles first
@@ -1117,14 +1115,19 @@ void generate_topology(const string& outfilename,
         << func;
     for(size_t i = 0; i < Afactors.size(); ++i) {
       double v = Afactors[i];
-      if((func == 1 || func == 9) && i == 2) {
+      if((func == 1 || func == 4 || func == 9) && i == 2) {
         Ofs << " " << setw(2) << (int) v;
       }else{
         Ofs << " " << setw(12) << v;
       }
     }
-    for(auto v: Bfactors) {
-      Ofs << " " << setw(12) << v;
+    for(size_t i = 0; i < Bfactors.size(); ++i) {
+      double v = Bfactors[i];
+      if((func == 1 || func == 4 || func == 9) && i == 2) {
+        Ofs << " " << setw(2) << (int) v;
+      }else{
+        Ofs << " " << setw(12) << v;
+      }
     }
     Ofs << endl;
   }
@@ -1156,7 +1159,7 @@ void generate_topology(const string& outfilename,
     Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
         << z_in_O + 1 << " " << w_in_O + 1 << " "
         << func;
-    if(func == 1 || func == 9) {
+    if(func == 1 || func == 4 || func == 9) {
       Ofs << " " << setw(12) << Bfactors[0]
           << " " << setw(12) << 0.00
           << " " << setw(2) << (int)Bfactors[2];
@@ -1166,11 +1169,13 @@ void generate_topology(const string& outfilename,
         Ofs << " " << setw(12) << 0.00;
       }
     }
-    vector<double> Bfactors_stB(Bfactors);    
-    // multiplicity does not appear in B state
-    for(size_t i = 0; i < Bfactors.size() - (func == 1 || func == 9); ++i) {
+    for(size_t i = 0; i < Bfactors.size(); ++i) {
       double v = Bfactors[i];
-      Ofs << " " << setw(12) << v;
+      if((func == 1 || func == 4 || func == 9) && i == 2) {
+        Ofs << " " << setw(2) << (int) v;
+      }else{
+        Ofs << " " << setw(12) << v;
+      }
     }
     Ofs << endl;
   }
