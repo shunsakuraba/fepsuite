@@ -17,6 +17,7 @@ static char atomtype(const string& an)
 }
 
 void assign_atoms(const string& process_atoms,
+                  const char* atomname,
                   const vector<string>& Anames,
                   const vector<string>& Bnames,
                   const MatrixXd& distmat,
@@ -29,12 +30,20 @@ void assign_atoms(const string& process_atoms,
 
   for(int i = 0; i < (int)Anames.size(); i++) {
     char at = atomtype(Anames[i]);
-    Aenable[i] = at && (process_atoms.find(at) != string::npos);
+    if(atomname) {
+      Aenable[i] = (Anames[i] == atomname);
+    }else{
+      Aenable[i] = at && (process_atoms.find(at) != string::npos);
+    }
   }
 
   for(int i = 0; i < (int)Bnames.size(); i++) {
     char at = atomtype(Bnames[i]);
-    Benable[i] = at && (process_atoms.find(at) != string::npos);
+    if(atomname) {
+      Benable[i] = (Bnames[i] == atomname);
+    }else{
+      Benable[i] = at && (process_atoms.find(at) != string::npos);
+    }
   }
 
   for(int i = 0; i < (int)Anames.size(); ++i) {

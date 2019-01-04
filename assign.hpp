@@ -5,6 +5,7 @@
 #include "topology.hpp"
 
 void assign_atoms(const std::string& process_atoms,
+                  const char* atomname_optional,
                   const std::vector<std::string>& Anames,
                   const std::vector<std::string>& Bnames,
                   const Eigen::MatrixXd& distmat,

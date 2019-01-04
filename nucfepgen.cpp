@@ -1335,6 +1335,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureOA", 0, "PDB structure to output (optional, for stateA)", false);
   p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
+  p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
@@ -1391,14 +1392,18 @@ int main(int argc, char* argv[])
 
   bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
-  assign_atoms("P",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  if(p.exist("protein")) {
+    assign_atoms("",    "CA",    Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  }else{
+    assign_atoms("P",   nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  }
   if(use_connectivity) {
     assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
     correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
   }else{
-    assign_atoms("NCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("H",   Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("HNCO", Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+    assign_atoms("NCO",  nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("H",    nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assign_atoms("HNCO", nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
   }
   if(!quiet){
     cout << "Atoms assigned:" << endl;
