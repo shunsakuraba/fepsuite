@@ -16,18 +16,19 @@ static char atomtype(const string& an)
   return 0;
 }
 
-void assign_atoms(const string& process_atoms,
-                  const char* atomname,
-                  const vector<string>& Anames,
-                  const vector<string>& Bnames,
-                  const MatrixXd& distmat,
-                  vector<int>& assignBofA,
-                  vector<int>& assignAofB,
-                  double threshold)
+int assign_atoms(const string& process_atoms,
+                 const char* atomname,
+                 const vector<string>& Anames,
+                 const vector<string>& Bnames,
+                 const MatrixXd& distmat,
+                 vector<int>& assignBofA,
+                 vector<int>& assignAofB,
+                 double threshold)
 {
   vector<bool> Aenable(Anames.size());
   vector<bool> Benable(Bnames.size());
 
+  int assigned = 0;
   for(int i = 0; i < (int)Anames.size(); i++) {
     char at = atomtype(Anames[i]);
     if(atomname) {
@@ -65,8 +66,10 @@ void assign_atoms(const string& process_atoms,
       // found the atom
       assignBofA[i] = minatm;
       assignAofB[minatm] = i;
+      ++assigned;
     }
   }
+  return assigned;
 }
 
 void assign_atoms_connectivity(const MatrixXd& distmat,

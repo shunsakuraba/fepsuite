@@ -1362,8 +1362,12 @@ int main(int argc, char* argv[])
   const vector<string>& Bnames = Bpdb.get_atomnames();
 
   // fit Bpdb structure into Apdb by comparing P-coordinates
-  {
-    
+  if(p.exist("protein")){
+    VectorXd Amass = set_selected_mass(Anames, "CA");
+    VectorXd Bmass = set_selected_mass(Bnames, "CA");
+
+    fit_selected(Amass, Bmass, Acoords, Bcoords);
+  }else{
     VectorXd Amass = set_selected_mass(Anames, "P");
     VectorXd Bmass = set_selected_mass(Bnames, "P");
 
@@ -1392,10 +1396,18 @@ int main(int argc, char* argv[])
 
   bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
+  int assigned;
   if(p.exist("protein")) {
-    assign_atoms("",    "CA",    Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assigned = assign_atoms("",    "CA",    Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
   }else{
-    assign_atoms("P",   nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assigned = assign_atoms("P",   nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+  }
+  if(verbose) {
+    cout << "Assigned " << assigned << " atoms @ mainchain phase" << endl;
+  }
+  if(assigned == 0) {
+    cout << "Too few assigned atoms at mainchain phase" << endl;
+    exit(1);
   }
   if(use_connectivity) {
     assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
