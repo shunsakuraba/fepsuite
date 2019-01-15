@@ -146,3 +146,32 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
 }
 
 
+int assign_atoms_resinfo(const vector<string>& Anames,
+                         const vector<string>& Bnames,
+                         const vector<string>& Aresnames,
+                         const vector<string>& Bresnames,
+                         const vector<int>& Aresids,
+                         const vector<int>& Bresids,
+                         vector<int>& assignBofA,
+                         vector<int>& assignAofB)
+{
+  int assigned = 0;
+
+  for(int i = 0; i < (int)Anames.size(); ++i) {
+    int found = -1;
+    for(int j = 0; j < (int)Bnames.size(); ++j) {
+      if((Aresids[i] == Bresids[j]) &&
+         (Aresnames[i] == Bresnames[j]) &&
+         (Anames[i] == Bnames[j])) {
+        found = j;
+        break;
+      }
+    }
+    if(found >= 0) {
+      assignBofA[i] = found;
+      assignAofB[found] = i;
+      ++assigned;
+    }
+  }
+  return assigned;
+}

@@ -13,6 +13,15 @@ int assign_atoms(const std::string& process_atoms,
                  std::vector<int>& assignAofB,
                  double threshold);
 
+int assign_atoms_resinfo(const std::vector<std::string>& Anames,
+                         const std::vector<std::string>& Bnames,
+                         const std::vector<std::string>& Aresnames,
+                         const std::vector<std::string>& Bresnames,
+                         const std::vector<int>& Aresids,
+                         const std::vector<int>& Bresids,
+                         std::vector<int>& assignBofA,
+                         std::vector<int>& assignAofB);
+
 void assign_atoms_connectivity(const Eigen::MatrixXd& distmat,
                                const topology& Atop,
                                const topology& Btop,

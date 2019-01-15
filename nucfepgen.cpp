@@ -1339,6 +1339,7 @@ int main(int argc, char* argv[])
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
+  p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches");
 
   bool ok = p.parse(argc, argv);
 
@@ -1409,6 +1410,12 @@ int main(int argc, char* argv[])
     cout << "Too few assigned atoms at mainchain phase" << endl;
     exit(1);
   }
+  if(p.exist("honor-resnames")) {
+    assign_atoms_resinfo(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(),
+                         Apdb.get_resids(), Bpdb.get_resids(),
+                         assignBofA, assignAofB);
+  }
+
   if(use_connectivity) {
     assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
     correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
