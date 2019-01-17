@@ -120,12 +120,16 @@ vector<int> calculate_int_distance_nonphantom(const topology& top,
   return distances;
 }
 
-array<int, 3> find_zmat_like_connectivity(const vector<vector<int> > &adj,
-                                          const vector<int>& phantoms,
-                                          const vector<int>& int_distances,
-                                          int atomix)
+static
+array<int, 3> find_zmat_like_connectivity_impl(const vector<vector<int> > &adj,
+                                               const vector<int>& phantoms,
+                                               const vector<int>& int_distances,
+                                               const vector<string>& atomnames,
+                                               bool allow_hydrogen,
+                                               int atomix,
+                                               bool *found)
 {
-  array<int, 3> ret;
+  array<int, 3> ret = {0, 0, 0};
   int curdist = int_distances[atomix];
   for(int b: adj[atomix]) {
     if(b == atomix || !(int_distances[b] == 0 || int_distances[b] < curdist)) {
@@ -138,17 +142,46 @@ array<int, 3> find_zmat_like_connectivity(const vector<vector<int> > &adj,
       }
       ret[1] = a;
       for(int d: adj[a]) {
-        if(d == atomix || d == a || d == b || !(int_distances[d] == 0 || int_distances[d] < int_distances[a])) {
+        if(d == atomix || d == a || d == b ||
+           !(int_distances[d] == 0 || int_distances[d] < int_distances[a])) {
+          continue;
+        }
+        if((!allow_hydrogen) && (atomnames[d][0] == 'H')) {
           continue;
         }
         ret[2] = d;
+        *found = true;
         return ret;
       }
     }
   }
   // Not found
-  throw runtime_error("find_zmat_like_connectivity: not found");
+  *found = false;
+  return ret;
 }
+
+static
+array<int, 3> find_zmat_like_connectivity(const vector<vector<int> > &adj,
+                                          const vector<int>& phantoms,
+                                          const vector<int>& int_distances,
+                                          const vector<string>& atomnames,
+                                          int atomix)
+{
+  bool found;
+  array<int, 3> ret;
+  ret = find_zmat_like_connectivity_impl(adj, phantoms, int_distances, atomnames, false, atomix, &found);
+  if(found) {
+    return ret;
+  }else{
+    // retry allowing H
+    ret = find_zmat_like_connectivity_impl(adj, phantoms, int_distances, atomnames, true, atomix, &found);
+    if(!found) {
+      throw runtime_error("find_zmat_like_connectivity: failed to find");
+    }
+    return ret;
+  }
+}
+
                    
 
 template<typename F>
@@ -216,6 +249,7 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
       find_zmat_like_connectivity(adj,
                                   Aphantoms_A,
                                   distance_A,
+                                  Atop.types,
                                   p_of_a);
     
     int bond_o = assignOofA[conn[0]];
@@ -1322,8 +1356,8 @@ int main(int argc, char* argv[])
   p.add("quiet", 'q', "Suppress unnecessary information");
   p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
   p.add<double>("force-bond", 0, "Cluster bond force constants", false, 5e+4);
-  p.add<double>("force-angular", 0, "Cluster rotation fixing force constants", false, 5e+2);
-  p.add<double>("force-dihedral", 0, "Cluster rotation fixing force constants", false, 5e+1);
+  p.add<double>("force-angular", 0, "Cluster rotation fixing force constants", false, 2e+3);
+  p.add<double>("force-dihedral", 0, "Cluster rotation fixing force constants", false, 2e+2);
   p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
   p.add("debug", 0, "Debug");
 
