@@ -1355,9 +1355,9 @@ int main(int argc, char* argv[])
   p.add("verbose", 'v', "Be more verbose");
   p.add("quiet", 'q', "Suppress unnecessary information");
   p.add<double>("maxdist", 0, "Maximum distances to fit", false, 1.0);
-  p.add<double>("force-bond", 0, "Cluster bond force constants", false, 5e+4);
-  p.add<double>("force-angular", 0, "Cluster rotation fixing force constants", false, 2e+3);
-  p.add<double>("force-dihedral", 0, "Cluster rotation fixing force constants", false, 2e+2);
+  p.add<double>("force-bond", 0, "Cluster bond force constants", false, 5e+5); // Typical bond force constants: 2-5e5. 5e5 is for double bonds.
+  p.add<double>("force-angular", 0, "Cluster rotation fixing force constants", false, 5e+2); // Typical angle fc: 3-7e2. 
+  p.add<double>("force-dihedral", 0, "Cluster rotation fixing force constants", false, 1e+2); // Typical dihedral fc: varies, up to 5e1 for peptide bond dihed rotation
   p.add<int>("max-warning", 0, "Maximum number of allowed errors", false, 0);
   p.add("debug", 0, "Debug");
 
