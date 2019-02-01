@@ -1389,6 +1389,9 @@ int main(int argc, char* argv[])
   topology Atop(p.get<string>("topologyA"));
   topology Btop(p.get<string>("topologyB"));
 
+  assert(Atop.names.size() == Apdb.get_atomnames().size());
+  assert(Btop.names.size() == Bpdb.get_atomnames().size());
+
   Matrix3Xd Acoords, Bcoords;
   Acoords = Apdb.get_coords();
   Bcoords = Bpdb.get_coords();
