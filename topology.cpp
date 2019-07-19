@@ -41,6 +41,11 @@ topology::topology(const string& fname)
     }
     if(line[0] == '#') {
       // currently ignore includes / defines ...
+      cerr << "Warning: topology file is not preprocessed!" << endl;
+      continue;
+    }
+    if(line[0] == '*') {
+      // another form of comment.
       continue;
     }
 
@@ -198,6 +203,8 @@ topology::topology(const string& fname)
       dihedral = vals;
     }else if(state == "system" || state == "molecules") {
       // do nothing
+    }else if(state == "constrainttypes") {
+      // do nothing. constrainttypes are not used unless [ constraints ] section appears, so safely ignored.
     }else{
       throw runtime_error((string("Unsupported section ") + state).c_str());
     }
