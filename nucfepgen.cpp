@@ -1128,9 +1128,8 @@ void generate_topology(const string& outfilename,
                  assignBofO[w_in_O],
                  func,
                  addendum);
-    if(!(func == 1 || func == 2 || func == 3 || func == 9)) {
-      // FIXME TODO: func == 4 should be supported below but untested
-      throw runtime_error("dihed func not in {1, 2, 3, 9} not supported");
+    if(!(func == 1 || func == 2 || func == 3 || func == 4 || func == 9)) {
+      throw runtime_error("dihed func not in {1, 2, 3, 4, 9} not supported");
     }
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(Afactors);

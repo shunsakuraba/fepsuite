@@ -194,7 +194,10 @@ topology::topology(const string& fname)
       }
       int addendum = 0;
       if(func == 1 || func == 9) {
-          addendum = (int)vals.back(); // rep values
+        if(vals.empty()) {
+          throw runtime_error("unsupported: input must be canonicalized");
+        }
+        addendum = (int)vals.back(); // rep values
       }
       if(addendum == 0 && diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)) > 0) {
         throw runtime_error("unsupported: dihedral multiple entries");
@@ -205,6 +208,8 @@ topology::topology(const string& fname)
       // do nothing
     }else if(state == "constrainttypes") {
       // do nothing. constrainttypes are not used unless [ constraints ] section appears, so safely ignored.
+    }else if(state == "implicit_genborn_params") {
+      // do nothing
     }else{
       throw runtime_error((string("Unsupported section ") + state).c_str());
     }
