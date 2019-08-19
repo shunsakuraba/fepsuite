@@ -217,7 +217,7 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
                     const vector<int>& assignBofO,
                     const vector<int>& assignOofA,
                     const topology &Atop, 
-                    bool isA)
+                    bool isA, bool wang_approximation)
 {
   int N = (int)assignAofO.size();
   vector<int> Aphantoms; // A's atoms which is phantom in state B, numbered in O
@@ -268,54 +268,58 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
   double factorA = isA ? 0.0 : 1.0;
   double factorB = isA ? 1.0 : 0.0;
 
-  Ofs << "[ bonds ]" << endl;
-  
-  for(int p: Aphantoms) {
-    int pa = assignAofO[p];
-    int bond_o = bond_atom[p];
-    int ba = assignAofO[bond_o];
+  if(!wang_approximation) {
+    Ofs << "[ bonds ]" << endl;
+    
+    for(int p: Aphantoms) {
+      int pa = assignAofO[p];
+      int bond_o = bond_atom[p];
+      int ba = assignAofO[bond_o];
 
-    double d = (Acoords.col(pa) - Acoords.col(ba)).norm();
-    Ofs << setw(6) << p + 1 << " "
-        << setw(6) << bond_o + 1 << " "
-        << setw(4) << 6 << " " // Harmonic, non-excl
-        << setw(8) << d * nm_of_angstrom << " "
-        << setw(8) << factorA * force_bond << " "
-        << setw(8) << d * nm_of_angstrom << " "
-        << setw(8) << factorB * force_bond << " "
-        << "; (dummy conn.) " 
-        << setw(3) << Atop.resids[pa] << " "
-        << setw(5) << Atop.names[pa] << " - "
-        << setw(3) << Atop.resids[ba] << " "
-        << setw(5) << Atop.names[ba]
-        << endl;
+      double d = (Acoords.col(pa) - Acoords.col(ba)).norm();
+      Ofs << setw(6) << p + 1 << " "
+          << setw(6) << bond_o + 1 << " "
+          << setw(4) << 6 << " " // Harmonic, non-excl
+          << setw(8) << d * nm_of_angstrom << " "
+          << setw(8) << factorA * force_bond << " "
+          << setw(8) << d * nm_of_angstrom << " "
+          << setw(8) << factorB * force_bond << " "
+          << "; (dummy conn.) " 
+          << setw(3) << Atop.resids[pa] << " "
+          << setw(5) << Atop.names[pa] << " - "
+          << setw(3) << Atop.resids[ba] << " "
+          << setw(5) << Atop.names[ba]
+          << endl;
+    }
   }
 
-  Ofs << "[ angles ]" << endl;
+  if(!wang_approximation) {
+    Ofs << "[ angles ]" << endl;
 
-  for(int p: Aphantoms) {
-    int pa = assignAofO[p];
-    int bond_o = bond_atom[p];
-    int ba = assignAofO[bond_o];
-    int angle_o = angle_atom[p];
-    int aa = assignAofO[angle_o];
+    for(int p: Aphantoms) {
+      int pa = assignAofO[p];
+      int bond_o = bond_atom[p];
+      int ba = assignAofO[bond_o];
+      int angle_o = angle_atom[p];
+      int aa = assignAofO[angle_o];
 
-    double ang_rad = angle(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa));
+      double ang_rad = angle(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa));
 
-    Ofs << setw(6) << p + 1 << " "
-        << setw(6) << bond_o + 1 << " "
-        << setw(6) << angle_o + 1 << " "
-        << setw(4) << 1 << " " // harmonic
-        << setw(8) << ang_rad * 180.0 / M_PI << " "
-        << setw(8) << factorA * force_angluar << " "
-        << setw(8) << ang_rad * 180.0 / M_PI << " "
-        << setw(8) << factorB * force_angluar << " "
-        << "; (dummy conn.) " 
-        << setw(3) << Atop.resids[pa] << " "
-        << setw(5) << Atop.names[pa] << "-"
-        << setw(5) << Atop.names[ba] << "-"
-        << setw(5) << Atop.names[aa]
-        << endl;
+      Ofs << setw(6) << p + 1 << " "
+          << setw(6) << bond_o + 1 << " "
+          << setw(6) << angle_o + 1 << " "
+          << setw(4) << 1 << " " // harmonic
+          << setw(8) << ang_rad * 180.0 / M_PI << " "
+          << setw(8) << factorA * force_angluar << " "
+          << setw(8) << ang_rad * 180.0 / M_PI << " "
+          << setw(8) << factorB * force_angluar << " "
+          << "; (dummy conn.) " 
+          << setw(3) << Atop.resids[pa] << " "
+          << setw(5) << Atop.names[pa] << "-"
+          << setw(5) << Atop.names[ba] << "-"
+          << setw(5) << Atop.names[aa]
+          << endl;
+    }
   }
 
   Ofs << "[ dihedrals ]" << endl;
@@ -595,7 +599,8 @@ void generate_topology(const string& outfilename,
                        const struct dummy_anchoring_parameters& cparams,
                        double rest_weighting,
                        const vector<string> &rest_exclude_atomtypes,
-                       bool gen_exclusion)
+                       bool gen_exclusion,
+                       bool wang_approximation)
 {
   int N = assignAofO.size();
 
@@ -968,7 +973,11 @@ void generate_topology(const string& outfilename,
       Bfactors = Btop.bonds.at(keyB);
     }else if(Afactors.size() > 0){
       Bfactors[0] = Afactors[0];
-      Bfactors[1] = 0.0;
+      if(wang_approximation){
+        Bfactors[1] = Afactors[1];
+      }else{
+        Bfactors[1] = 0.0;
+      }
     }else{
       Bfactors.clear();
     }
@@ -1004,7 +1013,7 @@ void generate_topology(const string& outfilename,
         << func;
     if(Bfactors.size() > 0) {
       Ofs << " " << Bfactors[0]
-          << " " << 0.00;
+          << " " << (wang_approximation ? Bfactors[1] : 0.00);
     }
     for(auto v: Bfactors) {
       Ofs << " " << v;
@@ -1038,17 +1047,21 @@ void generate_topology(const string& outfilename,
     if(Btop.angles.count(keyB) > 0) {
       Bfactors = Btop.angles.at(keyB);
     }else if(Afactors.size() > 0){
-      if(func == 1) {
-        Bfactors.resize(2);
-        Bfactors[0] = Afactors[0];
-        Bfactors[1] = 0.0;
-      }else if(func == 5) {
-        // only spring constants affected
-        Bfactors.resize(4);
-        Bfactors[0] = Afactors[0];
-        Bfactors[1] = 0.0;
-        Bfactors[2] = Afactors[2];
-        Bfactors[3] = 0.0;
+      if(wang_approximation) {
+        Bfactors = Afactors;
+      }else{
+        if(func == 1) {
+          Bfactors.resize(2);
+          Bfactors[0] = Afactors[0];
+          Bfactors[1] = 0.0;
+        }else if(func == 5) {
+          // only spring constants affected
+          Bfactors.resize(4);
+          Bfactors[0] = Afactors[0];
+          Bfactors[1] = 0.0;
+          Bfactors[2] = Afactors[2];
+          Bfactors[3] = 0.0;
+        }
       }
     }else{
       Bfactors.clear();
@@ -1091,12 +1104,12 @@ void generate_topology(const string& outfilename,
     if(Bfactors.size() > 0) {
       if(func == 1) {
         Ofs << " " << setw(12) << Bfactors[0]
-            << " " << setw(12) << 0.00;
+            << " " << setw(12) << (wang_approximation ? Bfactors[1] : 0.00);
       }else{
         Ofs << " " << setw(12) << Bfactors[0]
-            << " " << setw(12) << 0.00
+            << " " << setw(12) << (wang_approximation ? Bfactors[1] : 0.00)
             << " " << setw(12) << Bfactors[2]
-            << " " << setw(12) << 0.00;
+            << " " << setw(12) << (wang_approximation ? Bfactors[3] : 0.00);
       }
     }
     for(auto v: Bfactors) {
@@ -1262,7 +1275,7 @@ void generate_topology(const string& outfilename,
                    assignAofO,
                    assignBofO,
                    assignOofA,
-                   Atop, true);
+                   Atop, true, wang_approximation);
     Ofs << "; Atoms existing in B state" << endl;
     output_dummies(Ofs, Bcoords, 
                    cparams.force_bond,
@@ -1271,7 +1284,7 @@ void generate_topology(const string& outfilename,
                    assignBofO,
                    assignAofO,
                    assignOofB,
-                   Btop, false);
+                   Btop, false, wang_approximation);
   }
   Ofs << endl;
 
@@ -1373,6 +1386,7 @@ int main(int argc, char* argv[])
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
   p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches");
+  p.add("wang-approximation", 0, "Enable an approximation described in Supp. Info in Wang et al. 10.1073/pnas.1114017109");
 
   bool ok = p.parse(argc, argv);
 
@@ -1615,7 +1629,8 @@ int main(int argc, char* argv[])
                     cparams,
                     1.0,
                     rest_excluded_atoms,
-                    p.exist("gen-exclusion"));
+                    p.exist("gen-exclusion"),
+                    p.exist("wang-approximation"));
 
   // Generate PDB
   enum { OPDB_MERGED, OPDB_A, OPDB_B, OPDB_END };
