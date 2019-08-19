@@ -1466,6 +1466,11 @@ int main(int argc, char* argv[])
     for(int i = 0; i < (int)Anames.size(); ++i) {
       if(assignBofA[i] != -1) {
         int j = assignBofA[i];
+        if(!verbose &&
+           Apdb.get_residuenames()[i] == Bpdb.get_residuenames()[j] &&
+           Apdb.get_resids()[i] == Bpdb.get_resids()[j] &&
+           Anames[i] == Anames[j])
+          continue; // suppress printing
         cout << " " 
              << Apdb.get_chains()[i] << ":"
              << Apdb.get_residuenames()[i] << ":"
