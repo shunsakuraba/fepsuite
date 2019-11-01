@@ -620,7 +620,8 @@ void generate_topology(const string& outfilename,
   // Defaults section
   if(Atop.defaults != Btop.defaults ||
      !(Atop.defaults == topology::topotype::AMBER ||
-       Atop.defaults == topology::topotype::CHARMM)) {
+       Atop.defaults == topology::topotype::CHARMM ||
+       Atop.defaults == topology::topotype::OPLS)) {
     cerr << "Unsupported defaults type" << endl;
     exit(1);
   }
@@ -630,6 +631,10 @@ void generate_topology(const string& outfilename,
     Ofs << "1               2               yes             0.5     0.8333" << endl;
   }else if(Atop.defaults == topology::topotype::CHARMM) {
     Ofs << "1 2 yes 1.0 1.0" << endl;
+  }else if(Atop.defaults == topology::topotype::OPLS) {
+    Ofs << "1 3 yes 0.5 0.5" << endl;
+  }else{
+    throw std::runtime_error("Unsupported defaults type");
   }
   Ofs << endl;
 
