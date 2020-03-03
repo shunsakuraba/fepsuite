@@ -97,6 +97,53 @@ topology::topology(const string& fname)
       string atype;
       is >> atype;
       atomtypes[atype] = line;
+
+      // check for badly formatted ones (typically amber14sb.ff)
+      if(isdigit(atype[0])) {
+        cerr << "[ atomtypes ] contains type " << atype << " which starts from non-alphabets." << endl;
+        cerr << "This is invalid atomtype in GROMACS (but some user-generated force field, such as amber14sb.ff, contains the entries because AmberTools allow such kind of atom types.)" << endl;
+        cerr << "Consider renaming all such atomtypes to start from alphabets, e.g. 2C -> A2C." << endl;
+        throw runtime_error("topology::topology: invalid force field file detected");
+        // Do you know why I added this error message? Otherwise I will be messed with such ill-formed force fields.
+      }
+
+      // Old-type [ atomtypes ] may still exist, just to be sure
+      vector<string> inputs;
+      while(is){
+        string token;
+        is >> token;
+        if(is) inputs.push_back(token);
+      }
+      if(inputs.size() < 6) {
+        cerr << "[ atomtypes ] line is too short" << endl;
+        throw runtime_error("topology::topology: failed to parse");
+      }
+      bool have_bonded_type, have_atomic_number;
+      if(inputs[5].length() == 1 && isalpha(inputs[5][0])) {
+        have_bonded_type = true;
+        have_atomic_number = true;
+      }else if(inputs[3].length() == 1 && isalpha(inputs[3][0])) {
+        have_bonded_type = false;
+        have_atomic_number = false;
+      }else{
+        have_bonded_type = isalpha(inputs[1][0]);
+        have_atomic_number = ! have_bonded_type;
+        if(!have_bonded_type) {
+          // atomic number should be integer
+          if(!std::all_of(inputs[1].begin(), inputs[1].end(), [](char c) { return isdigit(c); })) {
+            cerr << "In [ atomtypes ], type " << atype << ": " << endl;
+            cerr << "The second entry starts from numerics. This is not a valid atom type for bonds. " << endl;
+            throw runtime_error("topology::topology: bondtype assignment error");
+          }
+        }
+      }
+
+      (void) have_atomic_number; // set but unused
+
+      string bond_type = atype;
+      if(have_bonded_type) bond_type = inputs[1];
+      
+      bondatomtypes[atype] = bond_type;
     }else if(state == "pairtypes") {
       istringstream is(line);
       string atype, btype;
@@ -121,6 +168,48 @@ topology::topology(const string& fname)
       int func;
       is >> atype >> btype >> ctype >> dtype >> func;
       dihedraltypes[make_tuple(atype, btype, ctype, dtype, func)].push_back(line);
+    }else if(state == "cmaptypes") {
+      // this is mostly unnecessary, but to 0-filld cmaptype if one of state do not have cmap potential.
+      istringstream is(line);
+      string atype, btype, ctype, dtype, etype;
+      int func;
+      is >> atype >> btype >> ctype >> dtype >> etype >> func;
+      // cmaptypes have strange format using backslash at the end of line
+      vector<double> values;
+      while(true){
+        double v;
+        is >> v;
+        if(is.fail()) {
+          // test whether we can read one more character and it is '\'
+          is.clear();
+          char c;
+          is >> c;
+          if(is.fail()) {
+            // no characters, i.e., end of the block
+            break;
+          }
+          if(c == '\\') {
+            getline(ifs, line);
+            is.str(line);
+            continue;
+          }else{
+            throw runtime_error((std::string("Unexpected [ cmaptypes ] character: ") + c).c_str());
+          }
+        }
+        values.push_back(v);
+      }
+      if(values.size() < 2) {
+        throw runtime_error("Invalid [ cmaptypes ] entry: size not found");
+      }
+      int phi_split = int(values[0]);
+      int psi_split = int(values[1]);
+      values.erase(values.begin());
+      values.erase(values.begin());
+      if(values.size() != (size_t)(phi_split * psi_split)) {
+        throw runtime_error("Invalid [ cmaptypes ] entry: too few arguments");        
+      }
+      topology::cmaptype key = std::make_tuple(atype, btype, ctype, dtype, etype, func);
+      cmaptypes[key] = std::make_tuple(phi_split, psi_split, values);
     }else if(state == "moleculetype") {
       istringstream is(line);
       is >> moleculename >> nexcl;
@@ -204,6 +293,12 @@ topology::topology(const string& fname)
       }
       vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)];
       dihedral = vals;
+    }else if(state == "cmap") {
+      istringstream is(line);
+      int a, b, c, d, e, func;
+      is >> a >> b >> c >> d >> e >> func;
+
+      cmaps.insert(make_tuple(a - 1, b - 1, c - 1, d - 1, e - 1, func));
     }else if(state == "system" || state == "molecules") {
       // do nothing
     }else if(state == "constrainttypes") {

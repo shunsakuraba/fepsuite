@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include <tuple>
@@ -13,10 +14,12 @@ struct topology {
   typedef std::tuple<int, int, int> bondkeytype;
   typedef std::tuple<int, int, int, int> anglekeytype;
   typedef std::tuple<int, int, int, int, int, int> dihedkeytype;
+  typedef std::tuple<int, int, int, int, int, int> cmapkeytype;
   typedef std::tuple<std::string, std::string, int> pairtype;
   typedef std::tuple<std::string, std::string, int> bondtype;
   typedef std::tuple<std::string, std::string, std::string, int> angletype;
   typedef std::tuple<std::string, std::string, std::string, std::string, int> dihedraltype;
+  typedef std::tuple<std::string, std::string, std::string, std::string, std::string, int> cmaptype;
 
   topotype defaults;
   std::string moleculename;
@@ -25,6 +28,8 @@ struct topology {
   // atomtypes
   // stores lines
   std::map<std::string, std::string> atomtypes;
+  // atomtype -> bondatomtype mapping
+  std::map<std::string, std::string> bondatomtypes;
   // pairtypes, stores the whole line
   std::map<pairtype, std::string> pairtypes;
   // bondtypes
@@ -33,6 +38,8 @@ struct topology {
   std::map<angletype, std::vector<std::string>> angletypes;
   // dihedraltypes
   std::map<dihedraltype, std::vector<std::string>> dihedraltypes;
+  // cmaptypes
+  std::map<cmaptype, std::tuple<int, int, std::vector<double>>> cmaptypes;
   
   // atoms
   std::vector<std::string> names;
@@ -54,6 +61,8 @@ struct topology {
   // dihedrals
   std::map<dihedkeytype, std::vector<double>> diheds;
 
+  // cmaps
+  std::set<cmapkeytype> cmaps;
 
   topology();
   topology(const std::string& fname);

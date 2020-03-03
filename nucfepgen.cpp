@@ -582,6 +582,67 @@ double li(double x, double a, double b)
   return a * (1 - x) + b * x;
 }
 
+
+static void do_check_cmap_add_zerofill(const topology &Atop, const topology &Btop,
+                                       const vector<int> &assignOofA, const vector<int> &assignBofO,
+                                       map<topology::cmaptype, tuple<int, int, vector<double>>> *cmaptypes_plus0)
+{
+  assert(cmaptypes_plus0->size() > 0);
+  for(const auto cmA: Atop.cmaps) {
+    int a = get<0>(cmA);
+    int b = get<1>(cmA);
+    int c = get<2>(cmA);
+    int d = get<3>(cmA);
+    int e = get<4>(cmA);
+    int func = get<5>(cmA);
+
+    string at = Atop.bondatomtypes.at(Atop.types[a]);
+    string bt = Atop.bondatomtypes.at(Atop.types[b]);
+    string ct = Atop.bondatomtypes.at(Atop.types[c]);
+    string dt = Atop.bondatomtypes.at(Atop.types[d]);
+    string et = Atop.bondatomtypes.at(Atop.types[e]);
+
+    assert(assignOofA[a] != -1);
+    assert(assignOofA[b] != -1);
+    assert(assignOofA[c] != -1);
+    assert(assignOofA[d] != -1);
+    assert(assignOofA[e] != -1);
+
+    int a_in_B = assignBofO[assignOofA[a]];
+    int b_in_B = assignBofO[assignOofA[b]];
+    int c_in_B = assignBofO[assignOofA[c]];
+    int d_in_B = assignBofO[assignOofA[d]];
+    int e_in_B = assignBofO[assignOofA[e]];
+
+    string at_in_B = (a_in_B != -1 ? Btop.bondatomtypes.at(Btop.types[a_in_B]) : "PHA");
+    string bt_in_B = (b_in_B != -1 ? Btop.bondatomtypes.at(Btop.types[b_in_B]) : "PHA");
+    string ct_in_B = (c_in_B != -1 ? Btop.bondatomtypes.at(Btop.types[c_in_B]) : "PHA");
+    string dt_in_B = (d_in_B != -1 ? Btop.bondatomtypes.at(Btop.types[d_in_B]) : "PHA");
+    string et_in_B = (e_in_B != -1 ? Btop.bondatomtypes.at(Btop.types[e_in_B]) : "PHA");
+
+    // TODO FIXME: as a pathological case, number of discretization may not match throughout entries.
+
+    topology::cmaptype keyA = std::make_tuple(at, bt, ct, dt, et, func);
+    topology::cmaptype keyB = std::make_tuple(at_in_B, bt_in_B, ct_in_B, dt_in_B, et_in_B, func);
+    if(cmaptypes_plus0->find(keyB) ==
+       cmaptypes_plus0->end()) {
+      if(verbose) {
+        cout << "Adding 0-filled CMAP entry for "
+             << at_in_B << "-"
+             << bt_in_B << "-"
+             << ct_in_B << "-"
+             << dt_in_B << "-"
+             << et_in_B << " (func " << func << ")" << endl;
+      }
+      const auto& baseentry = Atop.cmaptypes.at(keyA);
+      int phi_split = get<0>(baseentry);
+      int psi_split = get<1>(baseentry);
+      vector<double> newentry(0., get<2>(baseentry).size());
+      (*cmaptypes_plus0)[keyB] = std::make_tuple(phi_split, psi_split, newentry);
+    }
+  }
+}
+
 // Hey, could you clean up this mess?
 void generate_topology(const string& outfilename,
                        const vector<string>& argv,
@@ -889,6 +950,79 @@ void generate_topology(const string& outfilename,
     Ofs << endl;
   }
 
+  // cmaptypes.
+  // During the FEP, one of state A and B may not have the cmap entry for the perturbed bond-atom type. In such a case, we need to supply an entry of the cmaptypes with all values being 0.
+  if(Atop.cmaptypes.size() > 0 || Btop.cmaptypes.size() > 0) {
+    map<topology::cmaptype, tuple<int, int, vector<double>>> cmaptypes_plus0(Atop.cmaptypes);
+    // We assume cmaptypes are identical between two topologies.
+    // This should be valid as long as we use like #include "charmmxxff/cmap.itp" ...
+    if(Atop.cmaptypes.size() != Btop.cmaptypes.size()) {
+      throw runtime_error("[ cmaptypes ] entries are not identical between two states (size check failed)");
+    }
+    for(const auto& ceA: Atop.cmaptypes) {
+      map<topology::cmaptype, tuple<int, int, vector<double>>>::const_iterator it;
+      // in fact we can just use std::equal and lambda, but to make more informative error message...
+      if((it = Btop.cmaptypes.find(ceA.first)) != Btop.cmaptypes.end()) {
+        // entry exists in Btop
+        bool identical_entry =
+          (get<0>(ceA.second) == get<0>(it->second)) &&
+          (get<1>(ceA.second) == get<1>(it->second)) &&
+          (get<2>(ceA.second).size() == get<2>(it->second).size()) &&
+          std::equal(get<2>(ceA.second).begin(), get<2>(ceA.second).end(), get<2>(it->second).begin());
+        if(!identical_entry) {
+          cerr << "CMAP error: "
+               << get<0>(ceA.first) << "-"
+               << get<1>(ceA.first) << "-"
+               << get<2>(ceA.first) << "-"
+               << get<3>(ceA.first) << "-"
+               << get<4>(ceA.first) << " (functype "
+               << get<5>(ceA.first) << ")" << endl;
+          throw runtime_error("[ cmaptypes ] entries are not identical between two states");
+        }
+      }else{
+        cerr << "CMAP error: "
+               << get<0>(ceA.first) << "-"
+               << get<1>(ceA.first) << "-"
+               << get<2>(ceA.first) << "-"
+               << get<3>(ceA.first) << "-"
+               << get<4>(ceA.first) << " (functype "
+               << get<5>(ceA.first) << ")" << endl;
+        throw runtime_error("[ cmaptypes ] entry in state A does not exist in state B");
+      }
+    }
+    // With the equal size, iterating over A should be sufficient.
+
+    // Next: check CMAP usage, and add 0-filled entry if necessray.
+    do_check_cmap_add_zerofill(Atop, Btop, assignOofA, assignBofO, &cmaptypes_plus0);
+    do_check_cmap_add_zerofill(Btop, Atop, assignOofB, assignAofO, &cmaptypes_plus0);
+
+    Ofs << "[ cmaptypes ]" << endl;
+    for(const auto &entry: cmaptypes_plus0) {
+      const topology::cmaptype &key = entry.first;
+      const auto &value = entry.second;
+      int phi_split = get<0>(value);
+      int psi_split = get<1>(value);
+      const vector<double>& potentials = get<2>(value);
+      Ofs << get<0>(key) << " "
+          << get<1>(key) << " "
+          << get<2>(key) << " "
+          << get<3>(key) << " "
+          << get<4>(key) << " "
+          << get<5>(key) << " "
+          << phi_split << " "
+          << psi_split << "\\"
+          << endl;
+      Ofs << std::fixed;
+      Ofs.precision(8);
+      for(int i = 0; i < phi_split; ++i) {
+        for(int j = 0; j < psi_split; ++j) {
+          Ofs << potentials[i * psi_split + j] << (j == psi_split - 1 ? "" : " ");
+        }
+        Ofs << (i == phi_split - 1 ? "" : "\\") << endl;
+      }
+    }
+  }
+  
 
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;
@@ -1234,6 +1368,60 @@ void generate_topology(const string& outfilename,
   }
   Ofs << endl;
 
+  if(!Atop.cmaps.empty() || !Atop.cmaps.empty()) {
+    Ofs << "[ cmap ]" << endl;
+    // for cmap, we only have to merge everything
+    set<topology::cmapkeytype> merged;
+    for(const auto& v: Atop.cmaps) {
+      int a = std::get<0>(v);
+      int b = std::get<1>(v);
+      int c = std::get<2>(v);
+      int d = std::get<3>(v);
+      int e = std::get<4>(v);
+      int func = std::get<5>(v);
+
+      int a_in_O = assignOofA[a];
+      int b_in_O = assignOofA[b];
+      int c_in_O = assignOofA[c];
+      int d_in_O = assignOofA[d];
+      int e_in_O = assignOofA[e];
+
+      merged.insert(make_tuple(a_in_O, b_in_O, c_in_O, d_in_O, e_in_O, func));
+    }
+    for(const auto& v: Btop.cmaps) {
+      int a = std::get<0>(v);
+      int b = std::get<1>(v);
+      int c = std::get<2>(v);
+      int d = std::get<3>(v);
+      int e = std::get<4>(v);
+      int func = std::get<5>(v);
+
+      int a_in_O = assignOofB[a];
+      int b_in_O = assignOofB[b];
+      int c_in_O = assignOofB[c];
+      int d_in_O = assignOofB[d];
+      int e_in_O = assignOofB[e];
+
+      merged.insert(make_tuple(a_in_O, b_in_O, c_in_O, d_in_O, e_in_O, func));
+    }
+
+    for(const auto& v: merged) {
+      int a = std::get<0>(v);
+      int b = std::get<1>(v);
+      int c = std::get<2>(v);
+      int d = std::get<3>(v);
+      int e = std::get<4>(v);
+      int func = std::get<5>(v);
+
+      Ofs << a + 1 << " "
+          << b + 1 << " "
+          << c + 1 << " "
+          << d + 1 << " "
+          << e + 1 << " " << func << endl;
+    }
+    Ofs << endl;
+  }
+
   // pairs
   Ofs << "[ pairs ]" << endl;
   for(const auto& v: Atop.pairs) {
@@ -1392,6 +1580,7 @@ int main(int argc, char* argv[])
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
   p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches");
   p.add("wang-approximation", 0, "Enable an approximation described in Supp. Info in Wang et al. 10.1073/pnas.1114017109");
+  p.add("disable-cmap-error", 0, "FEP of CMAP requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
 
   bool ok = p.parse(argc, argv);
 
@@ -1603,6 +1792,13 @@ int main(int argc, char* argv[])
     if(errcnt > p.get<int>("max-warning")) {
       cerr << "Number of warning exceeds max-warning" << endl;
       exit(1);
+    }
+
+    if(Atop.cmaps.size() > 0 || Btop.cmaps.size() > 0) {
+      if(!p.exist("disable-cmap-error")) {
+        cerr << "FEP with CMAP requires modified GROMACS. If you have the patch and you understand that the modified version must be used, use --disable-cmap-error option." << endl;
+        exit(1);
+      }
     }
   }
 
