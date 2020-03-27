@@ -1677,7 +1677,7 @@ int main(int argc, char* argv[])
         if(!verbose &&
            Apdb.get_residuenames()[i] == Bpdb.get_residuenames()[j] &&
            Apdb.get_resids()[i] == Bpdb.get_resids()[j] &&
-           Anames[i] == Anames[j])
+           Anames[i] == Bnames[j])
           continue; // suppress printing
         cout << " " 
              << Apdb.get_chains()[i] << ":"
