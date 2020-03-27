@@ -56,9 +56,11 @@ topology::topology(const string& fname)
       }
     }
     {
-      size_t p = line.find_last_not_of(" \t");
+      size_t p = line.find_last_not_of(" \t\f\v\n\r");
       if(p != string::npos) {
-        line = line.substr(0, p + 1);
+        line.erase(p + 1);
+      }else{
+        line.clear(); // all whitespace
       }
     }
     if(line == ""){
@@ -125,6 +127,7 @@ topology::topology(const string& fname)
       }
       if(inputs.size() < 6) {
         cerr << "[ atomtypes ] line is too short" << endl;
+        cerr << "\"" << line << "\"" << endl;
         throw runtime_error("topology::topology: failed to parse");
       }
       bool have_bonded_type, have_atomic_number;
