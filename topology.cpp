@@ -65,27 +65,36 @@ topology::topology(const string& fname)
       continue;
     }
 
+    bool gen_pairs;
     if(state == "defaults") {
       istringstream is(line);
       int nbfunc, comb_rule;
-      string gen_pairs;
+      string gen_pairs_str;
       double fudgeLJ, fudgeQQ;
-      is >> nbfunc >> comb_rule >> gen_pairs >> fudgeLJ >> fudgeQQ;
+      is >> nbfunc >> comb_rule >> gen_pairs_str >> fudgeLJ >> fudgeQQ;
+      if(!is){
+          // XXX: fudgeLJ and fudgeQQ are optional
+          throw runtime_error("Failed to parse [ defaults ] section");
+      }
+      if(gen_pairs_str == "yes"){
+          gen_pairs = true;
+      }
+
       if(nbfunc == 1 && 
          comb_rule == 2 &&
-         gen_pairs == "yes" &&
+         gen_pairs &&
          fabs(fudgeLJ - 0.5) < 1e-3 &&
          fabs(fudgeQQ - 0.8333) < 1e-3) {
         defaults = AMBER;
       }else if(nbfunc == 1 &&
                comb_rule == 2 &&
-               gen_pairs == "yes" &&
+               gen_pairs &&
                fabs(fudgeLJ - 1.0) < 1e-3 &&
                fabs(fudgeQQ - 1.0) < 1e-3) {
         defaults = CHARMM;
       }else if(nbfunc == 1 &&
                comb_rule == 3 &&
-               gen_pairs == "yes" &&
+               gen_pairs &&
                fabs(fudgeLJ - 0.5) < 1e-3 &&
                fabs(fudgeQQ - 0.5) < 1e-3) {
         defaults = OPLS;

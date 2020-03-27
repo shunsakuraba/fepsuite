@@ -661,7 +661,8 @@ void generate_topology(const string& outfilename,
                        double rest_weighting,
                        const vector<string> &rest_exclude_atomtypes,
                        bool gen_exclusion,
-                       bool wang_approximation)
+                       bool wang_approximation,
+                       bool disable_pairs_error)
 {
   int N = assignAofO.size();
 
@@ -1424,37 +1425,59 @@ void generate_topology(const string& outfilename,
 
   // pairs
   Ofs << "[ pairs ]" << endl;
-  for(const auto& v: Atop.pairs) {
-    auto k = v.first;
-    int x = k.first;
-    int y = k.second;
-    int func = v.second;
+  for(int state = 0; state < 2; ++state){
+    const topology &Ptop = (state == 0 ? Atop : Btop);
+    const topology &Qtop = (state == 0 ? Btop : Atop);
+    const vector<int> assignOofP = (state == 0 ? assignOofA : assignOofB);
+    const vector<int> assignOofQ = (state == 0 ? assignOofB : assignOofA);
+    const vector<int> assignPofO = (state == 0 ? assignAofO : assignBofO);
+    const vector<int> assignQofO = (state == 0 ? assignBofO : assignAofO);
     
-    int x_in_O = assignOofA[x];
-    int y_in_O = assignOofA[y];
-    if(func != 1) {
-      throw runtime_error("pairs func != 1 not supported");
+    for(const auto& v: Ptop.pairs) {
+      auto k = v.first;
+      int x = k.first;
+      int y = k.second;
+      int func = v.second;
+      
+      int x_in_O = assignOofP[x];
+      int y_in_O = assignOofP[y];
+      if(func != 1) {
+        throw runtime_error("pairs func != 1 not supported");
+      }
+      bool pairs_perturbed = false;
+      int x_in_Q = assignQofO[x_in_O];
+      int y_in_Q = assignQofO[y_in_O];
+      if(x_in_Q != -1 && y_in_Q != -1) {
+        // x and y exist in state Q, check Q pairs
+        if(Qtop.pairs.count({x_in_Q, y_in_Q}) == 0 && Qtop.pairs.count({y_in_Q, x_in_Q}) == 0) {
+          // special case: 1-4 in state P turned to 1-2 or 1-3 (1-5 should not appear if exclusion check works...) in state Q
+          pairs_perturbed = true;
+        }else{
+          if(state == 1) {
+            // This case is already output in state 0
+            continue;
+          }
+        }
+      }
+      if(pairs_perturbed){
+        if(!disable_pairs_error){
+          throw runtime_error("The case with pairs are perturbed cannot be run on unpatched GROMACS");
+        }
+        // Here I assume at least one of pairs are 1-4, but need sanity checks
+        if(!(Ptop.nexcl >= 3 && Qtop.nexcl >= 3)) {
+          throw runtime_error("nexcl should be greater than or equal to 3");
+        }
+        func = 3;
+        
+        Ofs << x_in_O + 1 << " " << y_in_O + 1 << " "
+            << func << " "
+            << (state == 0 ? 1.0 : 0.0) << " "
+            << (state == 0 ? 0.0 : 1.0) << endl;
+      }else{
+        Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
+            << func << endl;
+      }
     }
-    Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
-        << func << endl;
-  }
-  // Remaining: not exists in A but exists in B
-  for(const auto& v: Btop.pairs) {
-    auto k = v.first;
-    int x = k.first;
-    int y = k.second;
-    int func = v.second;
-    
-    int x_in_O = assignOofB[x];
-    int y_in_O = assignOofB[y];
-    auto keyA = 
-      make_pair(assignAofO[x_in_O],
-                assignAofO[y_in_O]);
-    if(Atop.pairs.count(keyA) > 0) {
-      continue;
-    }
-    Ofs << x_in_O + 1 << " " << y_in_O + 1 << " " 
-        << func << endl;
   }
   Ofs << endl;
 
@@ -1581,6 +1604,7 @@ int main(int argc, char* argv[])
   p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches");
   p.add("wang-approximation", 0, "Enable an approximation described in Supp. Info in Wang et al. 10.1073/pnas.1114017109");
   p.add("disable-cmap-error", 0, "FEP of CMAP requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
+  p.add("disable-pairs-error", 0, "FEP of pairs section requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
 
   bool ok = p.parse(argc, argv);
 
@@ -1667,6 +1691,7 @@ int main(int argc, char* argv[])
     assign_atoms("NCO",  nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
     assign_atoms("H",    nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
     assign_atoms("HNCO", nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+    throw runtime_error("FIXME: here we need to check exclusion and exit on error");
   }
   if(!quiet){
     cout << "Atoms assigned:" << endl;
@@ -1831,7 +1856,8 @@ int main(int argc, char* argv[])
                     1.0,
                     rest_excluded_atoms,
                     p.exist("gen-exclusion"),
-                    p.exist("wang-approximation"));
+                    p.exist("wang-approximation"),
+                    p.exist("disable-pairs-error"));
 
   // Generate PDB
   enum { OPDB_MERGED, OPDB_A, OPDB_B, OPDB_END };
