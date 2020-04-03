@@ -30,6 +30,9 @@ struct topology {
   std::map<std::string, std::string> atomtypes;
   // atomtype -> bondatomtype mapping
   std::map<std::string, std::string> bondatomtypes;
+  // nonbond fixes
+  // FIXME: currently only storing verbatim.
+  std::vector<std::string> nbfixes;
   // pairtypes, stores the whole line
   std::map<pairtype, std::string> pairtypes;
   // bondtypes

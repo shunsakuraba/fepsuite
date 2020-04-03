@@ -1023,7 +1023,21 @@ void generate_topology(const string& outfilename,
       }
     }
   }
-  
+
+  if(!Atop.nbfixes.empty()) {
+    Ofs << "[ nonbond_params ]" << endl;
+    
+    bool identical =
+      Atop.nbfixes.size() == Btop.nbfixes.size() &&
+      std::equal(Atop.nbfixes.begin(), Atop.nbfixes.end(), Btop.nbfixes.begin());
+    if(!identical) {
+      cerr << "[ nonbond_params ] section are not identical between two topologies" << endl;
+      throw std::runtime_error("Reimplement saner nonbond_params process to topology.cpp");
+    }
+    for(const string& l: Atop.nbfixes) {
+      Ofs << l << endl;
+    }
+  }
 
   // moleculetype section
   Ofs << "[ moleculetype ]" << endl;

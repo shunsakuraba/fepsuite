@@ -317,6 +317,8 @@ topology::topology(const string& fname)
       // do nothing. constrainttypes are not used unless [ constraints ] section appears, so safely ignored.
     }else if(state == "implicit_genborn_params") {
       // do nothing
+    }else if(state == "nonbond_params"){
+      nbfixes.push_back(line);
     }else{
       throw runtime_error((string("Unsupported section ") + state).c_str());
     }
