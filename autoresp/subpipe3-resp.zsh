@@ -8,8 +8,6 @@ if [[ -z $0 ]]; then
     exit 1
 fi
 
-choke me turn this script to derive both RNA / DNA version
-
 source vars.zsh
 basedir=${0:h}
 
@@ -68,7 +66,7 @@ for iter in 1 2; do
 
     ACFILE=$basestructurename.resp.ac
 
-    $ANTECHAMBER -i $basestructure -fi pdb -o $ACFILE -fo ac -at amber
+    $ANTECHAMBER -i $basestructure -fi pdb -o $ACFILE -fo ac -at amber -nc $CHARGE
 
     ESP=$basestructurename.esp
 
@@ -87,11 +85,12 @@ for iter in 1 2; do
     QOUT1=$basestructurename.qout1
     QOUT2=$basestructurename.qout2
     # generate resp input
-    $RESPGEN -i $ACFILE -o $RESPIN1 -a $RESPADDIN -f resp1
+    rm -f QIN
+    $RESPGEN -i $ACFILE -o $RESPIN1 -a $RESPADDIN -f resp1 # generates QIN because of fixed charges
     $RESPGEN -i $ACFILE -o $RESPIN2 -a $RESPADDIN -f resp2
 
     # run resp
-    $RESP -O -i $RESPIN1 -o $RESPOUT1 -e $ESP -t $QOUT1
+    $RESP -O -i $RESPIN1 -o $RESPOUT1 -e $ESP -t $QOUT1 -q QIN
     $RESP -O -i $RESPIN2 -o $RESPOUT2 -e $ESP -t $QOUT2 -q $QOUT1
 
     MOLRES=$basestructurename.resp.mol2
