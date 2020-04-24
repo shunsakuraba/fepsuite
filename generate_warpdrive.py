@@ -217,11 +217,19 @@ def parse_and_generate_top(args):
         # at the very bottom of charging topology add reference system
         write_line("%s_ref 1\n" % target_molecule, "Q")
 
-    print(atom_ix_begins)
-    print(atom_ix_begin)
-    print(atom_ix_end)
-
     print("Topology generation completed. atoms = [", atom_ix_begin[target_molecule], ",", atom_ix_end[target_molecule], ")")
+    print("generating index addenda")
+    with open(args.output_index, "w") as ofh:
+        print("[ grp-complex ]", file=ofh)
+        for i in range(atom_ix_begins[0], atom_ix_begins[-1]):
+            print(i + 1, file=ofh)
+        print(file=ofh)
+        print("[ grp-lig ]", file=ofh)
+        for i in range(atom_ix_begins[-1], atom_ix_begins[-1] + atom_ix_end[target_molecule] - atom_ix_begin[target_molecule]):
+            print(i + 1, file=ofh)
+        print(file=ofh)
+    print("Completed")
+
     return (atom_ix_begin[target_molecule], atom_ix_end[target_molecule])
 
 def estimate_radius(substructure):
@@ -247,16 +255,20 @@ def generate_coords(structure, ix_begin, ix_end, dbuffer):
     newligcrd = lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :] + new_lig_com[numpy.newaxis, numpy.newaxis, :]
     print(newligcrd.shape)
     new_coords = numpy.concatenate((newprotligcrd, newligcrd), axis=1)
+
     return (new_coords, box_dist, new_protlig_com, new_lig_com)
 
 def generate_pdb(args, ix_begin, ix_end):
+    print("Loading PDB")
     target_molecule = args.mol
     structure = mdtraj.load(args.structure)
     topology = structure.topology
 
+    print("Calcing new coordinates")
     (newcoords, box_dist, new_protlig_com, new_lig_com) = generate_coords(structure, ix_begin, ix_end, args.distance)
     # new com information is necessary for generating restraints
 
+    print("Generating new PDB structure")
     ligtopology = mdtraj.Topology()
     ligchain = ligtopology.add_chain()
     prevres = None
@@ -269,10 +281,12 @@ def generate_pdb(args, ix_begin, ix_end):
         prevres = res
         ligtopology.add_atom(atom.name, atom.element, ligres)
 
+    print("Writing new PDB structure")
     newtopology = topology.join(ligtopology)
     newstructure = mdtraj.Trajectory(newcoords, newtopology, unitcell_lengths = box_dist, unitcell_angles=[90.0, 90.0, 90.0])
     newstructure.save_pdb(args.output_structure)
 
+    print("PDB generation completed")
     return (new_protlig_com, new_lig_com)
 
 def init_args():
@@ -287,6 +301,7 @@ def init_args():
     parser.add_argument("--output-ligand-q0", type=str, required=True, help="Output topology file for the ligand with 0-charged.")
     parser.add_argument("--output-complex-q0", type=str, required=True, help="Output topology file for the complex with 0-charged.")
     parser.add_argument("--output-com-info", type=str, required=True, help="Output COM position used in simulation")
+    parser.add_argument("--output-index", type=str, required=True, help="Output index file addendum for com pulling")
 
     return parser.parse_args()
 
@@ -295,8 +310,10 @@ if __name__ == "__main__":
 
     ix_begin, ix_end = parse_and_generate_top(args)
     (new_protlig_com, new_lig_com) = generate_pdb(args, ix_begin, ix_end)
+    print("Generating cominfo")
     with open(args.output_com_info, "w") as ofh:
         print("# complex", file=ofh)
         print(*new_protlig_com, file=ofh)
         print("# ligand", file=ofh)
         print(*new_lig_com, file=ofh)
+    print("Successfully Generated")
