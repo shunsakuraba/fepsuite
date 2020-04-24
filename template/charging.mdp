@@ -1,0 +1,38 @@
+; free energy for charging/discharing
+free_energy = yes
+
+fep_lambdas = {lambdas_formatted}
+calc_lambda_neighbors = 1
+init_lambda_state = {lambda_state}
+
+nstdhdl = 100
+dhdl_derivatives = no
+
+
+; pin molecules
+pull = yes
+
+pull_nstxout = 0
+pull_nstfout = 0
+
+pull_ngroups = 2
+pull_ncoords = 2
+
+pull_group1_name = {group_complex}
+pull_group2_name = {group_ligand}
+
+; coord 1: complex pinning
+pull_coord1_type = umbrella
+pull_coord1_geometry = distance
+pull_coord1_groups = 0 1
+pull_coord1_dim = Y Y Y
+pull_coord1_origin = {complex[0]:10.5f} {complex[1]:10.5f} {complex[2]:10.5f}
+pull_coord1_k = 100.0
+
+; coord 2: ligand pinning
+pull_coord2_type = umbrella
+pull_coord2_geometry = distance
+pull_coord2_groups = 0 2
+pull_coord2_dim = Y Y Y
+pull_coord2_origin = {lig[0]:10.5f} {lig[1]:10.5f} {lig[2]:10.5f}
+pull_coord2_k = 100.0 ; ~ 1.1 angstrom 
