@@ -15,4 +15,8 @@ NANN_PRO_PARA=1
 NANN=20
 NANN_PARA=1
 
+# first RUN_EQ ps will be ignored as equilibration
+RUN_PROD=2000
+
+
 
