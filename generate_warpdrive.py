@@ -8,8 +8,10 @@ import mdtraj
 
 def parse_and_generate_top(args):
     target_molecule = args.mol
+    solvent_molecules = args.solvent.split(',')
     atom_ix_begin = {}
     atom_ix_end = {}
+    complex_indices = []
     with \
             open(args.topology) as fh, \
             open(args.output_charging, "w") as ofhcharging, \
@@ -208,6 +210,9 @@ def parse_and_generate_top(args):
                 atom_ix_begins.append(newend)
                 atom_ix_begin[molname] = prevend
                 atom_ix_end[molname] = newend
+                if molname not in solvent_molecules:
+                    for i in range(prevend, newend):
+                        complex_indices.append(i)
                 continue
             if molecule != None:
                 moleculetype_section_ex_atoms.append(lraw)
@@ -221,7 +226,7 @@ def parse_and_generate_top(args):
     print("generating index addenda")
     with open(args.output_index, "w") as ofh:
         print("[ grp-complex ]", file=ofh)
-        for i in range(atom_ix_begins[0], atom_ix_begins[-1]):
+        for i in complex_indices:
             print(i + 1, file=ofh)
         print(file=ofh)
         print("[ grp-lig ]", file=ofh)
@@ -230,18 +235,20 @@ def parse_and_generate_top(args):
         print(file=ofh)
     print("Completed")
 
-    return (atom_ix_begin[target_molecule], atom_ix_end[target_molecule])
+    return (atom_ix_begin[target_molecule], atom_ix_end[target_molecule], complex_indices)
 
 def estimate_radius(substructure):
     com = mdtraj.compute_center_of_mass(substructure)
     ddsq = numpy.amax(numpy.sum((substructure.xyz[0, :, :] - com[:, numpy.newaxis, :]) ** 2, axis=2))
     return math.sqrt(ddsq)
 
-def generate_coords(structure, ix_begin, ix_end, dbuffer):
-    rprotlig = estimate_radius(structure)
+def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
+    print(len(complex_indices))
+    protlig = structure.atom_slice(complex_indices)
+    rprotlig = estimate_radius(protlig)
     lig = structure.atom_slice([i for i in range(ix_begin, ix_end)])
     rlig = estimate_radius(lig)
-    protlig_com = mdtraj.compute_center_of_mass(structure)
+    protlig_com = mdtraj.compute_center_of_mass(protlig)
     lig_com = mdtraj.compute_center_of_mass(lig)
     print("r(complex) =", rprotlig, "r(lig) =", rlig)
 
@@ -258,14 +265,14 @@ def generate_coords(structure, ix_begin, ix_end, dbuffer):
 
     return (new_coords, box_dist, new_protlig_com, new_lig_com)
 
-def generate_pdb(args, ix_begin, ix_end):
+def generate_pdb(args, ix_begin, ix_end, complex_indices):
     print("Loading PDB")
     target_molecule = args.mol
     structure = mdtraj.load(args.structure)
     topology = structure.topology
 
     print("Calcing new coordinates")
-    (newcoords, box_dist, new_protlig_com, new_lig_com) = generate_coords(structure, ix_begin, ix_end, args.distance)
+    (newcoords, box_dist, new_protlig_com, new_lig_com) = generate_coords(structure, ix_begin, ix_end, complex_indices, args.distance)
     # new com information is necessary for generating restraints
 
     print("Generating new PDB structure")
@@ -296,6 +303,7 @@ def init_args():
     parser.add_argument("--structure", type=str, required=True, help="Input PDB formatted file. molecules are assumed to be whole and clustered, and chains are not splitted.")
     parser.add_argument("--output-structure", type=str, required=True, help="output PDB file")
     parser.add_argument("--mol", type=str, required=True, help="Target molecule name")
+    parser.add_argument("--solvent", type=str, default="SOL,NA,K,CL,Na,Cl", help="Solvent molecules")
     parser.add_argument("--distance", type=float, default=1.0, help="Buffer region distance")
     parser.add_argument("--output-charging", type=str, required=True, help="Output topology file with distant charging")
     parser.add_argument("--output-ligand-q0", type=str, required=True, help="Output topology file for the ligand with 0-charged.")
@@ -308,8 +316,8 @@ def init_args():
 if __name__ == "__main__":
     args = init_args()
 
-    ix_begin, ix_end = parse_and_generate_top(args)
-    (new_protlig_com, new_lig_com) = generate_pdb(args, ix_begin, ix_end)
+    ix_begin, ix_end, complex_indices = parse_and_generate_top(args)
+    (new_protlig_com, new_lig_com) = generate_pdb(args, ix_begin, ix_end, complex_indices)
     print("Generating cominfo")
     with open(args.output_com_info, "w") as ofh:
         print("# complex", file=ofh)
