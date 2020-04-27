@@ -203,6 +203,8 @@ def parse_and_generate_top(args):
                 if molname == target_molecule:
                     assert nmol == 1
                     write_line(lraw, "QLC")
+                elif molname in solvent_molecules:
+                    write_line(lraw, "C")
                 else:
                     write_line(lraw, "QC")
                 prevend = atom_ix_begins[-1]
@@ -230,7 +232,7 @@ def parse_and_generate_top(args):
             print(i + 1, file=ofh)
         print(file=ofh)
         print("[ grp-lig ]", file=ofh)
-        for i in range(atom_ix_begins[-1], atom_ix_begins[-1] + atom_ix_end[target_molecule] - atom_ix_begin[target_molecule]):
+        for i in range(complex_indices[-1], complex_indices[-1] + atom_ix_end[target_molecule] - atom_ix_begin[target_molecule]):
             print(i + 1, file=ofh)
         print(file=ofh)
     print("Completed")
@@ -257,7 +259,7 @@ def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
     new_protlig_com = numpy.array([dbuffer / 2 + rprotlig, dbuffer / 2 + rprotlig, dbuffer / 2 + rprotlig])
     new_lig_com = numpy.array([dbuffer * 3 / 2 + rprotlig * 2 + rlig, dbuffer / 2 + rprotlig, dbuffer / 2 + rprotlig])
 
-    newprotligcrd = structure.xyz[:, :, :] - protlig_com[:, numpy.newaxis, :] + new_protlig_com[numpy.newaxis, numpy.newaxis, :]
+    newprotligcrd = protlig.xyz[:, :, :] - protlig_com[:, numpy.newaxis, :] + new_protlig_com[numpy.newaxis, numpy.newaxis, :]
     print(newprotligcrd.shape)
     newligcrd = lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :] + new_lig_com[numpy.newaxis, numpy.newaxis, :]
     print(newligcrd.shape)
@@ -268,14 +270,32 @@ def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
 def generate_pdb(args, ix_begin, ix_end, complex_indices):
     print("Loading PDB")
     target_molecule = args.mol
-    structure = mdtraj.load(args.structure)
+    structure = mdtraj.load(args.structure, standard_names=False)
     topology = structure.topology
 
     print("Calcing new coordinates")
     (newcoords, box_dist, new_protlig_com, new_lig_com) = generate_coords(structure, ix_begin, ix_end, complex_indices, args.distance)
     # new com information is necessary for generating restraints
 
-    print("Generating new PDB structure")
+    print("Generating new PDB structure for complex")
+    complextopology = mdtraj.Topology()
+    prevchain = None
+    complexchain = None
+    prevres = None
+    complexres = None
+    for aix in complex_indices:
+        atom = topology.atom(aix)
+        res = atom.residue
+        chain = res.chain
+        if prevchain != chain:
+            complexchain = complextopology.add_chain()
+        if prevres != res:
+            complexres = complextopology.add_residue(res.name, complexchain, res.resSeq, res.segment_id)
+        prevchain = chain
+        prevres = res
+        complextopology.add_atom(atom.name, atom.element, complexres)
+
+    print("Generating new PDB structure for ligand")
     ligtopology = mdtraj.Topology()
     ligchain = ligtopology.add_chain()
     prevres = None
@@ -289,7 +309,7 @@ def generate_pdb(args, ix_begin, ix_end, complex_indices):
         ligtopology.add_atom(atom.name, atom.element, ligres)
 
     print("Writing new PDB structure")
-    newtopology = topology.join(ligtopology)
+    newtopology = complextopology.join(ligtopology)
     newstructure = mdtraj.Trajectory(newcoords, newtopology, unitcell_lengths = box_dist, unitcell_angles=[90.0, 90.0, 90.0])
     newstructure.save_pdb(args.output_structure)
 

@@ -12,9 +12,9 @@ def generate_itp(args):
         print("[ intermolecular_interactions ]", file=ofh)
         print("[ bonds ]", file=ofh)
         if args.decouple_B:
-            print("%d %d 1 %.3f %.3f %.3f 0.000" % (anchor_atoms[2], anchor_atoms[3], avgs[0], args.distance_spring, avgs[0]), file=ofh)
+            print("%d %d 6 %.3f %.3f %.3f 0.000" % (anchor_atoms[2], anchor_atoms[3], avgs[0], args.distance_spring, avgs[0]), file=ofh)
         else:
-            print("%d %d 1 %.3f %.3f" % (anchor_atoms[2], anchor_atoms[3], avgs[0], args.distance_spring), file=ofh)
+            print("%d %d 6 %.3f %.3f" % (anchor_atoms[2], anchor_atoms[3], avgs[0], args.distance_spring), file=ofh)
         print(file=ofh)
         print("[ angles ]", file=ofh)
         if args.decouple_B:
