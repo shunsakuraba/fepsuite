@@ -13,7 +13,7 @@ couple_lambda0 = vdw
 couple_lambda1 = none
 couple_intramol = no
 
-sc-r-power = 48
+sc-r-power = 6
 sc-power = 1
 sc-sigma = 0.3
-sc-alpha = 0.0025
+sc-alpha = 0.5

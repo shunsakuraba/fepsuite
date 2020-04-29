@@ -18,8 +18,12 @@ pull_nstfout = 0
 pull_ngroups = 2
 pull_ncoords = 2
 
+pull-pbc-ref-prev-step-com = yes
+
 pull_group1_name = {group_complex}
+pull_group1_pbcatom = {anchor_complex}
 pull_group2_name = {group_ligand}
+pull_group2_pbcatom = {anchor_ligand}
 
 ; coord 1: complex pinning
 pull_coord1_type = umbrella

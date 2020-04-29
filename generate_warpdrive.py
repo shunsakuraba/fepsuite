@@ -264,8 +264,10 @@ def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
     newligcrd = lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :] + new_lig_com[numpy.newaxis, numpy.newaxis, :]
     print(newligcrd.shape)
     new_coords = numpy.concatenate((newprotligcrd, newligcrd), axis=1)
+    complex_anchor = complex_indices[numpy.argmin(numpy.sum((protlig.xyz[:, :, :] - protlig_com[:, numpy.newaxis, :]) ** 2, axis=2), axis=1)[0]]
+    lig_anchor = ix_begin + numpy.argmin(numpy.sum((lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :]) ** 2, axis=2), axis=1)[0] 
 
-    return (new_coords, box_dist, new_protlig_com, new_lig_com)
+    return (new_coords, box_dist, new_protlig_com, new_lig_com, complex_anchor, lig_anchor)
 
 def generate_pdb(args, ix_begin, ix_end, complex_indices):
     print("Loading PDB")
@@ -274,7 +276,7 @@ def generate_pdb(args, ix_begin, ix_end, complex_indices):
     topology = structure.topology
 
     print("Calcing new coordinates")
-    (newcoords, box_dist, new_protlig_com, new_lig_com) = generate_coords(structure, ix_begin, ix_end, complex_indices, args.distance)
+    (newcoords, box_dist, new_protlig_com, new_lig_com, complex_anchor, lig_anchor) = generate_coords(structure, ix_begin, ix_end, complex_indices, args.distance)
     # new com information is necessary for generating restraints
 
     print("Generating new PDB structure for complex")
@@ -314,7 +316,7 @@ def generate_pdb(args, ix_begin, ix_end, complex_indices):
     newstructure.save_pdb(args.output_structure)
 
     print("PDB generation completed")
-    return (new_protlig_com, new_lig_com)
+    return (new_protlig_com, new_lig_com, complex_anchor, lig_anchor)
 
 def init_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
@@ -337,11 +339,13 @@ if __name__ == "__main__":
     args = init_args()
 
     ix_begin, ix_end, complex_indices = parse_and_generate_top(args)
-    (new_protlig_com, new_lig_com) = generate_pdb(args, ix_begin, ix_end, complex_indices)
+    (new_protlig_com, new_lig_com, complex_anchor, lig_anchor) = generate_pdb(args, ix_begin, ix_end, complex_indices)
     print("Generating cominfo")
     with open(args.output_com_info, "w") as ofh:
         print("# complex", file=ofh)
         print(*new_protlig_com, file=ofh)
         print("# ligand", file=ofh)
         print(*new_lig_com, file=ofh)
+        print("# complex center atom ix, lig center atom ix (0-origin)", file=ofh)
+        print(complex_anchor, lig_anchor, file=ofh)
     print("Successfully Generated")
