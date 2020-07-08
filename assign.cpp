@@ -132,6 +132,10 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
       }
       if(Bn != -1) {
         // found Bn
+        assert(An < (int)Atop.names.size());
+        assert(Bn < (int)Btop.names.size());
+        assert(An >= 0);
+        assert(Bn >= 0);
         if(must_be_identical_names && 
            Atop.names[An] != Btop.names[Bn]) {
           continue;
