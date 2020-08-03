@@ -20,9 +20,9 @@ NCHARGE_PARA=6
 NANN_PRO=20
 NANN_PRO_PARA=6
 
-# ligand annihilation. Recommended:20, PARA is recommended to be <=8 (due to small size)
+# ligand annihilation. Recommended:20, PARA is recommended to be <=2 (due to small size)
 NANN=20
-NANN_PARA=6
+NANN_PARA=2
 
 # first RUN_EQ ps will be ignored as equilibration
 RUN_PROD=2000
