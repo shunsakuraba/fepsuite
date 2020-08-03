@@ -5,6 +5,7 @@ import copy
 import cmath
 import numpy
 import mdtraj
+import os.path
 
 def parse_and_generate_top(args):
     target_molecule = args.mol
@@ -272,7 +273,10 @@ def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
 def generate_pdb(args, ix_begin, ix_end, complex_indices):
     print("Loading PDB")
     target_molecule = args.mol
-    structure = mdtraj.load(args.structure, standard_names=False)
+    if os.path.splitext(args.structure)[1] in [".pdb", ".PDB"]:
+        structure = mdtraj.load(args.structure, standard_names=False)
+    else:
+        structure = mdtraj.load(args.structure)
     topology = structure.topology
 
     print("Calcing new coordinates")

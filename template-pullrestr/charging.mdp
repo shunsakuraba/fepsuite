@@ -10,15 +10,15 @@ dhdl_derivatives = no
 
 
 ; pin molecules
+; these are supplied elsewhere
 pull = yes
-
-pull_nstxout = 0
-pull_nstfout = 0
+;pull_nstxout = 0
+;pull_nstfout = 0
+;pull-pbc-ref-prev-step-com = yes
 
 pull_ngroups = 8
 pull_ncoords = 8
 
-pull-pbc-ref-prev-step-com = yes
 
 pull_group7_name = {group_complex}
 pull_group7_pbcatom = {anchor_complex}

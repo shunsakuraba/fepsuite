@@ -12,6 +12,7 @@ def generate(args):
         avgs = [float(x) for x in ls[1].split()]
         for i in range(1,6):
             avgs[i] = avgs[i] * 180.0 / math.pi # all format used degrees, convert it
+            avgs[i] -= 180.0 * round(avgs[i] / 360.0) # normalize to -180 to 180
     if args.itp is not None:
         with open(args.itp, "w") as ofh:
             print("[ intermolecular_interactions ]", file=ofh)
@@ -43,7 +44,7 @@ def generate(args):
     else:
         with open(args.ndx, "w") as ofh:
             # Write down anchor molecules
-            print("".join(["[ anchor%s ]\n%d" 
+            print("".join(["[ anchor%s ]\n%d\n" 
                              % (abc(i), a) 
                            for (i, a) in enumerate(anchor_atoms)]),
                   file=ofh)
@@ -54,31 +55,32 @@ def generate(args):
             pull-nstfout = 0
             pull-ngroups = 6 ; A-F
             pull-ncoords = 6 ; 1 bond, 2 angles, 3 dihedrals
-            pull-pbc-ref-prev-step-com = yes""", file=ofh)
+            pull-pbc-ref-prev-step-com = yes
+            """, file=ofh)
 
             for i in range(6):
-                print("pull_group%d_name = anchor%s" % (i, abc(i)), file=ofh)
-                print("pull_group%d_pbcatom = anchor%s" % (i, abc(i)), file=ofh)
+                print("pull-group%d-name    = anchor%s" % (i + 1, abc(i)), file=ofh)
+                print("pull-group%d-pbcatom = %d" % (i + 1, anchor_atoms[i]), file=ofh)
 
             dref = {
-                "distref_23": avg[0],
+                "distref_23": avgs[0],
                 "distK_23_A": args.distance_spring,
                 "distK_23_B": args.distance_spring,
-                "angleref_123": avg[1],
+                "angleref_123": avgs[1],
                 "angleK_123_A": args.angle_spring,
                 "angleK_123_B": args.angle_spring,
-                "angleref_234": avg[2],
+                "angleref_234": avgs[2],
                 "angleK_234_A": args.angle_spring,
                 "angleK_234_B": args.angle_spring,
-                "dihedralref_0123": avg[3],
-                "diheralK_0123_A": args.dihedral_spring,
-                "diheralK_0123_B": args.dihedral_spring,
-                "dihedralref_1234": avg[4],
-                "diheralK_1234_A": args.dihedral_spring,
-                "diheralK_1234_B": args.dihedral_spring,
-                "dihedralref_2345": avg[5],
-                "diheralK_2345_A": args.dihedral_spring,
-                "diheralK_2345_B": args.dihedral_spring
+                "dihedralref_0123": avgs[3],
+                "dihedralK_0123_A": args.dihedral_spring,
+                "dihedralK_0123_B": args.dihedral_spring,
+                "dihedralref_1234": avgs[4],
+                "dihedralK_1234_A": args.dihedral_spring,
+                "dihedralK_1234_B": args.dihedral_spring,
+                "dihedralref_2345": avgs[5],
+                "dihedralK_2345_A": args.dihedral_spring,
+                "dihedralK_2345_B": args.dihedral_spring
                 }
             if args.decouple_B:
                 dref["distK_23_B"] = 0.
@@ -89,55 +91,55 @@ def generate(args):
                 dref["dihedralK_2345_B"] = 0.
 
             print("""
-            pull_coord1_type = umbrella
-            pull_coord1_geometry = distance
-            pull_coord1_groups = 3 4
-            pull_coord1_dim = Y Y Y
-            pull_coord1_k = {distK_23_A}
-            pull_coord1_kB = {distK_23_B}
-            pull_coord1_init = {distref_23}
+            pull-coord1-type = umbrella
+            pull-coord1-geometry = distance
+            pull-coord1-groups = 3 4
+            pull-coord1-dim = Y Y Y
+            pull-coord1-k = {distK_23_A}
+            pull-coord1-kB = {distK_23_B}
+            pull-coord1-init = {distref_23}
 
-            pull_coord2_type = umbrella
-            pull_coord2_geometry = angle
-            pull_coord2_groups = 2 3 3 4
-            pull_coord2_dim = Y Y Y
-            pull_coord2_k = {angleK_123_A}
-            pull_coord2_kB = {angleK_123_B}
-            pull_coord2_init = {angleref_123}
+            pull-coord2-type = umbrella
+            pull-coord2-geometry = angle
+            pull-coord2-groups = 3 2 3 4
+            pull-coord2-dim = Y Y Y
+            pull-coord2-k = {angleK_123_A}
+            pull-coord2-kB = {angleK_123_B}
+            pull-coord2-init = {angleref_123}
 
-            pull_coord3_type = umbrella
-            pull_coord3_geometry = angle
-            pull_coord3_groups = 3 4 4 5
-            pull_coord3_dim = Y Y Y
-            pull_coord3_k = {angleK_234_A}
-            pull_coord3_kB = {angleK_234_B}
-            pull_coord3_init = {angleref_234}
+            pull-coord3-type = umbrella
+            pull-coord3-geometry = angle
+            pull-coord3-groups = 4 3 4 5
+            pull-coord3-dim = Y Y Y
+            pull-coord3-k = {angleK_234_A}
+            pull-coord3-kB = {angleK_234_B}
+            pull-coord3-init = {angleref_234}
 
-            pull_coord4_type = umbrella
-            pull_coord4_geometry = dihedral
-            pull_coord4_groups = 1 2 2 3 3 4
-            pull_coord4_dim = Y Y Y
-            pull_coord4_k = {dihedralK_0123_A}
-            pull_coord4_kB = {dihedralK_0123_B}
-            pull_coord4_init = {dihedralref_0123}
+            pull-coord4-type = umbrella
+            pull-coord4-geometry = dihedral
+            pull-coord4-groups = 1 2 2 3 3 4
+            pull-coord4-dim = Y Y Y
+            pull-coord4-k = {dihedralK_0123_A}
+            pull-coord4-kB = {dihedralK_0123_B}
+            pull-coord4-init = {dihedralref_0123}
             
-            pull_coord5_type = umbrella
-            pull_coord5_geometry = dihedral
-            pull_coord5_groups = 2 3 3 4 4 5
-            pull_coord5_dim = Y Y Y
-            pull_coord5_k = {dihedralK_1234_A}
-            pull_coord5_kB = {dihedralK_1234_B}
-            pull_coord5_init = {dihedralref_1234}
+            pull-coord5-type = umbrella
+            pull-coord5-geometry = dihedral
+            pull-coord5-groups = 2 3 3 4 4 5
+            pull-coord5-dim = Y Y Y
+            pull-coord5-k = {dihedralK_1234_A}
+            pull-coord5-kB = {dihedralK_1234_B}
+            pull-coord5-init = {dihedralref_1234}
            
-            pull_coord6_type = umbrella
-            pull_coord6_geometry = dihedral
-            pull_coord6_groups = 3 4 4 5 5 6
-            pull_coord6_dim = Y Y Y
-            pull_coord6_k = {dihedralK_2345_A}
-            pull_coord6_kB = {dihedralK_2345_B}
-            pull_coord6_init = {dihedralref_2345}
+            pull-coord6-type = umbrella
+            pull-coord6-geometry = dihedral
+            pull-coord6-groups = 3 4 4 5 5 6
+            pull-coord6-dim = Y Y Y
+            pull-coord6-k = {dihedralK_2345_A}
+            pull-coord6-kB = {dihedralK_2345_B}
+            pull-coord6-init = {dihedralref_2345}
            
-            """.format(kwdtbl), file=ofh)
+            """.format(**dref), file=ofh)
 
 def init_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
