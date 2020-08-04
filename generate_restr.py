@@ -12,7 +12,7 @@ def generate(args):
         avgs = [float(x) for x in ls[1].split()]
         for i in range(1,6):
             avgs[i] = avgs[i] * 180.0 / math.pi # all format used degrees, convert it
-            avgs[i] -= 180.0 * round(avgs[i] / 360.0) # normalize to -180 to 180
+            avgs[i] -= 360.0 * round(avgs[i] / 360.0) # normalize to -180 to 180
     if args.itp is not None:
         with open(args.itp, "w") as ofh:
             print("[ intermolecular_interactions ]", file=ofh)
