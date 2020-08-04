@@ -7,6 +7,7 @@
 #include <cassert>
 #include <iomanip>
 #include <fstream>
+#include <stack>
 
 using namespace std;
 using namespace Eigen;
@@ -56,6 +57,7 @@ vector<vector<bool>> get_connectivity(const pdb &p)
 
 bool match_impl(size_t curptr, vector<size_t> &input2ref,
                 vector<bool> &visited,
+                const vector<size_t> &inp_reorder,
                 const vector<vector<bool>>& refconn,
                 const vector<vector<bool>>& inpconn,
                 const vector<vector<bool>>& match_atomtype)
@@ -72,7 +74,7 @@ bool match_impl(size_t curptr, vector<size_t> &input2ref,
     bool isok = true;
     for(size_t prev = 0; prev < curptr; prev++) {
       size_t atom = input2ref[prev];
-      if(inpconn[curptr][prev] != refconn[trial][atom]){
+      if(inpconn[inp_reorder[curptr]][inp_reorder[prev]] != refconn[trial][atom]){
         isok = false;
         break;
       }
@@ -82,7 +84,7 @@ bool match_impl(size_t curptr, vector<size_t> &input2ref,
     // actually set and try search
     input2ref.push_back(trial);
     visited[trial] = true;
-    isok = match_impl(curptr + 1, input2ref, visited, refconn, inpconn, match_atomtype);
+    isok = match_impl(curptr + 1, input2ref, visited, inp_reorder, refconn, inpconn, match_atomtype);
     if(isok) {
       return true;
     }
@@ -116,14 +118,59 @@ vector<size_t> match_atoms(const pdb &ref, const pdb &inp)
     }
   }
 
+  vector<size_t> degree(ninp, 0);
+  for(size_t i = 0; i < ninp; ++i) {
+    int count = 0;
+    for(size_t j = 0; j < ninp; ++j) {
+      count += (int) targetconn[i][j];
+    }
+    degree[i] = count - 1; // -1 for self edge
+  }
+
+  size_t smallest_degree = 999;
+  size_t initialnode = 0;
+  for(size_t i = 0; i < ninp; ++i) {
+    if(degree[i] < smallest_degree) {
+      smallest_degree = degree[i];
+      initialnode = i;
+    }
+  }
+
+  // DFS to make node reordering
+  vector<size_t> inp_reorder;
+  {
+    vector<bool> visited(ninp, false);
+    stack<size_t> dfsstack;
+    dfsstack.push(initialnode);
+
+    while(!dfsstack.empty()) {
+      size_t t = dfsstack.top();
+      dfsstack.pop();
+      if(visited[t]) continue;
+      visited[t] = true;
+      inp_reorder.push_back(t);
+      for(size_t j = 0; j < ninp; j++) {
+        if(visited[j]) continue;
+        if(!targetconn[t][j]) continue;
+        dfsstack.push(j);
+      }
+    }
+    assert(inp_reorder.size() == ninp);
+  }
+
   // TODO pre-sort by connectivity to get faster assignment
   vector<bool> visited(ref.get_atomnames().size(), false);
-  bool found = match_impl(0, input2ref, visited, refconn, targetconn, match_atomtype);
+  bool found = match_impl(0, input2ref, visited, inp_reorder, refconn, targetconn, match_atomtype);
   
   if(!found) {
     throw runtime_error("No solution found");
   }
-  return input2ref;
+
+  vector<size_t> input2ref_real(ninp);
+  for(size_t i = 0; i < ninp; ++i) {
+    input2ref_real[inp_reorder[i]] = input2ref[i];
+  }
+  return input2ref_real;
 }
 
 int main(int argc, char* argv[])
