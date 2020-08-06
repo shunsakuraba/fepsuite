@@ -29,13 +29,17 @@ if [[ -z $JOB_NAME ]]; then
     eval $($ABFE_ROOT/pipeline.zsh query $i)
     # edit this qstat analysis part to adapt to other job systems
     qs=$(qstat)
+    deps=""
     for d in $DEPENDS; do
         if [[ -e $ID.jobid ]] && grep -q "$CUR.$d\s$ID" $ID.jobid ; then
             if grep -q $res <<< $qs; then
-                waitcmd+=(-hold_jid $ID.$d)
+                deps="$deps,FEP$ID.$d"
             fi
         fi
     done
+    if [[ $deps != "" ]]; then
+        waitcmd=(-hold_jid ${deps#,})
+    fi
     (( NODES = (PROCS + (CPN/CPP) - 1) / (CPN/CPP) ))
     (( REQPROCS = NODES * (SYSTEMCPN / CPP) ))
     case $PROCS in
@@ -52,7 +56,7 @@ if [[ -z $JOB_NAME ]]; then
     NNODE=$NODES
     set -e 
     # edit this line to adapt to other job systems
-    cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "$ID.$i" $0)
+    cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "FEP$ID.$i" $0) # T3 only accept names starting from alphabets
     builtin echo $cmd
     # edit this line to adapt to other job systems
     res=$($cmd | head -1)

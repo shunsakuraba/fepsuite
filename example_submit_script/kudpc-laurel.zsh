@@ -31,14 +31,18 @@ if [[ -z $QSUB_PROCS ]]; then
     eval $($ABFE_ROOT/pipeline.zsh query $i)
     # edit this qstat analysis part to adapt to other job systems
     qs=$(qstat)
+    deps=""
     for d in $DEPENDS; do
         if [[ -e $ID.jobid ]] && grep -q "$CUR.$d\s$ID" $ID.jobid ; then
             res=$(grep "$CUR.$d\s$ID" $ID.jobid | tail -n 1 | cut -f3)
             if grep -q $res <<< $qs; then
-                waitcmd+=(-W "depend=afterok:$res")
+                deps="$deps,$res"
             fi
         fi
     done
+    if [[ $deps != "" ]]; then
+        waitcmd=(-W depend=afterok:"${deps#,}")
+    fi
     (( NODES = (PROCS + (CPN/CPP) - 1) / (CPN/CPP) ))
     (( REQPROCS = NODES * (SYSTEMCPN / CPP) ))
     set -e 
