@@ -73,7 +73,7 @@ echo "STEP=$STEPNO"
 # Site-specific settings starts from here
 source /etc/profile.d/modules.sh
 
-module load cuda/9.2.148 intel-mpi/19.7.217
+module load cuda/9.2.148 intel-mpi/19.0.117
 module load gromacs/2019.4
 
 mpirun_() {
