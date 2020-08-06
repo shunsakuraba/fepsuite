@@ -56,7 +56,7 @@ if [[ -z $JOB_NAME ]]; then
     NNODE=$NODES
     set -e 
     # edit this line to adapt to other job systems
-    cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "FEP$ID.$i" $0) # T3 only accept names starting from alphabets
+    cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T:00:00 -N "FEP$ID.$i" $0) # T3 only accept names starting from alphabets
     builtin echo $cmd
     # edit this line to adapt to other job systems
     res=$($cmd | head -1 | cut -d ' ' -f 3)
