@@ -59,7 +59,7 @@ if [[ -z $JOB_NAME ]]; then
     cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "FEP$ID.$i" $0) # T3 only accept names starting from alphabets
     builtin echo $cmd
     # edit this line to adapt to other job systems
-    res=$($cmd | head -1)
+    res=$($cmd | head -1 | cut -d ' ' -f 3)
     echo Submitted jobid $res.
     echo "$CUR.$i\t$ID\t$res" >> $ID.jobid
     set +e
