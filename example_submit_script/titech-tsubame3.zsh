@@ -73,6 +73,7 @@ echo "STEP=$STEPNO"
 # Site-specific settings starts from here
 source /etc/profile.d/modules.sh
 
+# Since Tsubame3 does not provide newer gromacs, we use 2019.4 here, but we urge you to compile 2019.6 because .5 and .6 have FEP-related fixes
 module load cuda/9.2.148 intel-mpi/19.0.117
 module load gromacs/2019.4
 
