@@ -1,0 +1,33 @@
+integrator = sd
+nsteps = 2000000 ; 4 ns
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+; fourierspacing = 0.10
+
+nstxtcout = 10000
+nstxout=100000
+nstvout=0
+nstfout=0
+
+dispcorr = EnerPres
+
+ref_t = 300
+tau_t = 2
+tc_grps = System
+
+pcoupl = Parrinello-Rahman
+ref_p = 1.013
+tau_p = 50.00
+nstpcouple = 100
+compressibility = 4.5e-5
+
+constraints = h-bonds
+constraint-algorithm = LINCS
+

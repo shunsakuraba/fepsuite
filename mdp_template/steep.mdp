@@ -1,0 +1,14 @@
+integrator = steep
+nsteps = 1000
+
+define = -DPOSRES
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.3
+rvdw = 1.3
+
+emstep = 0.005
+

@@ -1,0 +1,29 @@
+integrator = sd
+define = -DPOSRES
+nsteps = 50000
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+dispcorr = EnerPres
+
+ref_t = 300
+tau_t = 0.2
+gen_vel = yes
+gen_temp = 300
+tc_grps = System
+
+pcoupl = Berendsen
+ref_p = 1.013
+tau_p = 10.00
+nstpcouple = 10
+compressibility = 4.5e-5
+
+constraints = h-bonds
+constraint-algorithm = LINCS
