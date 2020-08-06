@@ -31,14 +31,10 @@ if [[ -z $JOB_NAME ]]; then
     qs=$(qstat)
     deps=""
     for d in $DEPENDS; do
-        if [[ -e $ID.jobid ]] && grep -q "$CUR.$d\s$ID" $ID.jobid ; then
-            if grep -q $res <<< $qs; then
-                deps="$deps,FEP$ID.$d"
-            fi
-        fi
+      deps="$deps,FEP$ID.$d"
     done
     if [[ $deps != "" ]]; then
-        waitcmd=(-hold_jid ${deps#,})
+      waitcmd=(-hold_jid ${deps#,})
     fi
     (( NODES = (PROCS + (CPN/CPP) - 1) / (CPN/CPP) ))
     (( REQPROCS = NODES * (SYSTEMCPN / CPP) ))
