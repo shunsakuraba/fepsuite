@@ -1,6 +1,5 @@
 #!/bin/zsh
 #$ -cwd
-#$ -g _GROUP_ID_
 
 export ABFE_ROOT=_ABFE_PATH_
 source para_conf.zsh
@@ -53,7 +52,7 @@ if [[ -z $JOB_NAME ]]; then
     NNODE=$NODES
     set -e 
     # edit this line to adapt to other job systems
-    cmd=(qsub $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "$ID.$i" $0)
+    cmd=(qsub -g _GROUP_ID_ $waitcmd $EXTRA -v "NAME=$CUR.$i,PROCS=$PROCS,CPN=$CPN,ID=$ID" -l $RESOURCE=$NNODE -l h_rt=$T -N "$ID.$i" $0)
     builtin echo $cmd
     # edit this line to adapt to other job systems
     res=$($cmd | head -1)
