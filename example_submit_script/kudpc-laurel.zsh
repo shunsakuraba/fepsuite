@@ -36,12 +36,12 @@ if [[ -z $QSUB_PROCS ]]; then
         if [[ -e $ID.jobid ]] && grep -q "$CUR.$d\s$ID" $ID.jobid ; then
             res=$(grep "$CUR.$d\s$ID" $ID.jobid | tail -n 1 | cut -f3)
             if grep -q $res <<< $qs; then
-                deps="$deps,$res"
+                deps="$deps:$res"
             fi
         fi
     done
     if [[ $deps != "" ]]; then
-        waitcmd=(-W depend=afterok:"${deps#,}")
+        waitcmd=(-W depend=afterok:"${deps#:}")
     fi
     (( NODES = (PROCS + (CPN/CPP) - 1) / (CPN/CPP) ))
     (( REQPROCS = NODES * (SYSTEMCPN / CPP) ))
