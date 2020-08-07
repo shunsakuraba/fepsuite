@@ -91,5 +91,7 @@ GMX_MPI=$(which gmx_mpi)
 
 # actual runs
 
+# for grid engine errcode of 100 has a special meaning
+trap '{ echo "Aborting job"; exit 100 }' ZERR
 source $ABFE_ROOT/pipeline.zsh run $STEPNO
 
