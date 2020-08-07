@@ -180,7 +180,8 @@ int main(int argc, char* argv[])
   p.add("help", 0, "Print this message");
   p.add<string>("reference", 'r', "Reference PDB", true);
   p.add<string>("input", 'f', "Input PDB", true);
-  p.add<string>("output", 'o', "Output PDB", true);  
+  p.add<string>("output", 'o', "Output PDB", true);
+  p.add("reorder-to-reference", 0, "Reorder to refernce structure (input and reference must have same number of atoms");
 
   {
     bool ok = p.parse(argc, argv);
@@ -197,10 +198,25 @@ int main(int argc, char* argv[])
   ofstream crdfs(p.get<string>("output"));
   crdfs.setf(ios::fixed);
   vector<size_t> input2ref = match_atoms(refpdb, targetpdb);
-  for(size_t i = 0; i < input2ref.size(); ++i) {
+  vector<size_t> printorder(input2ref.size());
+  if(p.exist("reorder-to-reference")) {
+    if(refpdb.get_atomnames().size() != targetpdb.get_atomnames().size()) {
+      cerr << "To reorder two PDBs must have matched number of atoms" << endl;
+      return EXIT_FAILURE;
+    }
+    for(size_t i = 0; i < input2ref.size(); ++i) {
+      printorder[input2ref[i]] = i;
+    }
+  }else{
+    for(size_t i = 0; i < input2ref.size(); ++i) {
+      printorder[i] = i;
+    }
+  }
+  size_t atomcount = 1;
+  for(size_t i: printorder) {
     size_t ref = input2ref[i];
     crdfs << setw(6) << "ATOM  " 
-          << setw(5) << std::right << (i + 1)
+          << setw(5) << std::right << atomcount++
           << " ";
     const string& atom = refpdb.get_atomnames()[ref];
     if(atom.length() == 4) {
