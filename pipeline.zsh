@@ -224,7 +224,7 @@ main() {
             python3 $ABFE_ROOT/generate_warpdrive.py --mol $LIG_TOP --topology $ID/pp.top --structure $ID/prerun.pbc.pdb --output-structure $ID/wd.pdb --output-charging $ID/charging.top --output-ligand-q0 $ID/ligand-q0.top --output-complex-q0 $ID/complex-q0.top --output-com-info $ID/cominfo --output-index $ID/for_pull.ndx --distance $WATER_THICKNESS_CHARGING
             do_solvate $ID/wd.pdb $ID/charging.top $ID/charging
             # slice out the ligand
-            python3 -c "import mdtraj; c = mdtraj.load(\"$ID/prerun.pbc.pdb\"); s = c.topology.select(\"${LIG_MDTRAJ:q}\"); c.atom_slice(s).save_pdb(\"$ID/lig.pdb\")"
+            python3 -c "import mdtraj; c = mdtraj.load(\"$ID/prerun.pbc.pdb\"); s = c.topology.select(\"$LIG_MDTRAJ\"); c.atom_slice(s).save_pdb(\"$ID/lig.pdb\")"
             $SINGLERUN $GMX editconf -f $ID/lig.pdb -d $WATER_THICKNESS -bt dodecahedron -o $ID/lig-box.pdb
             do_solvate $ID/lig-box.pdb $ID/ligand-q0.top $ID/ligand-q0
 
