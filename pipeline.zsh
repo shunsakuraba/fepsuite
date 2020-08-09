@@ -142,7 +142,7 @@ do_product_runs() {
     if [[ -n $pullmdp ]]; then
         mdprestr=(--additional-mdp $ID/$pullmdp)
     fi
-    $PYTHON3 $ABFE_ROOT/generate_decoupling.py --template-dir $ABFE_ROOT/template-pullrestr --cominfo $ID/cominfo $mdprestr --output-mdp $ID/mdp_addenda --mode $phase -N $nrepl --mol-name $MOL
+    $PYTHON3 $ABFE_ROOT/generate_decoupling.py --template-dir $ABFE_ROOT/template-pullrestr --cominfo $ID/cominfo $mdprestr --output-mdp $ID/mdp_addenda --mode $phase -N $nrepl --mol-name $LIG_TOP
     for i in {0..$((nrepl-1))}; do
         CODE=$phase.$i
         RUNDIR=$ID/$CODE
