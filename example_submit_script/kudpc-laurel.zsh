@@ -80,7 +80,6 @@ SINGLERUN=()
 
 source PATH_TO_GROMACS/bin/GMXRC
 PYTHON3=python3
-MOL=${ID##*-}
 
 GMX=$(which gmx_mpi)
 GMX_MPI=$(which gmx_mpi)

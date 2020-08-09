@@ -84,7 +84,6 @@ SINGLERUN=()
 # ---- Site-specific settings ends here
 
 PYTHON3=python3
-MOL=${ID##*-}
 
 GMX=$(which gmx_mpi)
 GMX_MPI=$(which gmx_mpi)
