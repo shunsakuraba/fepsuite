@@ -226,32 +226,36 @@ def parse_and_generate_top(args):
         write_line("%s_ref 1\n" % target_molecule, "Q")
 
     print("Topology generation completed. atoms = [", atom_ix_begin[target_molecule], ",", atom_ix_end[target_molecule], ")")
-    print("generating index addenda")
-    with open(args.output_index, "w") as ofh:
+    return (atom_ix_begin[target_molecule], atom_ix_end[target_molecule], complex_indices)
+
+def generate_ndx(fname, target_begin, target_end, complex_indices, complex_indices_com):
+    print("Generating index addenda")
+    with open(fname, "w") as ofh:
         print("[ grp-complex ]", file=ofh)
-        for i in complex_indices:
+        for i in complex_indices_com:
             print(i + 1, file=ofh)
         print(file=ofh)
         print("[ grp-lig ]", file=ofh)
-        for i in range(complex_indices[-1], complex_indices[-1] + atom_ix_end[target_molecule] - atom_ix_begin[target_molecule]):
+        for i in range(complex_indices[-1], complex_indices[-1] + target_end - target_begin):
             print(i + 1, file=ofh)
         print(file=ofh)
     print("Completed")
-
-    return (atom_ix_begin[target_molecule], atom_ix_end[target_molecule], complex_indices)
 
 def estimate_radius(substructure):
     com = mdtraj.compute_center_of_mass(substructure)
     ddsq = numpy.amax(numpy.sum((substructure.xyz[0, :, :] - com[:, numpy.newaxis, :]) ** 2, axis=2))
     return math.sqrt(ddsq)
 
-def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
-    print(len(complex_indices))
+def generate_coords(structure, ix_begin, ix_end, complex_indices, complex_indices_com, dbuffer):
+    print("Total atoms in complex = ", len(complex_indices))
+    print("Generating atom slices (this may take some time)")
     protlig = structure.atom_slice(complex_indices)
+    protlig_forcom = structure.atom_slice(complex_indices_com)
     rprotlig = estimate_radius(protlig)
     lig = structure.atom_slice([i for i in range(ix_begin, ix_end)])
+    print("Estimating radius")
     rlig = estimate_radius(lig)
-    protlig_com = mdtraj.compute_center_of_mass(protlig)
+    protlig_com = mdtraj.compute_center_of_mass(protlig_forcom)
     lig_com = mdtraj.compute_center_of_mass(lig)
     print("r(complex) =", rprotlig, "r(lig) =", rlig)
 
@@ -265,7 +269,7 @@ def generate_coords(structure, ix_begin, ix_end, complex_indices, dbuffer):
     newligcrd = lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :] + new_lig_com[numpy.newaxis, numpy.newaxis, :]
     print(newligcrd.shape)
     new_coords = numpy.concatenate((newprotligcrd, newligcrd), axis=1)
-    complex_anchor = complex_indices[numpy.argmin(numpy.sum((protlig.xyz[:, :, :] - protlig_com[:, numpy.newaxis, :]) ** 2, axis=2), axis=1)[0]]
+    complex_anchor = complex_indices_com[numpy.argmin(numpy.sum((protlig_forcom.xyz[:, :, :] - protlig_com[:, numpy.newaxis, :]) ** 2, axis=2), axis=1)[0]]
     lig_anchor = ix_begin + numpy.argmin(numpy.sum((lig.xyz[:, :, :] - lig_com[:, numpy.newaxis, :]) ** 2, axis=2), axis=1)[0] 
 
     return (new_coords, box_dist, new_protlig_com, new_lig_com, complex_anchor, lig_anchor)
@@ -280,7 +284,9 @@ def generate_pdb(args, ix_begin, ix_end, complex_indices):
     topology = structure.topology
 
     print("Calcing new coordinates")
-    (newcoords, box_dist, new_protlig_com, new_lig_com, complex_anchor, lig_anchor) = generate_coords(structure, ix_begin, ix_end, complex_indices, args.distance)
+    complex_indices_com = sorted(list(set(topology.select(args.complex_com_sel)) & set(complex_indices)))
+    (newcoords, box_dist, new_protlig_com, new_lig_com, complex_anchor, lig_anchor) = \
+            generate_coords(structure, ix_begin, ix_end, complex_indices, complex_indices_com, args.distance)
     # new com information is necessary for generating restraints
 
     print("Generating new PDB structure for complex")
@@ -320,7 +326,7 @@ def generate_pdb(args, ix_begin, ix_end, complex_indices):
     newstructure.save_pdb(args.output_structure)
 
     print("PDB generation completed")
-    return (new_protlig_com, new_lig_com, complex_anchor, lig_anchor)
+    return (new_protlig_com, new_lig_com, complex_anchor, lig_anchor, complextopology, complex_indices_com)
 
 def init_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
@@ -331,6 +337,7 @@ def init_args():
     parser.add_argument("--mol", type=str, required=True, help="Target molecule name")
     parser.add_argument("--solvent", type=str, default="SOL,NA,K,CL,Na,Cl", help="Solvent molecules")
     parser.add_argument("--distance", type=float, default=1.0, help="Buffer region distance")
+    parser.add_argument("--complex-com-sel", type=str, default="name CA", help="Additional selection condition for complex COM calculation")
     parser.add_argument("--output-charging", type=str, required=True, help="Output topology file with distant charging")
     parser.add_argument("--output-ligand-q0", type=str, required=True, help="Output topology file for the ligand with 0-charged.")
     parser.add_argument("--output-complex-q0", type=str, required=True, help="Output topology file for the complex with 0-charged.")
@@ -343,7 +350,8 @@ if __name__ == "__main__":
     args = init_args()
 
     ix_begin, ix_end, complex_indices = parse_and_generate_top(args)
-    (new_protlig_com, new_lig_com, complex_anchor, lig_anchor) = generate_pdb(args, ix_begin, ix_end, complex_indices)
+    (new_protlig_com, new_lig_com, complex_anchor, lig_anchor, complextopology, complex_indices_com) = generate_pdb(args, ix_begin, ix_end, complex_indices)
+    generate_ndx(args.output_index, ix_begin, ix_end, complex_indices, complex_indices_com)
     print("Generating cominfo")
     with open(args.output_com_info, "w") as ofh:
         print("# complex", file=ofh)
