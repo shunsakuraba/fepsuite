@@ -41,6 +41,11 @@ if [[ -z $JOB_NAME ]]; then
     case $PROCS in
         1)
             RESOURCE=q_node
+            case $i in
+                3|11)
+                    RESOURCE=s_core
+                    ;;
+            esac
             ;;
         2)
             RESOURCE=h_node
