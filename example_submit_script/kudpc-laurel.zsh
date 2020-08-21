@@ -19,6 +19,7 @@ if [[ -z $QSUB_PROCS ]]; then
     echo "Usage: $0 (runpath) (stages)"
     exit 1
   fi
+  qs=$(qstat)
   for i in $jobs; do
     PROCS=36   # Default procs
     TPP=1      # Threads / proc
@@ -30,7 +31,6 @@ if [[ -z $QSUB_PROCS ]]; then
     waitcmd=()
     eval $($ABFE_ROOT/pipeline.zsh query $i)
     # edit this qstat analysis part to adapt to other job systems
-    qs=$(qstat)
     deps=""
     for d in $DEPENDS; do
         if [[ -e $ID.jobid ]] && grep -q "$CUR.$d\s$ID" $ID.jobid ; then
@@ -54,6 +54,7 @@ if [[ -z $QSUB_PROCS ]]; then
     echo Submitted jobid $res.
     echo "$CUR.$i\t$ID\t$res" >> $ID.jobid
     set +e
+    qs+="$res\n"
   done
   exit $?
 fi
