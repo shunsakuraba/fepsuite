@@ -81,7 +81,8 @@ module load gromacs/2019.4
 mpirun_() {
     np=$1
     shift
-    # edit this part based on environments
+    # Edit this part based on environments
+    # If you use openmpi you may need to specify -x LD_LIBRARY_PATH -x OMP_NUM_THREADS
     mpirun -np $np -ppn $CPN $@
 }
 # some supercomputer (e.g. Cray KNL) requires extra commands before single-process run. E.g. (aprun -n 1)

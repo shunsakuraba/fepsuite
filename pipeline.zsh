@@ -104,7 +104,7 @@ do_run() {
         product)
             ;;
         *)
-            echo "do_run $1 $2 $3 $4 $5 $6 $7 $8 $9 $10: \$cont invalid"
+            echo "do_run $1 $2 $3 $4 $5 $6 $7 $8 $9 $10: \$prep invalid"
             exit 1
             ;;
     esac
@@ -214,7 +214,8 @@ main() {
                 echo "q" | $SINGLERUN $GMX make_ndx -f $ID/pp.tpr -o $ID/index_receptor.ndx
                 ndxcmd=(-n $ID/index_receptor.ndx)
             fi
-            echo "$RECEPTOR_NDX\n$RECEPTOR_NDX\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prep.steep.tpr $ndxcmd -f $ID/prerun.run.pdb -pbc cluster -center -ur compact -o $ID/prerun.pbc.pdb
+            echo "$RECEPTOR_NDX\n$RECEPTOR_NDX\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prep.steep.tpr $ndxcmd -f $ID/prerun.run.pdb -pbc cluster -center -o $ID/prerun.pbc_pre.pdb
+            echo "$RECEPTOR_NDX\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prep.steep.tpr $ndxcmd -f $ID/prerun.pbc_pre.pdb -pbc mol -center -ur compact -o $ID/prerun.pbc.pdb
             python3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "$LIG_MDTRAJ" --prot-sel "$RECEPTOR_MDTRAJ" --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.cut.xtc --output $ID/restrinfo
             # Restraint for annihilation and charging
             python3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --mdp $ID/restr_pull.mdp --ndx $ID/restr_pull.ndx
