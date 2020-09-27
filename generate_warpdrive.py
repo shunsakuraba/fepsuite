@@ -236,8 +236,8 @@ def generate_ndx(fname, target_begin, target_end, complex_indices, complex_indic
             print(i + 1, file=ofh)
         print(file=ofh)
         print("[ grp-lig ]", file=ofh)
-        for i in range(complex_indices[-1], complex_indices[-1] + target_end - target_begin):
-            print(i + 1, file=ofh)
+        for i in range(complex_indices[-1] + 1, complex_indices[-1] + target_end - target_begin + 1): # +1 because range starts from the next to complex_indices[-1]
+            print(i + 1, file=ofh) # +1 for 1-origin
         print(file=ofh)
     print("Completed")
 
