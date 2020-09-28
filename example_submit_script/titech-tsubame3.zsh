@@ -96,7 +96,7 @@ GMX_MPI=$(which gmx_mpi)
 
 # actual runs
 
-# for grid engine errcode of 100 has a special meaning
-trap '{ echo "Aborting job"; exit 100 }' ZERR
+# for grid engine errcode of 100 has a special meaning. set +e is required because of set -ex inside the pipeline
+trap '{ echo "Aborting job"; set +e; exit 100 }' ZERR
 source $ABFE_ROOT/pipeline.zsh run $STEPNO
 
