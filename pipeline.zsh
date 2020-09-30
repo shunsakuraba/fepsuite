@@ -37,7 +37,7 @@ mdrun_find_possible_np() {
     fi
     while true; do
         echo "Trying with NP=$NP"
-        mpirun_ $NP $GMX_MPI mdrun $args
+        mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
             tail -20 $log_basename.log | grep -q -i "\\(domain\\|prime\\)" || { echo "Error: domain-unrelated error"; exit 1 }
@@ -85,6 +85,10 @@ do_run() {
     else
         mdp=(-f mdp/$phase.mdp)
     fi
+    nstlist_cmd=()
+    if [[ -n $NSTLIST ]] && [[ $phase != steep ]]; then
+        nstlist_cmd=(-nstlist $NSTLIST)
+    fi
     case $cont in
         cont)
             contcmd=(-t $ID/$conf.cpt)
@@ -109,7 +113,7 @@ do_run() {
             ;;
     esac
     $SINGLERUN $GMX grompp $mdp $index -p $ID/$topol.top -c $ID/$conf.pdb $contcmd -o $ID/$outprefix.$phase.tpr -po $ID/$outprefix.$phase.out.mdp $restrcmd -maxwarn $maxwarn || exit 1
-    mdrun_find_possible_np 1 -deffnm $ID/$outprefix.$phase -c $ID/$outprefix.$phase.pdb
+    mdrun_find_possible_np 1 -deffnm $ID/$outprefix.$phase -c $ID/$outprefix.$phase.pdb $nstlist_cmd
 }
 
 do_prep_runs() {
@@ -156,7 +160,11 @@ do_product_runs() {
         $SINGLERUN $GMX grompp -f $MDP -p $ID/$topol -c $ID/$prev.pdb -t $ID/$prev.cpt -o $RUNDIR/$phase.tpr -po $ID/$output.$phase.$i.mdp $ndx_grompp -maxwarn $maxwarn
         DIRS+=$RUNDIR
     done
-    mdrun_find_possible_np $nrepl -multidir $DIRS -deffnm $phase -c $phase.pdb -replex 500
+    nstlist_cmd=()
+    if [[ -n $NSTLIST ]]; then
+        nstlist_cmd=(-nstlist $NSTLIST)
+    fi
+    mdrun_find_possible_np $nrepl -multidir $DIRS -deffnm $phase -c $phase.pdb -replex 500 $nstlist_cmd
 }
 
 do_bar() {
