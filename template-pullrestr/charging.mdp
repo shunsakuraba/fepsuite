@@ -23,7 +23,6 @@ pull_ncoords = 8
 pull_group7_name = {group_complex}
 pull_group7_pbcatom = {anchor_complex}
 pull_group8_name = {group_ligand}
-pull_group8_pbcatom = {anchor_ligand}
 
 ; coord 7: complex pinning
 pull_coord7_type = umbrella
