@@ -34,7 +34,8 @@ def find_restraints(args):
     lig_c_ix = ligheavyix[numpy.argmax(d2s)]
     assert lig_a_ix != lig_c_ix
     print("ligand second atom:", lig_c_ix, topology.atom(lig_c_ix))
-    
+
+    # TODO FIXME(shun): this condition is irrational, needs a fix
     # third atom: a-b-c angle > 90 deg, farthest from the first
     angle_indices = [[lig_a_ix, ix, lig_c_ix] for ix in ligheavyix]
     angle_indices2 = [[ix, lig_a_ix, lig_c_ix] for ix in ligheavyix]
@@ -158,6 +159,15 @@ def find_restraints(args):
             args.angle_weight * (numpy.var(angles_a, axis=0) + numpy.var(angles_b, axis=0)) + 
             args.dihedral_weight * (numpy.var(diheds_a, axis=0) + numpy.var(diheds_b, axis=0) + numpy.var(diheds_c, axis=0))
             )
+    # prevent ang < 45 or ang > 135 (log sin theta part gets unstable)
+    # FIXME(shun): actually such an angle should not be chosen from the beginning
+    avgangle_a_all = numpy.mean(angles_a, axis=0)
+    avgangle_b_all = numpy.mean(angles_b, axis=0)
+    banned_a = numpy.logical_or(avgangle_a_all < (math.pi * 45.0 / 180.0), avgangle_a_all > (math.pi * 135.0 / 180.0))
+    banned_b = numpy.logical_or(avgangle_b_all < (math.pi * 45.0 / 180.0), avgangle_b_all > (math.pi * 135.0 / 180.0))
+    banned = numpy.logical_or(banned_a, banned_b)
+    total_weights[banned] = 1e+6
+
     bestcand = numpy.argmin(total_weights)
     avgdist = numpy.mean(dists[:, bestcand])
     avgangle_a = numpy.mean(angles_a[:, bestcand])
