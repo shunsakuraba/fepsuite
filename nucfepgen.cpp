@@ -13,6 +13,7 @@
 #include <set>
 #include <queue>
 #include <algorithm>
+#include <array>
 #include "disjoint_set.hpp"
 
 using namespace std;
