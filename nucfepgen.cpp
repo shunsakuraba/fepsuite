@@ -1118,8 +1118,8 @@ void generate_topology(const string& outfilename,
       make_tuple(assignBofO[x_in_O],
                  assignBofO[y_in_O],
                  func);
-    if(func != 1) {
-      throw runtime_error("Bond func != 1 not supported");
+    if(func != 1 && func != 6) {
+      throw runtime_error("Bond func != 1, 6 not supported");
     }
     const vector<double>& Afactors = v.second;
     vector<double> Bfactors(2, 0);

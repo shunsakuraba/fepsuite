@@ -18,6 +18,10 @@ topology::topology(const string& fname)
   : defaults(AMBER), nexcl(0)
 {
   ifstream ifs(fname.c_str());
+
+  if(!ifs) {
+      throw runtime_error(string("topology::topology() failed to open file: \"") + fname + "\"");
+  }
   
   string line;
   string state;
