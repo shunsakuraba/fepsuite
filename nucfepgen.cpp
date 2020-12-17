@@ -1589,6 +1589,49 @@ void generate_topology(const string& outfilename,
 
 }
 
+static string find_file_at_exe_path(const string& exepath, const string& fname)
+{
+  size_t p = exepath.find_last_of('/');
+  if(p == string::npos) {
+    throw runtime_error(string("Failed to find ") + fname);
+  }
+  string exedir_with_slash = exepath.substr(0, p + 1);
+  return exedir_with_slash + fname;
+}
+
+static set<pair<string, string>> load_forbid_assign(const string& exepath, const string& fname)
+{
+  ifstream ifs(fname);
+  if(!ifs) {
+    ifs.close();
+    ifs.clear();
+    ifs.open(find_file_at_exe_path(exepath, fname));
+    if(!ifs) {
+      cerr << "Failed to find \"" << fname << "\"" << endl;
+      throw runtime_error("load_forbid_assign");
+    }
+  }
+  string line;
+  set<pair<string, string>> ret;
+  while(getline(ifs, line)) {
+    if(line.length() >= 1 && line[0] == '#') {
+      continue;
+    }
+    if(line.find_first_not_of(" \t\n") == string::npos) {
+      // blank
+      continue;
+    }
+    istringstream is(line);
+    string resname, atomname;
+    is >> resname >> atomname;
+    if(is.fail()) {
+      cerr << "Failed to parse: \"" << line << "\"" << endl;
+      throw runtime_error("load_forbid_assign");
+    }
+    ret.insert(make_pair(resname, atomname));
+  }
+  return ret;
+}
 
 int main(int argc, char* argv[])
 {
@@ -1612,6 +1655,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureOA", 0, "PDB structure to output (optional, for stateA)", false);
   p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
+  p.add<string>("forbid-assign", 0, "Each line in this file should contain RESNAME ATOMNAME pair that are not mapped in assignment when perturbed", false, "forbid-assign.txt");
   p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
@@ -1678,13 +1722,18 @@ int main(int argc, char* argv[])
   vector<int> assignAofB(Bcoords.cols(), -1);
   vector<int> Adepth;
 
+  set<pair<string, string>> forbid_assign = load_forbid_assign(string(argv[0]), p.get<string>("forbid-assign"));
+  cerr << "DEBUG: forbid_assign" << forbid_assign.size() << endl;
+
   bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
   int assigned;
   if(p.exist("protein")) {
-    assigned = assign_atoms("",    "CA",    Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assigned = assign_atoms("",    "CA",    Anames, Bnames,
+                            distmat, assignBofA, assignAofB, pdist);
   }else{
-    assigned = assign_atoms("P",   nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
+    assigned = assign_atoms("P",   nullptr, Anames, Bnames,
+                            distmat, assignBofA, assignAofB, pdist);
   }
   if(verbose) {
     cout << "Assigned " << assigned << " atoms @ mainchain phase" << endl;
@@ -1698,14 +1747,17 @@ int main(int argc, char* argv[])
                          Apdb.get_resids(), Bpdb.get_resids(),
                          assignBofA, assignAofB);
   }
+  // FIXME: this assign-unassign mess should be streamlined
+  unassign_atoms_forbidding(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(), forbid_assign, assignBofA, assignAofB);
 
   if(use_connectivity) {
-    assign_atoms_connectivity(distmat, Atop, Btop, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
+    assign_atoms_connectivity(distmat, Atop, Btop, forbid_assign, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
     correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
   }else{
     assign_atoms("NCO",  nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
     assign_atoms("H",    nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
     assign_atoms("HNCO", nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+    unassign_atoms_forbidding(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(), forbid_assign, assignBofA, assignAofB);
     throw runtime_error("FIXME: here we need to check exclusion and exit on error");
   }
   if(!quiet){

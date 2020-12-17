@@ -3,6 +3,7 @@
 #include <limits>
 #include <queue>
 
+#include <iostream>
 using namespace std;
 using namespace Eigen;
 
@@ -14,6 +15,23 @@ static char atomtype(const string& an)
     }
   }
   return 0;
+}
+
+static bool is_forbidden(const vector<string>& Anames,
+                         const vector<string>& Bnames,
+                         const vector<string>& Aresnames,
+                         const vector<string>& Bresnames,
+                         const set<pair<string, string> >& forbid_assign,
+                         int aindex,
+                         int bindex)
+{
+  const string &An = Anames[aindex];
+  const string &Bn = Bnames[bindex];
+  const string &Ar = Aresnames[aindex];
+  const string &Br = Bresnames[bindex];
+  return (Ar != Br &&
+          (forbid_assign.count(make_pair(Ar, An)) > 0 ||
+           forbid_assign.count(make_pair(Br, Bn)) > 0));
 }
 
 int assign_atoms(const string& process_atoms,
@@ -75,6 +93,7 @@ int assign_atoms(const string& process_atoms,
 void assign_atoms_connectivity(const MatrixXd& distmat,
                                const topology& Atop,
                                const topology& Btop,
+                               const set<pair<string, string> > &forbid_assign,
                                vector<int>& assignBofA,
                                vector<int>& assignAofB,
                                vector<int>& depth,
@@ -140,6 +159,9 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
            Atop.names[An] != Btop.names[Bn]) {
           continue;
         }
+        if(is_forbidden(Atop.names, Btop.names, Atop.resnames, Btop.resnames, forbid_assign, An, Bn)) {
+          continue;
+        }
         assignBofA[An] = Bn;
         assignAofB[Bn] = An;
         pq.emplace(make_pair(e.first + 1, An));
@@ -179,3 +201,25 @@ int assign_atoms_resinfo(const vector<string>& Anames,
   }
   return assigned;
 }
+
+void unassign_atoms_forbidding(const vector<string>& Anames,
+                               const vector<string>& Bnames,
+                               const vector<string>& Aresnames,
+                               const vector<string>& Bresnames,
+                               const set<pair<string, string> > &forbid_assign,
+                               vector<int>& assignBofA,
+                               vector<int>& assignAofB)
+{
+  for(int aindex: assignAofB) {
+    if(aindex < 0) {
+      continue;
+    }
+    assert(aindex < (int)assignBofA.size());
+    int bindex = assignBofA[aindex];
+    if(is_forbidden(Anames, Bnames, Aresnames, Bresnames, forbid_assign, aindex, bindex)) {
+      assignAofB[bindex] = -1;
+      assignBofA[aindex] = -1;
+    }
+  }
+}
+

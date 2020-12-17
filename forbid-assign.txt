@@ -1,0 +1,30 @@
+# Pro is unstable perhaps due to imine, try to avoid matching
+PRO N
+PRO CA
+PRO HA
+PRO CB
+PRO HB1
+PRO HB2
+PRO CG
+PRO HG1
+PRO HG2
+PRO CD
+PRO HD1
+PRO HD2
+# ILE is unstable when side chains are matched
+ILE HB
+ILE CG1
+ILE HG12
+ILE HG13
+ILE CG2
+ILE HG21
+ILE HG22
+ILE HG23
+ILE CD
+ILE HD1
+ILE HD2
+ILE HD3
+ILE CD1
+ILE HD11
+ILE HD12
+ILE HD13
