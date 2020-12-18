@@ -3,7 +3,6 @@
 #include <limits>
 #include <queue>
 
-#include <iostream>
 using namespace std;
 using namespace Eigen;
 
