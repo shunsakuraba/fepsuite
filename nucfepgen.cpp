@@ -633,12 +633,15 @@ static void do_check_cmap_add_zerofill(const topology &Atop, const topology &Bto
              << bt_in_B << "-"
              << ct_in_B << "-"
              << dt_in_B << "-"
-             << et_in_B << " (func " << func << ")" << endl;
+             << et_in_B << " (func " << func;
       }
       const auto& baseentry = Atop.cmaptypes.at(keyA);
       int phi_split = get<0>(baseentry);
       int psi_split = get<1>(baseentry);
-      vector<double> newentry(0., get<2>(baseentry).size());
+      vector<double> newentry(get<2>(baseentry).size(), 0.);
+      if(verbose) {
+        cout << ", numentry = " << get<2>(baseentry).size() << ")" << endl;
+      }
       (*cmaptypes_plus0)[keyB] = std::make_tuple(phi_split, psi_split, newentry);
     }
   }
