@@ -16,32 +16,48 @@ static char atomtype(const string& an)
   return 0;
 }
 
-static bool is_forbidden(const vector<string>& Anames,
-                         const vector<string>& Bnames,
-                         const vector<string>& Aresnames,
-                         const vector<string>& Bresnames,
-                         const set<pair<string, string> >& forbid_assign,
-                         int aindex,
-                         int bindex)
+bool dict_match(const assigner_dictionary& dictionary,
+                const string &Aresname,
+                const string &Aname,
+                const string &Bresname,
+                const string &Bname)
 {
-  const string &An = Anames[aindex];
-  const string &Bn = Bnames[bindex];
-  const string &Ar = Aresnames[aindex];
-  const string &Br = Bresnames[bindex];
-  return (Ar != Br &&
-          (forbid_assign.count(make_pair(Ar, An)) > 0 ||
-           forbid_assign.count(make_pair(Br, Bn)) > 0));
+  for(const assigner_conditions &ad: dictionary){
+    for(int i = 0; i < 2; ++i) {
+      const string& resname1 = (i == 0 ? Aresname : Bresname);
+      const string& atomname1 = (i == 0 ? Aname : Bname);
+      const string& resname2 = (i == 0 ? Bresname : Aresname);
+      const string& atomname2 = (i == 0 ? Bname : Aname);
+      
+      if((ad.res1 == "*" || ad.res1 == resname1) &&
+        (ad.res2 == "*" || ad.res2 == resname2) &&
+        (ad.atom1 == "*" || ad.atom1 == atomname1) &&
+        (ad.atom2 == "*" || ad.atom2 == atomname2)) {
+        assigner_action action = ad.action;
+        if(action == ASSIGN_ACCEPT) {
+          return true;
+        }
+        if(action == ASSIGN_REJECT) {
+          return false;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 int assign_atoms(const string& process_atoms,
                  const char* atomname,
-                 const vector<string>& Anames,
-                 const vector<string>& Bnames,
+                 const topology &Atop,
+                 const topology &Btop,
                  const MatrixXd& distmat,
                  vector<int>& assignBofA,
                  vector<int>& assignAofB,
                  double threshold)
 {
+  const vector<string> &Anames = Atop.names;
+  const vector<string> &Bnames = Btop.names;
+
   vector<bool> Aenable(Anames.size());
   vector<bool> Benable(Bnames.size());
 
@@ -89,10 +105,9 @@ int assign_atoms(const string& process_atoms,
   return assigned;
 }
 
-void assign_atoms_connectivity(const MatrixXd& distmat,
-                               const topology& Atop,
-                               const topology& Btop,
-                               const set<pair<string, string> > &forbid_assign,
+void assign_atoms_connectivity(const topology &Atop,
+                               const topology &Btop,
+                               const MatrixXd& distmat,
                                vector<int>& assignBofA,
                                vector<int>& assignAofB,
                                vector<int>& depth,
@@ -158,9 +173,6 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
            Atop.names[An] != Btop.names[Bn]) {
           continue;
         }
-        if(is_forbidden(Atop.names, Btop.names, Atop.resnames, Btop.resnames, forbid_assign, An, Bn)) {
-          continue;
-        }
         assignBofA[An] = Bn;
         assignAofB[Bn] = An;
         pq.emplace(make_pair(e.first + 1, An));
@@ -171,54 +183,57 @@ void assign_atoms_connectivity(const MatrixXd& distmat,
 }
 
 
-int assign_atoms_resinfo(const vector<string>& Anames,
-                         const vector<string>& Bnames,
-                         const vector<string>& Aresnames,
-                         const vector<string>& Bresnames,
-                         const vector<int>& Aresids,
-                         const vector<int>& Bresids,
-                         vector<int>& assignBofA,
-                         vector<int>& assignAofB)
+int assign_atoms_resinfo(const topology &Atop,
+                         const topology &Btop,
+                         const assigner_dictionary& dictionary,
+                         vector<int>* assignBofA,
+                         vector<int>* assignAofB)
 {
+  const vector<string> &Anames = Atop.names;
+  const vector<string> &Bnames = Btop.names;
+  const vector<string> &Aresnames = Atop.resnames;
+  const vector<string> &Bresnames = Btop.resnames;
+  const vector<int> &Aresids = Atop.resids;
+  const vector<int> &Bresids = Btop.resids;
   int assigned = 0;
 
+  multimap<int, size_t> Bresids_to_Batoms;
+  for(int j = 0; j < (int)Bnames.size(); ++j) {
+    int resid = Bresids[j];
+    Bresids_to_Batoms.insert({resid, (size_t)j});
+  }
+
   for(int i = 0; i < (int)Anames.size(); ++i) {
+    if((*assignBofA)[i] != -1) {
+      continue;
+    }
     int found = -1;
-    for(int j = 0; j < (int)Bnames.size(); ++j) {
-      if((Aresids[i] == Bresids[j]) &&
-         (Aresnames[i] == Bresnames[j]) &&
+    auto range = Bresids_to_Batoms.equal_range(Aresids[i]);
+    for(auto p = range.first; p != range.second; ++p) {
+      int j = p->second;
+      if((*assignAofB)[j] != -1) {
+        continue;
+      }
+
+      if((Aresnames[i] == Bresnames[j]) &&
          (Anames[i] == Bnames[j])) {
         found = j;
         break;
       }
+      if(Aresnames[i] != Bresnames[j]) {
+        if(dict_match(dictionary, Aresnames[i], Anames[i], Bresnames[j], Bnames[j])) {
+          found = j;
+          break;
+        }
+      }
     }
     if(found >= 0) {
-      assignBofA[i] = found;
-      assignAofB[found] = i;
+      (*assignBofA)[i] = found;
+      (*assignAofB)[found] = i;
       ++assigned;
     }
   }
   return assigned;
 }
 
-void unassign_atoms_forbidding(const vector<string>& Anames,
-                               const vector<string>& Bnames,
-                               const vector<string>& Aresnames,
-                               const vector<string>& Bresnames,
-                               const set<pair<string, string> > &forbid_assign,
-                               vector<int>& assignBofA,
-                               vector<int>& assignAofB)
-{
-  for(int aindex: assignAofB) {
-    if(aindex < 0) {
-      continue;
-    }
-    assert(aindex < (int)assignBofA.size());
-    int bindex = assignBofA[aindex];
-    if(is_forbidden(Anames, Bnames, Aresnames, Bresnames, forbid_assign, aindex, bindex)) {
-      assignAofB[bindex] = -1;
-      assignBofA[aindex] = -1;
-    }
-  }
-}
 

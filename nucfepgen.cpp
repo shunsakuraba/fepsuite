@@ -1602,7 +1602,7 @@ static string find_file_at_exe_path(const string& exepath, const string& fname)
   return exedir_with_slash + fname;
 }
 
-static set<pair<string, string>> load_forbid_assign(const string& exepath, const string& fname)
+static vector<assigner_conditions> load_dictionary(const string& exepath, const string& fname)
 {
   ifstream ifs(fname);
   if(!ifs) {
@@ -1611,13 +1611,13 @@ static set<pair<string, string>> load_forbid_assign(const string& exepath, const
     ifs.open(find_file_at_exe_path(exepath, fname));
     if(!ifs) {
       cerr << "Failed to find \"" << fname << "\"" << endl;
-      throw runtime_error("load_forbid_assign");
+      throw runtime_error("load_dictionary");
     }
   }
   string line;
-  set<pair<string, string>> ret;
+  vector<assigner_conditions> ret;
   while(getline(ifs, line)) {
-    if(line.length() >= 1 && line[0] == '#') {
+    if(line.empty() || (line.length() >= 1 && line[0] == '#')) {
       continue;
     }
     if(line.find_first_not_of(" \t\n") == string::npos) {
@@ -1625,13 +1625,19 @@ static set<pair<string, string>> load_forbid_assign(const string& exepath, const
       continue;
     }
     istringstream is(line);
-    string resname, atomname;
-    is >> resname >> atomname;
+    string actionstr, resname1, atomname1, resname2, atomname2;
+    is >> actionstr >> resname1 >> atomname1 >> resname2 >> atomname2;
     if(is.fail()) {
       cerr << "Failed to parse: \"" << line << "\"" << endl;
       throw runtime_error("load_forbid_assign");
     }
-    ret.insert(make_pair(resname, atomname));
+    assigner_action action = ASSIGN_NR;
+    if(actionstr == "ACCEPT") {
+      action = ASSIGN_ACCEPT;
+    }else if(actionstr == "REJECT") {
+      action = ASSIGN_REJECT;
+    }
+    ret.emplace_back(assigner_conditions{action, resname1, atomname1, resname2, atomname2});
   }
   return ret;
 }
@@ -1658,12 +1664,12 @@ int main(int argc, char* argv[])
   p.add<string>("structureOA", 0, "PDB structure to output (optional, for stateA)", false);
   p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
-  p.add<string>("forbid-assign", 0, "Each line in this file should contain RESNAME ATOMNAME pair that are not mapped in assignment when perturbed", false, "forbid-assign.txt");
+  p.add<string>("assign-dictionary", 0, "Specify assignment matching pair", false, "assign-dictionary.txt");
   p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
-  p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches");
+  p.add("honor-resnames", 0, "Do not check structure if residue id & residue name matches, and use dictionary matching procedure");
   p.add("wang-approximation", 0, "Enable an approximation described in Supp. Info in Wang et al. 10.1073/pnas.1114017109");
   p.add("disable-cmap-error", 0, "FEP of CMAP requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
   p.add("disable-pairs-error", 0, "FEP of pairs section requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
@@ -1725,43 +1731,40 @@ int main(int argc, char* argv[])
   vector<int> assignAofB(Bcoords.cols(), -1);
   vector<int> Adepth;
 
-  set<pair<string, string>> forbid_assign = load_forbid_assign(string(argv[0]), p.get<string>("forbid-assign"));
-  cerr << "DEBUG: forbid_assign" << forbid_assign.size() << endl;
+  assigner_dictionary dictionary = load_dictionary(string(argv[0]), p.get<string>("assign-dictionary"));
+  cerr << "DEBUG: dictionary size: " << dictionary.size() << endl;
 
   bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
   int assigned;
-  if(p.exist("protein")) {
-    assigned = assign_atoms("",    "CA",    Anames, Bnames,
-                            distmat, assignBofA, assignAofB, pdist);
-  }else{
-    assigned = assign_atoms("P",   nullptr, Anames, Bnames,
-                            distmat, assignBofA, assignAofB, pdist);
-  }
-  if(verbose) {
-    cout << "Assigned " << assigned << " atoms @ mainchain phase" << endl;
-  }
-  if(assigned == 0) {
-    cout << "Too few assigned atoms at mainchain phase" << endl;
-    exit(1);
-  }
   if(p.exist("honor-resnames")) {
-    assign_atoms_resinfo(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(),
-                         Apdb.get_resids(), Bpdb.get_resids(),
-                         assignBofA, assignAofB);
-  }
-  // FIXME: this assign-unassign mess should be streamlined
-  unassign_atoms_forbidding(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(), forbid_assign, assignBofA, assignAofB);
-
-  if(use_connectivity) {
-    assign_atoms_connectivity(distmat, Atop, Btop, forbid_assign, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
-    correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
+    assign_atoms_resinfo(Atop, Btop, dictionary,
+                         &assignBofA, &assignAofB);
   }else{
-    assign_atoms("NCO",  nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("H",    nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist);
-    assign_atoms("HNCO", nullptr, Anames, Bnames, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
-    unassign_atoms_forbidding(Anames, Bnames, Apdb.get_residuenames(), Bpdb.get_residuenames(), forbid_assign, assignBofA, assignAofB);
-    throw runtime_error("FIXME: here we need to check exclusion and exit on error");
+    if(p.exist("protein")) {
+      assigned = assign_atoms("",    "CA",    Atop, Btop,
+                              distmat, assignBofA, assignAofB, pdist);
+    }else{
+      assigned = assign_atoms("P",   nullptr, Atop, Btop,
+                              distmat, assignBofA, assignAofB, pdist);
+    }
+    if(verbose) {
+      cout << "Assigned " << assigned << " atoms @ mainchain phase" << endl;
+    }
+    if(assigned == 0) {
+      cout << "Too few assigned atoms at mainchain phase" << endl;
+      exit(1);
+    }
+
+    if(use_connectivity) {
+      assign_atoms_connectivity(Atop, Btop, distmat, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
+      correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
+    }else{
+      assign_atoms("NCO",  nullptr, Atop, Btop, distmat, assignBofA, assignAofB, pdist);
+      assign_atoms("H",    nullptr, Atop, Btop, distmat, assignBofA, assignAofB, pdist);
+      assign_atoms("HNCO", nullptr, Atop, Btop, distmat, assignBofA, assignAofB, pdist); // re-asign unassigned
+      throw runtime_error("FIXME: here we need to check exclusion and exit on error");
+    }
   }
   if(!quiet){
     cout << "Atoms assigned:" << endl;

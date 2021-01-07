@@ -6,39 +6,40 @@
 #include <utility>
 #include "topology.hpp"
 
+enum assigner_action {
+    ASSIGN_ACCEPT,
+    ASSIGN_REJECT,
+    ASSIGN_NR
+};
+
+struct assigner_conditions {
+    assigner_action action;
+    std::string res1, atom1, res2, atom2;
+};
+
+typedef std::vector<assigner_conditions> assigner_dictionary;
+
 int assign_atoms(const std::string& process_atoms,
                  const char* atomname_optional,
-                 const std::vector<std::string>& Anames,
-                 const std::vector<std::string>& Bnames,
+                 const topology &Atop,
+                 const topology &Btop,
                  const Eigen::MatrixXd& distmat,
                  std::vector<int>& assignBofA,
                  std::vector<int>& assignAofB,
                  double threshold);
 
-int assign_atoms_resinfo(const std::vector<std::string>& Anames,
-                         const std::vector<std::string>& Bnames,
-                         const std::vector<std::string>& Aresnames,
-                         const std::vector<std::string>& Bresnames,
-                         const std::vector<int>& Aresids,
-                         const std::vector<int>& Bresids,
-                         std::vector<int>& assignBofA,
-                         std::vector<int>& assignAofB);
+int assign_atoms_resinfo(const topology &Atop,
+                         const topology &Btop,
+                         const assigner_dictionary& dictionary,
+                         std::vector<int>* assignBofA,
+                         std::vector<int>* assignAofB);
 
-void assign_atoms_connectivity(const Eigen::MatrixXd& distmat,
-                               const topology& Atop,
+void assign_atoms_connectivity(const topology& Atop,
                                const topology& Btop,
-                               const std::set<std::pair<std::string, std::string> > &forbid_assign,
+                               const Eigen::MatrixXd& distmat,
                                std::vector<int>& assignBofA,
                                std::vector<int>& assignAofB,
                                std::vector<int>& Adepth,
                                double threshold,
                                bool must_be_identical_names);
-
-void unassign_atoms_forbidding(const std::vector<std::string>& Anames,
-                               const std::vector<std::string>& Bnames,
-                               const std::vector<std::string>& Aresnames,
-                               const std::vector<std::string>& Bresnames,
-                               const std::set<std::pair<std::string, std::string> > &forbid_assign,
-                               std::vector<int>& assignBofA,
-                               std::vector<int>& assignAofB);
 

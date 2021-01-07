@@ -1,0 +1,41 @@
+# action resname atomname resname atomname
+# Reject PRO, all but C O
+REJECT PRO N * *
+REJECT PRO CA * *
+REJECT PRO HA * *
+REJECT PRO CB * *
+REJECT PRO HB1 * *
+REJECT PRO HB2 * *
+REJECT PRO CG * *
+REJECT PRO HG1 * *
+REJECT PRO HG2 * *
+REJECT PRO CD * *
+REJECT PRO HD1 * *
+REJECT PRO HD2 * *
+# Accept others up to CB
+ACCEPT * C * C
+ACCEPT * H * H
+ACCEPT * N * N
+ACCEPT * O * O
+ACCEPT * CA * CA
+ACCEPT * HA * HA
+ACCEPT * CB * CB
+# charmm uses "HN" instead of "H"
+ACCEPT * HN * HN
+# Accept TYR-PHE
+ACCEPT TYR HB1 PHE HB1
+ACCEPT TYR HB2 PHE HB2
+ACCEPT TYR CG PHE CG
+ACCEPT TYR CD1 PHE CD1
+ACCEPT TYR CD2 PHE CD2
+ACCEPT TYR HE1 PHE HE1
+ACCEPT TYR HE2 PHE HE2
+ACCEPT TYR CE1 PHE CE1
+ACCEPT TYR CE2 PHE CE2
+ACCEPT TYR HE1 PHE HE1
+ACCEPT TYR HE2 PHE HE2
+ACCEPT TYR CZ PHE CZ
+# I wanted to accept GLY HA, but the naming convention is actually super mess, so I decided to leave this commented.
+# Amber uses HA2/HA3 and HA2 corresponds to HA. 
+# Amber in GROMACS uses HA1/HA2.
+# ACCEPT GLY HA2 * HA
