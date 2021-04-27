@@ -22,24 +22,22 @@ def find_restraints(args):
     _anchors = topology.select("(%s) and (name %s %s %s)" % (args.prot_sel, anc1, anc2, anc3))
 
     # pass 0: determine ligand representative atoms
-    # first atom: center of the ligand. Assumes that refstructure makes ligand whole.
+    # first atom (a): center of the ligand. Assumes that refstructure makes ligand whole.
     center = mdtraj.compute_center_of_mass(refstructure.atom_slice(ligheavyix))[0, :]
     d2s = numpy.sum((refstructure.xyz[0, ligheavyix, :] - center[numpy.newaxis, :])**2, axis=1)
     lig_a_ix = ligheavyix[numpy.argmin(d2s)]
     print("ligand first atom:", lig_a_ix, topology.atom(lig_a_ix))
 
-    # second atom: farthest from the first
+    # second atom (b): farthest from the first
     lig_a = refstructure.xyz[0, lig_a_ix, :]
     d2s = numpy.sum((refstructure.xyz[0, ligheavyix, :] - center[numpy.newaxis, :])**2, axis=1)
-    lig_c_ix = ligheavyix[numpy.argmax(d2s)]
-    assert lig_a_ix != lig_c_ix
-    print("ligand second atom:", lig_c_ix, topology.atom(lig_c_ix))
+    lig_b_ix = ligheavyix[numpy.argmax(d2s)]
+    assert lig_a_ix != lig_b_ix
+    print("ligand second atom:", lig_b_ix, topology.atom(lig_b_ix))
 
-    # TODO FIXME(shun): this condition is irrational, needs a fix
-    # third atom: a-b-c angle > 90 deg, farthest from the first
-    angle_indices = [[lig_a_ix, ix, lig_c_ix] for ix in ligheavyix]
-    angle_indices2 = [[ix, lig_a_ix, lig_c_ix] for ix in ligheavyix]
-    angle_indices3 = [[ix, lig_c_ix, lig_a_ix] for ix in ligheavyix]
+    # third atom (c): 45 < b-a-c < 135, farthest from the first
+    # this ensures correct harmonic approximation in the analytical correction
+    angle_indices = [[lig_b_ix, lig_a_ix, ix] for ix in ligheavyix]
     assert numpy.shape(numpy.array(angle_indices))[1] == 3
 
     def calc_angle(indices):
@@ -49,16 +47,14 @@ def find_restraints(args):
             angles[numpy.isnan(angles)] = 0.0
         return angles
     angles = calc_angle(angle_indices)
-    angles2 = calc_angle(angle_indices2)
-    angles3 = calc_angle(angle_indices3)
-    rangle = (90.0 * math.pi / 180.0) 
-    #mask = (angles < rangle) & (angles2 < rangle) & (angles3 < rangle)
-    mask = (angles2 < rangle) & (angles3 < rangle)
-    d2s[mask] = 0.0
-    lig_b_ix = ligheavyix[numpy.argmax(d2s)]
-    assert lig_a_ix != lig_b_ix
-    assert lig_c_ix != lig_b_ix
-    print("ligand third atom:", lig_b_ix, topology.atom(lig_b_ix))
+    angmin = (45.0 * math.pi / 180.0) 
+    angmax = (135.0 * math.pi / 180.0) 
+    mask = (angmin < angles) & (angles < angmax)
+    d2s[numpy.logical_not(mask)] = 0.0
+    lig_c_ix = ligheavyix[numpy.argmax(d2s)]
+    assert lig_a_ix != lig_c_ix
+    assert lig_b_ix != lig_c_ix
+    print("ligand third atom:", lig_c_ix, topology.atom(lig_c_ix))
 
 
     # pass 1: find neighboring protein atoms
