@@ -14,23 +14,12 @@ def lambda_schedule(mode, n):
     if mode == "restrain":
         return numpy.linspace(0., 1., n, endpoint=True)
     if mode == "annihilation-lig":
-        if False:
-            base = numpy.linspace(0., math.pi / 2, n, endpoint=True)
-            # state B: annihilated, dense lambda needed
-            ret = numpy.sin(base)
-            ret[0] = 0.
-            ret[-1] = 1.
-            return ret
-        return numpy.linspace(0., 1., n, endpoint=True)
+        # SSC(2), Lee et al. JCTC 16 5512 (2020).
+        x = numpy.linspace(0., 1., n, endpoint=True)
+        return (6. * x**2 - 15. * x + 10.) * x ** 3
     if mode == "annihilation-complex":
-        if False:
-            base = numpy.linspace(0., math.pi / 2, n, endpoint=True)
-            # state B: annihilated, dense lambda needed
-            ret = numpy.sin(base)
-            ret[0] = 0.
-            ret[-1] = 1.
-            return ret
-        return numpy.linspace(0., 1., n, endpoint=True)
+        x = numpy.linspace(0., 1., n, endpoint=True)
+        return (6. * x**2 - 15. * x + 10.) * x ** 3
     raise RuntimeError("Unsupported mode")
 
 def generate_decoupling(args):
