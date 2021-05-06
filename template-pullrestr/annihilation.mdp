@@ -5,14 +5,15 @@ fep_lambdas = {lambdas_formatted}
 calc_lambda_neighbors = 1
 init_lambda_state = {lambda_state}
 
-couple_moltype = {group_mol}
-couple_lambda0 = vdw-q
-couple_lambda1 = vdw
-couple_intramol = no
-
-sc-coul = no
-sc-alpha = 0 ; linear interpolation for q
-
 nstdhdl = 100
 dhdl_derivatives = no
 
+couple_moltype = {group_mol}
+couple_lambda0 = vdw
+couple_lambda1 = none
+couple_intramol = no
+
+sc-r-power = 6
+sc-power = 1
+sc-sigma = 0.3
+sc-alpha = 0.5

@@ -1,3 +1,4 @@
+; To support totally uncpuled states, integrator must be sd, and tcouple must be no
 integrator = sd
 nsteps = 2000000 ; 4 ns
 
@@ -11,7 +12,7 @@ rcoulomb = 1.0
 rvdw = 1.0
 ; fourierspacing = 0.10
 
-nstxtcout = 10000
+nstxout-compressed = 10000
 nstxout=100000
 nstvout=0
 nstfout=0

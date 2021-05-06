@@ -1,0 +1,2 @@
+vdwtype = PME
+nstenergy = 1000
