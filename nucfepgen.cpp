@@ -1847,6 +1847,34 @@ int main(int argc, char* argv[])
            std::includes(Bs.begin(), Bs.end(),
                          As.begin(), As.end())) &&
          !use_connectivity) {
+        // FIXME TODO: this part really should use A/Bconn without dummy atoms.
+        bool unmatched_are_all_dummy = true;
+        for(int ao: As) {
+          int b = assignBofO[ao];
+          if(b == -1) {
+            // A real B dummy
+            continue;
+          }
+          if(Bs.count(assignOofB[b]) == 0) {
+            // A real and B real, but does not appear in B connectivity
+            unmatched_are_all_dummy = false;
+          }
+        }
+        for(int bo: Bs) {
+          int a = assignAofO[bo];
+          if(a == -1) {
+            // A dummy B real
+            continue;
+          }
+          if(As.count(assignOofA[a]) == 0) {
+            // A real and B real, but does not appear in A connectivity
+            unmatched_are_all_dummy = false;
+          }
+        }
+        if(unmatched_are_all_dummy) {
+          // OK, ignore this
+          continue;
+        }
         errcnt++;
         int Ai = assignAofO[i];
         int Bi = assignBofO[i];
