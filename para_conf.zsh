@@ -1,28 +1,24 @@
 # GROMACS parallelization settings. 
-# For all cases, *_PARA is the number of MPI procs to be run for each replica (or the entire run for pre-run).
-# Thus, number of total MPI processes is e.g. NCPLX_RESTR * NCPLX_RESTR_PARA for the restraint replica run.
-# If you are using GPU, it is recommended to set all *_PARA = 1.
-# Recommended number of _PARA is a divisor of the number of cores / CPU.
-# Number of replicas (values without _PARA) should be kept to recommended value (except when ligand is large, where you may need 20 replicas)
+# N* parameters are the number of replicas in Hamiltonian replica exchange.
+# *_PARA parameters are the number of MPI processes for each replica.
+# Thus, number of total MPI processes is e.g. NRESTR * COMPLEX_PARA for the restraint replica run.
 
-# Pre-run nproc
-NPRERUN_PARA=36
 
-# Prot-lig restraint. Recommended: 4
-NCPLX_RESTR=4
-NCPLX_RESTR_PARA=6
+# Prot-lig restraint relaxation. Recommended: 4
+NRESTR=4
 
-# Charge-discharge. Recommended: 12
+# Charge-discharge. Recommended: 12. For large molecules & strongly charged molecules we recommend greater values.
 NCHARGE=12
-NCHARGE_PARA=6
 
-# ligand-protein annihilation. Recommended: 12
-NANN_PRO=12
-NANN_PRO_PARA=6
+# Annihilation. Recommended:12. For large molecules we recommend greater values, e.g. for ligand with 60 heavy atoms NANNIH=20 will be a good starting point.
+NANNIH=12
 
-# ligand annihilation. Recommended:12, PARA is recommended to be <=2 (due to small size)
-NANN=12
-NANN_PARA=2
+# Number of MPI processes used when calculating ligands (LIG_PARA) and complexes (COMPLEX_PARA).
+# Recommended number of _PARA is a divisor of the number of cores / CPU.
+# LIG_PARA needs to be a small number (due to its small system size).
+# If you use GPU, we recommend 1 for both variables.
+LIG_PARA=2
+COMPLEX_PARA=12
 
 # first RUN_PROD ps will be ignored as equilibration
 RUN_PROD=2000
@@ -45,9 +41,16 @@ RECEPTOR_MDTRAJ="protein"
 # Reference structure used is the final snapshot of the equilibration
 EQ_RMSD_CUTOFF=0.4
 
-# Set this value to max (ligand diameter) if calculation fails due to bond length exceeding domain size
+# Set this value to max (ligand diameter) if calculation fails due to the bond length exceeding the domain size
 # (unit: nm)
 MAX_BONDED_INTERACTION_DIST=0
+
+#*************************
+# Parameter optimization
+#*************************
+# Annihilation lambda parameters are optimized during pre-run phase, ANNIH_LAMBDA_OPT_LENGTH ps and ANNIH_LAMBDA_OPT times
+ANNIH_LAMBDA_OPT=5
+ANNIH_LAMBDA_OPT_LENGTH=50
 
 #*************************
 # Solvation and ionization
@@ -57,7 +60,6 @@ WATER_STRUCTURE=spc216
 
 # water thickness used in ligand system
 WATER_THICKNESS=1.0
-WATER_THICKNESS_CHARGING=$WATER_THICKNESS
 
 # ionic strength in M
 IONIC_STRENGTH=0.150

@@ -1,6 +1,7 @@
 import argparse
 import math
 import warnings
+import common_gmx_files
 
 def find_restraints(args):
     # importing at this timing is discouraged in python, but it's too heavy to just show --help
@@ -13,13 +14,16 @@ def find_restraints(args):
     topology = refstructure.topology
     iterbegin_trajectory = lambda: mdtraj.iterload(args.trajectory, top=topology)
 
-    protix = topology.select(args.prot_sel)
-    ligix = topology.select(args.lig_sel)
-    ligheavyix = topology.select("(%s) and not type H" % args.lig_sel)
+    indices = common_gmx_files.parse_index(args.index)
+    protix = indices[args.prot_sel]
+    ligix = indices[args.lig_sel]
+    ligheavyix = list(set(topology.select("not type H")) & set(ligix))
     # before scanning the trajectory, check whether --anchor-atoms are sane
     anchor_names = args.anchor_atoms.split(',')
     [anc1, anc2, anc3] = anchor_names
-    _anchors = topology.select("(%s) and (name %s %s %s)" % (args.prot_sel, anc1, anc2, anc3))
+    _anchors = topology.select("name %s %s %s" % (anc1, anc2, anc3))
+    if len(_anchors) == 0:
+        raise RuntimeError("No match for anchor atoms in system")
 
     # pass 0: determine ligand representative atoms
     # first atom (a): center of the ligand. Assumes that refstructure makes ligand whole.
@@ -77,7 +81,7 @@ def find_restraints(args):
     anchors = []
     # I do believe this is an extreme case, but just in case...
     for r in residues:
-        anchors_cur = [topology.select("(%s) and resid %d and name %s" % (args.prot_sel, r, n)) for n in anchor_names]
+        anchors_cur = [list(set(topology.select("resid %d and name %s" % (r, n))) & set(protix)) for n in anchor_names]
         fail = False
         for al in anchors_cur:
             if len(al) != 1:
@@ -143,13 +147,6 @@ def find_restraints(args):
     periodic_diheds(diheds_b)
     periodic_diheds(diheds_c)
 
-    print(dists.shape)
-    print(angles_a.shape)
-    print(angles_b.shape)
-    print(diheds_a.shape)
-    print(diheds_b.shape)
-    print(diheds_c.shape)
-
     total_weights = (
             args.distance_weight * numpy.var(dists, axis=0) +
             args.angle_weight * (numpy.var(angles_a, axis=0) + numpy.var(angles_b, axis=0)) + 
@@ -192,8 +189,9 @@ def find_restraints(args):
 def init_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--prot-sel", type=str, default="protein", help="Selection text for protein")
-    parser.add_argument("--lig-sel", type=str, default="not (protein or water or resname NA CL K)", help="Selection text for ligand")
+    parser.add_argument("--prot-sel", type=str, default="Receptor", help="Index name for receptor selection")
+    parser.add_argument("--lig-sel", type=str, default="Ligand", help="Index name for ligand selection")
+    parser.add_argument("--index", type=str, default="index.ndx", help="Index file name")
     parser.add_argument("--search-dist", type=float, default=5.0, help="Distance as an upper limit to search contacting atoms. [angstrom]")
     parser.add_argument("--anchor-atoms", type=str, default="CA,C,N", help="Anchor atom names. Atoms are chosen to be in the same residue.")
     parser.add_argument("--topology", type=str, help="Topology file, possibly .pdb or .gro file.", required=True)

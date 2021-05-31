@@ -17,10 +17,10 @@ nstdhdl = 100
 dhdl_derivatives = no
 
 ; output x coordinates to calculate the long-range correction
-; keep the following tag for scripts
-;LRCONLY BEGIN
+; keep the following tags for scripts
+;LRCONLY_BEGIN
 nstxout_compressed = 1000
 compressed_x_precision = 10000
 nstenergy = 1000
-;LRCONLY END
+;LRCONLY_END
 

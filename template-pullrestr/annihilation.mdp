@@ -16,4 +16,13 @@ couple_intramol = no
 sc-r-power = 6
 sc-power = 1
 sc-sigma = 0.3
-sc-alpha = 0.5
+sc-alpha = 0.2
+
+; output x coordinates to calculate the long-range correction
+; keep the following tags for scripts
+;LRCONLY_BEGIN
+nstxout_compressed = 1000
+compressed_x_precision = 10000
+nstenergy = 1000
+;LRCONLY_END
+

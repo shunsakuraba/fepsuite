@@ -1,7 +1,7 @@
 integrator = cg
 nsteps = 1000
 
-define = -DPOSRES
+define = -DPOSRES -DFLEXIBLE
 
 continuation = yes
 cutoff-scheme = Verlet

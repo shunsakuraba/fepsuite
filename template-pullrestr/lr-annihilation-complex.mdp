@@ -1,0 +1,22 @@
+vdwtype = PME
+nstenergy = 1000
+; free energy for charging/discharing
+free_energy = yes
+
+fep_lambdas = 1
+;calc_lambda_neighbors = 1
+init_lambda_state = 0
+
+nstdhdl = 100
+dhdl_derivatives = no
+
+couple_moltype = {group_mol}
+couple_lambda0 = vdw
+couple_lambda1 = none
+couple_intramol = no
+
+sc-r-power = 6
+sc-power = 1
+sc-sigma = 0.3
+sc-alpha = 0.5
+

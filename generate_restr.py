@@ -148,9 +148,9 @@ def init_args():
     parser.add_argument("--itp", type=str, default=None, help="Output restraint file")
     parser.add_argument("--mdp", type=str, default=None, help="Output pull-code file")
     parser.add_argument("--ndx", type=str, default=None, help="Output index file")
-    parser.add_argument("--distance-spring", type=float, default=418.68, help="Spring constant to apply (kJ/mol/nm^2)")
-    parser.add_argument("--angle-spring", type=float, default=4.1868, help="Weight to the angle stdev (kJ/mol/rad^2)")
-    parser.add_argument("--dihedral-spring", type=float, default=4.1868, help="Weight to the dihedral stdev (kJ/mol/rad^2)")
+    parser.add_argument("--distance-spring", type=float, default=4184, help="Spring constant to apply (kJ/mol/nm^2)")
+    parser.add_argument("--angle-spring", type=float, default=41.84, help="Weight to the angle stdev (kJ/mol/rad^2)")
+    parser.add_argument("--dihedral-spring", type=float, default=41.84, help="Weight to the dihedral stdev (kJ/mol/rad^2)")
     parser.add_argument("--decouple-B", action="store_true",help="Set decoupling mode")
 
     return parser.parse_args()

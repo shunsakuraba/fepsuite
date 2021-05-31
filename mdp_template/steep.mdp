@@ -1,7 +1,7 @@
 integrator = steep
 nsteps = 1000
 
-define = -DPOSRES
+define = -DPOSRES -DFLEXIBLE
 
 cutoff-scheme = Verlet
 pbc = xyz
