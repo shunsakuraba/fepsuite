@@ -212,7 +212,7 @@ do_product_runs() {
             cat ./mdp/run.mdp $ID/mdp_addenda/${phase}-$i.mdp | $postprocess  > $MDP
             if (( iprerun < nprerun )); then
                 sync $MDP
-                dt=$(grep "^\\s*dt\s*=" $MDP | cut -d '=' -f2 | cut -d ';' -f1)
+                dt=$(grep "^\\s*dt\\s*=" $MDP | cut -d '=' -f2 | cut -d ';' -f1)
                 declare -i nsteps # fix to integer
                 (( nsteps = ANNIH_LAMBDA_OPT_LENGTH / dt ))
                 sed -i "/nsteps/c nsteps = $nsteps" $MDP # in the future thie may be sent to postprocess
