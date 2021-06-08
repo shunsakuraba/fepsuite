@@ -338,6 +338,9 @@ main() {
         set -x
     fi
     case $reqstate,$stateno in
+        query,all)
+            echo {1..12}
+            ;;
         query,1)
             echo "DEPENDS=(); (( PROCS = COMPLEX_PARA ))"
             ;;
