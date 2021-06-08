@@ -1,0 +1,39 @@
+integrator = md
+; 4 ns run
+nsteps = 2000000
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+fourierspacing = 0.12
+
+nstxtcout = 10000
+
+dispcorr = EnerPres
+
+tcoupl = V-rescale
+ref_t = 300
+tau_t = 1
+tc_grps = System
+
+pcoupl = Parrinello-Rahman
+ref_p = 1.013
+tau_p = 20.00
+nstpcouple = 40
+compressibility = 4.5e-5
+
+constraints = h-bonds
+constraint-algorithm = LINCS
+
+free-energy = yes
+fep-lambdas = %LAMBDAS%
+init-lambda-state = %LAMBDASTATE%
+calc-lambda-neighbors = 1
+nstdhdl = 0
+dhdl-derivatives = no
+

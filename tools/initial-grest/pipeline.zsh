@@ -82,21 +82,24 @@ main() {
             # min for state A
             $SINGLERUN $GMX grompp -f mdp/steep.mdp -c $ID/conf_ionized -p $ID/topol_ionized.top -r $ID/conf_ionized -o $ID/steep -po $ID/steep.mdout -maxwarn 1 # 1 for switching
             mdrun_find_possible_np 1 -deffnm $ID/steep -c $ID/steep.pdb
-            $SINGLERUN $GMX grompp -f mdp/cg.mdp -c $ID/steep.pdb -p $ID/topol_ionized.top -r $ID/conf_ionized.pdb -o $ID/min -po $ID/min.mdout -maxwarn 1
+            $SINGLERUN $GMX grompp -f mdp/cg.mdp -c $ID/steep.pdb -p $ID/topol_ionized.top -r $ID/conf_ionized -o $ID/min -po $ID/min.mdout -maxwarn 1
             mdrun_find_possible_np 1 -deffnm $ID/min -c $ID/min.pdb
             ;;
         query,2)
             echo "DEPENDS=(1); (( PROCS = COMPLEX_PARA ))"
             ;;
         run,2)
-            $SINGLERUN $GMX grompp -f mdp/nvt.mdp -c $ID/min.pdb -p $ID/topol_ionized.top -r $ID/conf_ionized.pdb -o $ID/nvt -po $ID/nvt.mdout -maxwarn 1
+            sed '/dt/c dt=0.0005' mdp/nvt.mdp > $ID/nvt05.mdp
+            $SINGLERUN $GMX grompp -f $ID/nvt05.mdp -c $ID/min.pdb -p $ID/topol_ionized.top -r $ID/conf_ionized -o $ID/nvt05 -po $ID/nvt05.mdout -maxwarn 1
+            mdrun_find_possible_np 1 -deffnm $ID/nvt05 -c $ID/nvt05.pdb
+            $SINGLERUN $GMX grompp -f mdp/nvt.mdp -c $ID/min.pdb -p $ID/topol_ionized.top -r $ID/conf_ionized -o $ID/nvt -po $ID/nvt.mdout -t $ID/nvt05.cpt -maxwarn 1
             mdrun_find_possible_np 1 -deffnm $ID/nvt -c $ID/nvt.pdb
             ;;
         query,3)
             echo "DEPENDS=(2); (( PROCS = COMPLEX_PARA ))"
             ;;
         run,3)
-            $SINGLERUN $GMX grompp -f mdp/npt.mdp -c $ID/nvt.pdb -p $ID/topol_ionized.top -t $ID/nvt.cpt -o $ID/npt -po $ID/npt.mdout -maxwarn 1
+            $SINGLERUN $GMX grompp -f mdp/npt.mdp -c $ID/nvt.pdb -p $ID/topol_ionized.top -t $ID/nvt.cpt -r $ID/conf_ionized -o $ID/npt -po $ID/npt.mdout -maxwarn 1
             mdrun_find_possible_np 1 -deffnm $ID/npt -c $ID/npt.pdb
             ;;
         query,4)
@@ -144,8 +147,14 @@ main() {
             python3 $ABFE_ROOT/make_ndx.py --structure $base_structure --topology $ID/topol_pp_ca.top --ligand $LIG_GMX --receptor $RECEPTOR_MDTRAJ --output $ID/analysis.ndx
             echo "Receptor\nSystem\n" | $SINGLERUN $GMX trjconv -s $ID/rest0/run.tpr -f $ID/rest0/prodrun.xtc -o $ID/rest0/prodrun.pbc.xtc -n $ID/analysis.ndx -center -pbc mol -ur compact
             echo "Receptor\nReceptor\nSystem\n" | $SINGLERUN $GMX trjconv -s $ID/rest0/run.tpr -f $ID/rest0/prodrun.pbc.xtc -o $ID/rest0/prodrun.fit.xtc -n $ID/analysis.ndx -center -fit rot+trans
-            echo "Ligand\nSystem\n" | $SINGLERUN $GMX cluster -s $ID/rest0/run.tpr -f $ID/rest0/prodrun.fit.xtc -b $RUN_PROD -method jarvis-patrick -nofit -g $ID/cluster.log -n $ID/analysis.ndx
+            echo "Ligand\nSystem\n" | $SINGLERUN $GMX cluster -s $ID/rest0/run.tpr -f $ID/rest0/prodrun.fit.xtc -b $RUN_PROD -method jarvis-patrick -nofit -g $ID/cluster.log -n $ID/analysis.ndx -o $ID/rmsd-clust -dist $ID/rmsd-dist
             python3 $ABFE_ROOT/tools/initial-grest/select_cluster.py --base-structure $base_structure --traj $ID/rest0/prodrun.pbc.xtc --cluster-log $ID/cluster.log --threshold $CLUSTER_THRESHOLD --output-prefix $ID/result
+            N=$(head -n 1 $ID/result.txt) || true
+            if (( N > 0 )); then
+                for i in {0..$((N-1))}; do
+                    echo "Receptor\nLigand\n" | $SINGLERUN $GMX rms -s $ID/steep.tpr -f $ID/result$i.pdb -o $ID/rms$i.xvg -n $ID/analysis.ndx
+                done
+            fi
             ;;
         *)
             echo "Unexpected stage outputs"

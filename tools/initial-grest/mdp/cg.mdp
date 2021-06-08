@@ -1,0 +1,18 @@
+integrator = cg
+nsteps = 1000
+
+; prevent SHAKE problem
+define = -DFLEXIBLE -DPOSRES
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = Reaction-Field
+
+rcoulomb = 1.2
+rvdw = 1.2
+vdwtype = Switch
+
+rvdw-switch=1.15
+
+emstep = 0.005
+nstcgsteep = 20

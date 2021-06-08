@@ -1,0 +1,24 @@
+integrator = md
+nsteps = 50000
+define = -DPOSRES
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+nstxout = 1000
+
+dispcorr = Ener
+
+tcoupl = V-rescale
+ref_t = 300
+tau_t = 1
+tc_grps = System
+
+constraints = h-bonds
+constraint-algorithm = LINCS

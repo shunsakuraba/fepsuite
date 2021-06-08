@@ -6,7 +6,7 @@ import re
 import argparse
 
 def main(args):
-    topology = mdtraj.load(args.base_structure).topology
+    topology = mdtraj.load(args.base_structure, standard_names=False).topology
 
     nst = []
     middles = []
@@ -22,7 +22,13 @@ def main(args):
                 assert cluster_id + 1 == int(cols[0])
                 cluster_id = int(cols[0])
                 nst.append(int(cols[1].split()[0]))
-                middles.append(float(cols[2].split()[0]))
+                # cluster.log is very weirdly formatted:
+                # "4000" and "1.300" will be formatted like 40001.300
+                if '.' not in cols[2]:
+                    fp = len(cols[2]) + 1
+                else:
+                    fp = cols[2].rindex('.')
+                middles.append(float(cols[2][0:fp - 1].strip()))
   
     totalframe = sum(nst)
     selected = [(nst[i], middles[i]) for i in range(len(nst)) if nst[i] >= args.threshold * totalframe]
@@ -36,7 +42,8 @@ def main(args):
         for (ifr, t) in enumerate(chunk.time):
             for (isel, (_ns, s)) in enumerate(selected):
                 if abs(s - t) < 1e-3:
-                    chunk[ifr].save_pdb("%s%d.pdb" % (args.output_prefix, isel))
+                    frame = chunk[ifr]
+                    frame.save_pdb("%s%d.pdb" % (args.output_prefix, isel))
 
 def init_args():
     parser = argparse.ArgumentParser(description="Pick major cluster and write corresponding structure files",
