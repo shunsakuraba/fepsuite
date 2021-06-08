@@ -2,7 +2,7 @@ integrator = sd
 nsteps = 5000
 define = -DPOSRES
 
-dt = 0.002
+dt = 0.001
 
 cutoff-scheme = Verlet
 pbc = xyz
