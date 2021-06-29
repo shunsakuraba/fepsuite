@@ -2,6 +2,7 @@
 #$ -cwd
 
 export ABFE_ROOT=_ABFE_PATH_
+export PIPELINE=$ABFE_ROOT/pipeline.zsh
 source para_conf.zsh
 
 if [[ -z $JOB_NAME ]]; then
@@ -17,16 +18,16 @@ if [[ -z $JOB_NAME ]]; then
     exit 1
   fi
   for i in $jobs; do
-    PROCS=1    # Default procs
-    TPP=1      # Threads / proc
-    CPP=1      # Cores / proc
-    CPN=4      # Cores / node. Real procs are 28 but we want one GPU per run
-    SYSTEMCPN=4
-    T=24       # 8 hr run. Modify this part depending on your system size
+    PROCS=1     # Default procs
+    TPP=1       # Threads / proc
+    CPP=1       # Cores / proc
+    CPN=4       # Cores / node. Real procs are 28 but we want one GPU per run
+    SYSTEMCPN=4 # Cores / node (hardware)
+    T=24        # 24 hr run. Modify this part depending on your system size
     DEPENDS=()
     EXTRA=()
     waitcmd=()
-    eval $($ABFE_ROOT/pipeline.zsh query $i)
+    eval $($PIPELINE query $i)
     # edit this qstat analysis part to adapt to other job systems
     qs=$(qstat)
     deps=""
@@ -68,6 +69,16 @@ if [[ -z $JOB_NAME ]]; then
   exit $?
 fi
 
+# This hack is required because of Gridge Engine's fxxking restriction that errcode must be 100
+if [[ -z $OUTSIDE_ERROR_TRAP ]]; then
+    OUTSIDE_ERROR_TRAP=yes zsh $0
+    if (( $? != 0 )); then
+        exit 100
+    fi
+    exit 0
+fi
+
+
 STEPNO=${NAME:e}
 echo "STEP=$STEPNO"
 
@@ -96,7 +107,5 @@ GMX_MPI=$(which gmx_mpi)
 
 # actual runs
 
-# for grid engine errcode of 100 has a special meaning. set +e is required because of set -ex inside the pipeline
-trap '{ echo "Aborting job"; set +e; exit 100 }' ZERR
-source $ABFE_ROOT/pipeline.zsh run $STEPNO
-
+setopt ERR_EXIT
+source $PIPELINE run $STEPNO

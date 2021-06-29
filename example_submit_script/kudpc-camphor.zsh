@@ -5,6 +5,7 @@
 #QSUB -ry
 
 export ABFE_ROOT=_ABFE_PATH_
+export PIPELINE=$ABFE_ROOT/pipeline.zsh
 source para_conf.zsh
 
 if [[ -z $QSUB_PROCS ]]; then
@@ -29,7 +30,7 @@ if [[ -z $QSUB_PROCS ]]; then
     DEPENDS=()
     EXTRA=()
     waitcmd=()
-    eval $($ABFE_ROOT/pipeline.zsh query $i)
+    eval $($PIPELINE query $i)
     # edit this qstat analysis part to adapt to other job systems
     deps=""
     for d in $DEPENDS; do
@@ -91,5 +92,5 @@ GMX_MPI=$(which gmx_mpi)
 
 # actual runs
 
-source $ABFE_ROOT/pipeline.zsh run $STEPNO
+source $PIPELINE run $STEPNO
 
