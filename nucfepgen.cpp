@@ -666,7 +666,8 @@ void generate_topology(const string& outfilename,
                        const vector<string> &rest_exclude_atomtypes,
                        bool gen_exclusion,
                        bool wang_approximation,
-                       bool disable_pairs_error)
+                       bool disable_pairs_error,
+                       const string& restraints_atomname)
 {
   int N = assignAofO.size();
 
@@ -1579,6 +1580,40 @@ void generate_topology(const string& outfilename,
     Ofs << endl;
   }
 
+  if(!restraints_atomname.empty()) {
+    Ofs << "#ifdef RESTR" << endl;
+    Ofs << "[ position_restraints ]" << endl;
+    set<string> restcond;
+    size_t pos = 0;
+    size_t pend;
+    while(true) {
+      string token;
+      pend = restraints_atomname.find(',', pos);
+      // here pend might be either position or npos
+      if(pend == std::string::npos) {
+        token = std::string(restraints_atomname, pos);
+      }else{
+        token = std::string(restraints_atomname, pos, pend - pos);
+      }
+      restcond.insert(token);
+      if(pend == std::string::npos) {
+        break;
+      }else{
+        pos = pend + 1;
+      }
+    }
+    for(int i = 0; i < N; i++) {
+      if((assignAofO[i] != -1 && restcond.count(Atop.names[assignAofO[i]]) > 0) ||
+         (assignBofO[i] != -1 && restcond.count(Btop.names[assignBofO[i]]) > 0)) {
+        int functype = 1;
+        double forceconst = 1000.;
+        Ofs << (i + 1) << " " << functype << " ";
+        Ofs << forceconst << " " << forceconst << " " << forceconst << endl;
+      }
+    }
+    Ofs << "#endif" << endl;
+  }
+
   // Generate footer, way to go!
   Ofs << "[ system ]" << endl;
   Ofs << "Merged structure from " 
@@ -1665,6 +1700,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
   p.add<string>("assign-dictionary", 0, "Specify assignment matching pair", false, "assign-dictionary.txt");
+  p.add<string>("generate-restraint", 0, "Comma-separated list. If non-empty, restraints are be generated for this atom name, with 1000 kJ/mol/nm^2", false, "");
   p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
@@ -1958,7 +1994,8 @@ int main(int argc, char* argv[])
                     rest_excluded_atoms,
                     p.exist("gen-exclusion"),
                     p.exist("wang-approximation"),
-                    p.exist("disable-pairs-error"));
+                    p.exist("disable-pairs-error"),
+                    p.get<string>("generate-restraint"));
 
   // Generate PDB
   enum { OPDB_MERGED, OPDB_A, OPDB_B, OPDB_END };
