@@ -2,7 +2,7 @@
 import mdtraj
 import sys
 
-[_, dummy, topname, writeto] = sys.argv
+[_, confname, topname, writeto] = sys.argv
 
 modified = []
 with open(topname) as fh:
@@ -30,8 +30,8 @@ with open(topname) as fh:
                 modified.append(atomno)
 
 #print(modified)
-gro = mdtraj.load("conf_ionized.gro")
-protein = gro.topology.select("not (resname HOH or resname NA or resname CL)")
+gro = mdtraj.load(confname)
+protein = gro.topology.select("not (resname HOH NA CL Na Cl K)")
 # neighbors are defined as within 4 aa
 neighbors = mdtraj.compute_neighbors(gro, 0.4, query_indices=modified, haystack_indices=protein)
 neighbors = neighbors[0]

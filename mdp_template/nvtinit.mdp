@@ -1,0 +1,24 @@
+integrator = md
+nsteps = 50000
+define = -DPOSRES
+
+dt = 0.001
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+nstxout = 1000
+
+dispcorr = Ener
+
+tcoupl = V-rescale
+ref_t = 300
+tau_t = 5 ; heat up slowly
+tc_grps = System
+gen_vel = yes
+gen_temp = 1.0 ; heat up from 1K
+
