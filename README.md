@@ -50,3 +50,6 @@ export PIPELINE=$FEPREST_ROOT/pipeline.zsh
 11. If everything works fine, output should be generated at `feprestrun/A123V/bar1.log`.
 
 
+
+# Notes
+`rest2py/` should be moved to submodule once the source code become open.
