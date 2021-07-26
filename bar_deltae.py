@@ -138,10 +138,10 @@ def main():
         assert (1, 0) in energies2x2[isim_base]
         assert (1, 1) in energies2x2[isim_base]
         #print("DEBUG:", len(time_all[isim_base]))
-        print(len(energies2x2[isim_base][(0,0)]))
-        print(len(energies2x2[isim_base][(0,1)]))
-        print(len(energies2x2[isim_base][(1,0)]))
-        print(len(energies2x2[isim_base][(1,1)]))
+        #print(len(energies2x2[isim_base][(0,0)]))
+        #print(len(energies2x2[isim_base][(0,1)]))
+        #print(len(energies2x2[isim_base][(1,0)]))
+        #print(len(energies2x2[isim_base][(1,1)]))
 
     # reconstruct matrix elements
     for isim_base in range(opts.nsim - 1):
