@@ -362,7 +362,7 @@ main() {
             do_run topol_ionized prep.npt prerun run "" "" "" cont prep 0
             ;;
         query,3)
-            echo "DEPENDS=(2);PROCS=1"
+            echo "DEPENDS=(2);PROCS=1;NOGPU_STAGE=yes"
             ;;
         run,3)
             # Compute RMSD of ligands for thresholding
@@ -467,7 +467,7 @@ main() {
             do_eval_run topol_ionized lr-annihilation-complex annihilation-complex.$((NANNIH - 1))/annihilation-complex lr-annihilation-complex complex $((NANNIH - 1))
             ;;
         query,12)
-            echo "DEPENDS=(3 4 5 6 7 8 9 10 11)"
+            echo "DEPENDS=(3 4 5 6 7 8 9 10 11); NOGPU_STAGE=yes"
             ;;
         run,12)
             TEMP=$(grep ref_t mdp/run.mdp | cut -d '=' -f2)

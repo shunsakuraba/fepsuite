@@ -39,14 +39,13 @@ if [[ -z $JOB_NAME ]]; then
     fi
     (( NODES = (PROCS + (CPN/CPP) - 1) / (CPN/CPP) ))
     (( REQPROCS = NODES * (SYSTEMCPN / CPP) ))
+    # Job queue request setting. Modify here if you want to change.
     case $PROCS in
         1)
             RESOURCE=q_node
-            case $i in
-                3|11)
-                    RESOURCE=s_core
-                    ;;
-            esac
+            if [[ $NOGPU_STAGE = yes ]]; then
+                RESOURCE=s_core
+            fi
             ;;
         2)
             RESOURCE=h_node
