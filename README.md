@@ -48,6 +48,3 @@ export GMX_DIR=$HOME/opt/gromacs-2020-sphrex
 10. Wait until all calculations finish.
 11. If everything works fine, output should be generated at `feprestrun/A123V/bar1.log`. The final line of each log file represents the free-energy change. Typically you need to subtract the reference state from the calculation (such like `A123V/bar.log` - `A123V_ref/bar.log`)
 
-
-# Notes
-`rest2py/` should be moved to submodule once the source code become open.
