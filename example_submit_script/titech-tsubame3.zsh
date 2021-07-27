@@ -1,10 +1,10 @@
 #!/bin/zsh
 #$ -cwd
 
-export ABFE_ROOT=_ABFE_PATH_
-export PIPELINE=$ABFE_ROOT/pipeline.zsh
-source para_conf.zsh
+export FEPREST_ROOT=_FEPREST_PATH_
+export PIPELINE=$FEPREST_ROOT/pipeline.zsh
 export GMX_DIR=_PATH_TO_GMX_
+source para_conf.zsh
 
 if [[ -z $JOB_NAME ]]; then
   # submit itself
@@ -25,6 +25,7 @@ if [[ -z $JOB_NAME ]]; then
     CPN=4       # Cores / node. Real procs are 28 but we want one GPU per run
     SYSTEMCPN=4 # Cores / node (hardware)
     T=24        # 24 hr run. Modify this part depending on your system size
+    NOGPU_STAGE=
     DEPENDS=()
     EXTRA=()
     waitcmd=()
@@ -87,7 +88,6 @@ source /etc/profile.d/modules.sh
 
 # Modify this part based on modules you used during the compilation
 module load cuda/9.2.148 intel-mpi/19.0.117
-source $GMX_DIR/bin/GMXRC.zsh
 
 mpirun_() {
     np=$1
@@ -100,6 +100,7 @@ mpirun_() {
 SINGLERUN=()
 # ---- Site-specific settings ends here
 
+source $GMX_DIR/bin/GMXRC.zsh
 PYTHON3=python3
 
 GMX=$(which gmx_mpi)

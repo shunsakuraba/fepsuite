@@ -1,4 +1,4 @@
-###FEP-REST-PP: free-energy perturbation pipeline for protein mutational analysis
+## FEP-REST-PP: free-energy perturbation pipeline for protein mutational analysis
 
 # Preparation 1: environment
 
@@ -25,7 +25,7 @@ To run this script you need to compile enhanced version of GROMACS.
 % cd gromacs-2020.x
 % patch -p1 < gromacs-2020-hrex.patch
 % mkdir build; cd build
-% cmake -DCMAKE_INSTALL_PREFIX=$HOME/opt/gromacs-2020-hyrex -DGMX_MPI=on ..
+% cmake -DCMAKE_INSTALL_PREFIX=$HOME/opt/gromacs-2020-sphrex -DGMX_MPI=on ..
 ```
 
 # Calculating the free energy
@@ -34,21 +34,19 @@ Then, follow the next order to run the FEP-REST-PP.
 1. Prepare topology with `nucfepgen`.
 2. Set topology file name as `topol_ionized.top` and coorinate file as `conf_ionized.pdb` or `conf_ionized.gro`. (You can use symlink for that).
 3. Prepare a directory with two depths, e.g. `feprestrun/A123V`. Put topology and structure files under `feprestrun/A123V`. Similarly put reference state files under `feprestrun/A123V_ref`.
-4. Clone this git repository to somewhere, e.g. `$HOME/repos/feprest`. Also clone git repository of `fep-abfe` [ https://github.com/shunsakuraba/fep-abfe ] to somewhere, e.g. `$HOME/repos/fep-abfe`.
-5. Copy `para_conf.zsh` from feprest repository to `feprestrun`. Find an appropriate submission script under `$HOME/repos/fep-abfe/example_submit_script` to `feprestrun/`. Copy whole `mdp_template` directory to `feprestrun/`, and rename the directory name to `mdp`. If necessary, modify mdp files according to your calculation conditions.
-6. Modify submission script's `ABFE_ROOT=` part as follows:
+4. Clone this git repository to somewhere, e.g. `$HOME/repos/feprest`.
+5. Copy `para_conf.zsh` from feprest repository to `feprestrun`. Find an appropriate submission script under `$HOME/repos/feprest/example_submit_script` to `feprestrun/`. Copy whole `mdp_template` directory to `feprestrun/`, and rename the directory name to `mdp`. If necessary, modify mdp files according to your calculation conditions.
+6. Modify submission script's `FEPREST_ROOT=` part as follows:
 ```sh
-#export ABFE_ROOT=_ABFE_PATH_
-#export PIPELINE=$ABFE_ROOT/pipeline.zsh
 export FEPREST_ROOT=$HOME/repos/feprest
 export PIPELINE=$FEPREST_ROOT/pipeline.zsh
+export GMX_DIR=$HOME/opt/gromacs-2020-sphrex
 ```
 7. Modify `para_conf.zsh` according to your calculation environment.
 8. Chdir to `feprest` directory, e.g. `cd $HOME/feprestrun`. 
-9. Run the submission script with secondary directory name (in this case `mol1`) and `all`, e.g. `./titech_tsubame3.zsh A123V all`. The script will submit all necessary jobs.
+9. Run the submission script with secondary directory name (in this case `A123V`) and `all`, e.g. `./titech_tsubame3.zsh A123V all`. The script will submit all necessary jobs.
 10. Wait until all calculations finish.
-11. If everything works fine, output should be generated at `feprestrun/A123V/bar1.log`.
-
+11. If everything works fine, output should be generated at `feprestrun/A123V/bar1.log`. The final line of each log file represents the free-energy change. Typically you need to subtract the reference state from the calculation (such like `A123V_ref/bar.log` - `A123V/bar.log`)
 
 
 # Notes

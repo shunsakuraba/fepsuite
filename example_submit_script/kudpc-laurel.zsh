@@ -4,8 +4,9 @@
 #QSUB -W 96:00
 #QSUB -ry
 
-export ABFE_ROOT=_ABFE_PATH_
-export PIPELINE=$ABFE_ROOT/pipeline.zsh
+export FEPREST_ROOT=_FEPREST_PATH_
+export PIPELINE=$FEPREST_ROOT/pipeline.zsh
+export GMX_DIR=_GMX_DIR_
 source para_conf.zsh
 
 if [[ -z $QSUB_PROCS ]]; then
@@ -70,6 +71,10 @@ module () {
         eval `/opt/modules/default/bin/modulecmd zsh $*`
 }
 
+# prepare module command your used during compilation here
+# module load ....
+
+
 mpirun_() {
     np=$1
     shift
@@ -80,13 +85,13 @@ mpirun_() {
 SINGLERUN=()
 # ---- Site-specific settings ends here
 
-source PATH_TO_GROMACS/bin/GMXRC
+source $GMX_DIR/bin/GMXRC.zsh
 PYTHON3=python3
 
 GMX=$(which gmx_mpi)
 GMX_MPI=$(which gmx_mpi)
 
 # actual runs
-
+setopt ERR_EXIT
 source $PIPELINE run $STEPNO
 
