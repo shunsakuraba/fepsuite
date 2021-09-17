@@ -172,7 +172,7 @@ main() {
             prev=$ID/nptA
             top=$ID/fep_underlined.top
             if [[ $CHARGED = yes ]]; then
-                python3 $FEPREST_ROOT/neutralize.py $ID/fep_underlined.top $ID/nptA.gro $ID/fep_underlined_neut.top $ID/nptA_neut.gro
+                python3 $FEPREST_ROOT/neutralize.py $ID/fep_underlined.top $ID/nptA.gro $ID/fep_underlined_neut.top $ID/nptA_neut.gro $AT_POSITIVE $AT_NEGATIVE
                 prev=$ID/nptA_neut
                 top=$ID/fep_underlined_neut.top
             fi

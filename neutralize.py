@@ -5,7 +5,7 @@ import random
 
 natompersol = 3 # FIXME for TIP4P
 
-[_, topin, groin, topout, groout] = sys.argv
+[_, topin, groin, topout, groout, positive_at, negative_at] = sys.argv
 dtotal = 0.0
 
 with open(topin) as fh, \
@@ -30,15 +30,15 @@ with open(topin) as fh, \
 """)
                 if dtotal < -0.5:
                     # increase charge
-                    ofh.write("""
-     1     OW      1     SOL     OW      1     -0.834    8.00000    NAX     1.000  8.00000
+                    ofh.write(f"""
+     1     OW      1     SOL     OW      1     -0.834    8.00000    {positive_at}      1.000  8.00000
      2     HW      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
      3     HW      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
 """)
                 elif dtotal > 0.5:
                     # decrease charge
-                    ofh.write("""
-     1     OW      1     SOL     OW      1     -0.834    8.00000    CLX    -1.000  8.00000
+                    ofh.write(f"""
+     1     OW      1     SOL     OW      1     -0.834    8.00000    {negative_at}     -1.000  8.00000
      2     HW      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
      3     HW      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
 """)
