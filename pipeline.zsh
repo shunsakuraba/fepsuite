@@ -52,9 +52,13 @@ mdrun_find_possible_np() {
     else
         NP=$PROCS
     fi
+    ntomp=()
+    if [[ -z $OMP_NUM_THREADS ]] || (( OMP_NUM_THREADS == 1 )); then
+        ntomp=(-ntomp 1) # this is required for forcing GROMACS to run
+    fi
     while true; do
         echo "Trying with NP=$NP"
-        mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD
+        mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD $ntomp
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
             domain_error=0
@@ -151,7 +155,8 @@ main() {
             if ! grep -q POSRES $ID/$BASETOP ; then
                 sed -e "s/-DPOSRES/ /" -i $ID/nvtA.mdp
             fi
-            $SINGLERUN $GMX grompp -f $ID/nvtA.mdp -c $ID/minA.gro -p $ID/$BASETOP -o $ID/nvtA -po $ID/nvtA.mdout -maxwarn $((BASEWARN+1)) $REFCMDINIT
+            sed '/^\[ atoms \]/,/^\[ \.\+ \]/s/1.0080\+e+00/8.00000e+00/g' $ID/$BASETOP > $ID/heavy.top
+            $SINGLERUN $GMX grompp -f $ID/nvtA.mdp -c $ID/minA.gro -p $ID/heavy.top -o $ID/nvtA -po $ID/nvtA.mdout -maxwarn $((BASEWARN+1)) $REFCMDINIT
             mdrun_find_possible_np 1 -deffnm $ID/nvtA
             ;;
         query,3)
@@ -160,7 +165,7 @@ main() {
         run,3)
             # NPT run (10 ns)
             cp mdp/nptinit.mdp $ID/nptA.mdp
-            $SINGLERUN $GMX grompp -f $ID/nptA.mdp -c $ID/nvtA.gro -p $ID/$BASETOP -o $ID/nptA -po $ID/nptA.mdout -maxwarn $((BASEWARN+1)) -pp $ID/fep_pp.top $REFCMD
+            $SINGLERUN $GMX grompp -f $ID/nptA.mdp -c $ID/nvtA.gro -p $ID/heavy.top -o $ID/nptA -po $ID/nptA.mdout -maxwarn $((BASEWARN+1)) -pp $ID/fep_pp.top $REFCMD
             mdrun_find_possible_np 1 -deffnm $ID/nptA 
             ;;
         query,4)
@@ -226,7 +231,7 @@ main() {
                     python3 $FEPREST_ROOT/re-tip3p.py $work/fep_$i.top $work/fep_tip3p_$i.top
                     sed -i '/^\[ atoms \]/,/^\[ bonds \]/s/1.0080\+e+00/8.00000e+00/g' $work/fep_tip3p_$i.top
                     { echo "energygrps = hot"; echo "userint1 = 1" } >> $work/nvt${p}_$i.mdp 
-                        $SINGLERUN $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                    $SINGLERUN $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
                 done
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -rdd $DOMAIN_SHRINK # extend to 100 ps
                 for i in {0..$((NREP - 1))}; do
@@ -312,12 +317,12 @@ main() {
                 reps+=$mrundir
                 $SINGLERUN $GMX convert-tpr -s $mrundir/run_ph$((PHASE-1)) -o $mrundir/run_ph$PHASE -extend $SIMLENGTH
             done
-            mdrun_find_possible_np $NREP -deffnm prodrun -s run_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -noappend -rdd $DOMAIN_SHRINK -nb gpu -bonded cpu
+            mdrun_find_possible_np $NREP -deffnm prodrun -s run_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -noappend -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu
 
-            mkdir checkpoint_$stateno || true
+            mkdir $ID/checkpoint_$stateno || true
             for d in $reps; do
-                mkdir -p checkpoint_$stateno/$d || true
-                cp $d/prodrun.cpt checkpoint_$stateno/$d
+                mkdir -p $ID/checkpoint_$stateno/$d || true
+                cp $d/prodrun.cpt $ID/checkpoint_$stateno/$d
             done
             MINPART=2
             (( MAXPART = PHASE + 1 ))
