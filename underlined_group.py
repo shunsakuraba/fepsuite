@@ -30,7 +30,7 @@ with open(topname) as fh, open(ndxname, "w") as ofh:
             ls = l.split()
             aindex = int(ls[0])
             atype = ls[1]
-            if atype.endswith("_"):
+            if atype.endswith("_") or (len(ls) >= 10 and (ls[8] != atype or float(ls[9]) != float(ls[6]))): # ls[8]: B at, ls[6]/[9]: chg
                 scaledatoms.append(aindex - 1)
             natom += 1
         if section == "molecules":
@@ -40,7 +40,7 @@ with open(topname) as fh, open(ndxname, "w") as ofh:
             (natom, scaledatoms) = moltable[molname]
             for i in range(molcount):
                 for c in scaledatoms:
-                    scaled_indices.append(c + i * natom)
+                    scaled_indices.append(c + i * natom + tot_natom)
             tot_natom += natom * molcount
             continue
     print("[ System ]", file=ofh)

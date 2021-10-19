@@ -43,3 +43,8 @@ REFCRD=
 # which results in relatively long interaction between the two. Option -rdd on mdrun is thus required with this number
 DOMAIN_SHRINK=0.6
 
+# Atom types for positive / negative monovalent ions
+# AMBER ff series: Na / Cl, CHARMM: SOD/CLA, OPLS: opls_407 / opls_401
+AT_POSITIVE=Na
+AT_NEGATIVE=Cl
+
