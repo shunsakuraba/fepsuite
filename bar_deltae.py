@@ -7,6 +7,9 @@ import argparse
 import numpy
 import os.path
 import pickle
+import collections
+
+SimEval = collections.namedtuple("SimEval", ["sim", "eval"])
 
 # in kJ/mol/K (to fit GROMACSy output)
 gasconstant = 0.008314472
@@ -30,6 +33,7 @@ def parse_args():
     parser.add_argument('--save-dir', help="save result to this directory", type = str, default = os.getcwd())
     parser.add_argument('--subsample', help="subsample interval", type = int, default = 1)
     parser.add_argument('--split', help="Number of chunks", type = int, default = 10)
+    parser.add_argument('--show-intermediate', help="Show intermediate cumsum", action="store_true")
 
     opts = parser.parse_args()
     return opts
@@ -56,29 +60,37 @@ def parse_deltae(fs, subsample, simindex):
                         continue
                     tprev = tt
                     eval_pot_pair = [(int(ls[i]), float(ls[1 + i])) for i in range(1, len(ls), 2)]
-                    basepot = None
-                    for (evix, evpot) in eval_pot_pair:
-                        if evix == simindex:
-                            basepot = evpot
                     if(samplecount % subsample == 0):
                         for (evix, evpot) in eval_pot_pair:
-                            if evix != simindex:
-                                #data.append((tt, eval_pot_pair))
-                                data.append((tt, evix, basepot, evpot))
+                            data.append((tt, evix, evpot))
                     samplecount += 1
     return data
 
-def bar(emat, time_all, btime, etime):
-    nsim = len(emat)
+def bar(emat, time_all, nsim, btime, etime, show_intermediate):
     dgtot = 0.0
     for isim in range(nsim - 1):
-        mask_isim = numpy.logical_and(time_all[isim] > btime, time_all[isim] <= etime)
-        #print("DEBUG", emat[(isim, isim)].shape)
-        u = numpy.array([[emat[isim][(0, 0)][mask_isim], emat[isim][(0, 1)][mask_isim]],
-                      [emat[isim][(1, 0)][mask_isim], emat[isim][(1, 1)][mask_isim]]], numpy.float64)
-        nk = numpy.array([numpy.sum(mask_isim), numpy.sum(mask_isim)])
+        basestate = SimEval(sim=isim, eval=isim)
+        #print(time_all[basestate])
+        mask_isim = numpy.logical_and(time_all[basestate] > btime, time_all[basestate] <= etime)
+        nmasked = numpy.sum(mask_isim)
+        assert nmasked > 0
+        assert len(emat[basestate]) == len(emat[SimEval(sim=isim, eval=isim + 1)])
+        assert len(emat[basestate]) == len(emat[SimEval(sim=isim + 1, eval=isim + 1)])
+        assert len(emat[basestate]) == len(emat[SimEval(sim=isim + 1, eval=isim + 1)])
+        # uses u_kn representation
+        # K: evaluation states
+        # N: samples (N_K)
+        u = numpy.empty((2, nmasked * 2))
+        # evaluated by isim
+        u[0, 0:nmasked] = emat[basestate][mask_isim]
+        u[0, nmasked:nmasked*2] = emat[SimEval(sim=isim+1, eval=isim)][mask_isim]
+        u[1, 0:nmasked] = emat[SimEval(sim=isim, eval=isim+1)][mask_isim]
+        u[1, nmasked:nmasked*2] = emat[SimEval(sim=isim+1, eval=isim+1)][mask_isim]
 
-        #print(u.shape, nk.shape)
+        nk = numpy.array([nmasked, nmasked])
+
+
+        # print("debug shape:", u.shape, nk.shape)
         mb = pymbar.MBAR(u, nk, verbose=False)
         rettuple = mb.getFreeEnergyDifferences(compute_uncertainty=False, warning_cutoff=1)
         #print("DEBUG", type(rettuple))
@@ -87,81 +99,60 @@ def bar(emat, time_all, btime, etime):
         #print("DEBUG", type(Deltaf))
         #print("DEBUG shape", Deltaf.shape)
         dgtot += Deltaf[0, 1] # F[isim + 1] - F[isim], fixed comment 2021 May 20th
+        if show_intermediate:
+            print("INT", isim, isim+1, Deltaf[0,1], dgtot)
     return dgtot # F[opts.nsim - 1] - F[0]
 
 def main():
     opts = parse_args()
 
-    # Correct representation is indeed [L][K][N]. (note some previous mbar documentation was wrong)
-    # L: observation states
-    # K: evaluation states (in this case, and usually, L == K)
-    # N: samples (N_K)
     betas = []
-    energies2x2 = {} # maps isim_base -> (isim - isimbase, ieval - isimbase) -> array(E)
+    energies = {}
     nsamples = {}
     time_all = {}
+    beta = 1. / (gasconstant * opts.temp)
 
     for isim in range(opts.nsim):
-        beta = 1. / (gasconstant * opts.temp)
         files = []
         for part in range(opts.minpart, opts.maxpart + 1):
             f = opts.xvgs.replace("%sim", str(isim)).replace("%part", "%04d"%part)
             files.append(f)
         data = parse_deltae(files, opts.subsample, isim)
-        for ievalshift in [-1, 1]:
-            ieval = isim + ievalshift
-            selected = list(filter(lambda x: x[1] == ieval, data))
-            if ievalshift == -1:
-                eneix = isim - 1
-                if eneix < 0: 
-                    continue
-            else:
-                eneix = isim
-                assert eneix not in energies2x2
-                energies2x2[eneix] = {}
-            # Note the order of ieval and isim, because this value is opponent's coordinate eval'd by isim
-            energies2x2[eneix][(ieval - eneix, isim - eneix)] = beta * numpy.array([opponent - mye for (_t, _, mye, opponent) in selected])
-            energies2x2[eneix][(isim - eneix, isim - eneix)] = beta * numpy.array([mye for (_t, _, mye, _opponent) in selected])
+        
+        for (t, st, energy) in data:
+            se = SimEval(sim=isim, eval=st)
+            if se not in energies:
+                energies[se] = []
+                time_all[se] = []
+            if len(time_all[se]) > 0 and time_all[se][-1] == t:
+                # dup frame
+                continue
+            energies[se].append(energy)
+            time_all[se].append(t)
 
-            if ievalshift == 1:
-                time_all[isim] = numpy.array([t for (t, _, _, _) in selected])
-        nsamples[isim] = len(time_all[isim])
-        print("Finished loading %s with %d frames" % (", ".join(files), len(data)))
+        nsamples[isim] = len(time_all[SimEval(sim=isim, eval=isim)])
+        print("Finished loading %s with %d points %d frames" % (", ".join(files), len(data), len(time_all[se]))) # time_all[se] shall exist
         sys.stdout.flush()
-    # At this point energies2x2 contains all information to calculate dE
 
-    # sanity checks
-    for isim_base in range(opts.nsim - 1):
-        assert isim_base in energies2x2
-        assert (0, 0) in energies2x2[isim_base]
-        assert (0, 1) in energies2x2[isim_base]
-        assert (1, 0) in energies2x2[isim_base]
-        assert (1, 1) in energies2x2[isim_base]
-        #print("DEBUG:", len(time_all[isim_base]))
-        #print(len(energies2x2[isim_base][(0,0)]))
-        #print(len(energies2x2[isim_base][(0,1)]))
-        #print(len(energies2x2[isim_base][(1,0)]))
-        #print(len(energies2x2[isim_base][(1,1)]))
+    # is this legit?
+    #for k in energies:
+    for k in list(energies.keys()):
+        energies[k] = numpy.array(energies[k]) * beta
+        time_all[k] = numpy.array(time_all[k])
 
-    # reconstruct matrix elements
-    for isim_base in range(opts.nsim - 1):
-        # Delta-E added to base evaluation
-        energies2x2[isim_base][0, 1] += energies2x2[isim_base][0, 0]
-        energies2x2[isim_base][1, 0] += energies2x2[isim_base][1, 1]
-    
     # Do simple bar with 2x2 matrix
     print("Performing sectioned BAR")
 
     results = []
     for i in range(opts.split):
-        tmin = time_all[0][0]
-        tmax = time_all[0][-1]
+        tmin = time_all[SimEval(0,0)][0]
+        tmax = time_all[SimEval(0,0)][-1]
         twidth = (tmax - tmin) / opts.split
         tspan = (i + 1) * twidth
         t0 = tmin + 0.5 * tspan
         t1 = tmin + tspan
-        barres = bar(energies2x2, time_all, t0, t1) 
-        print("BAR %f-%f:" % (t0, t1), barres * gasconstant* opts.temp)
+        barres = bar(energies, time_all, opts.nsim, t0, t1, opts.show_intermediate) 
+        print("BAR %f-%f:" % (t0, t1), barres * gasconstant * opts.temp)
         results.append((t0, t1, barres))
 
     pickle.dump(results, open("%s/results.pickle" % opts.save_dir, "wb"))
