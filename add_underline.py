@@ -49,12 +49,10 @@ with open(writeto, "w") as ofh:
             comment = ""
             if l.startswith("["):
                 section = l.split()[1]
-                print(l.rstrip(), file=ofh)
-                continue
             elif ';' in l:
                 (l, comment) = l.split(';', 1)
                 comment = "; " + comment
-            if l.strip() == "":
+            elif l.strip() == "":
                 pass
             elif section == "moleculetype":
                 molname = l.split()[0]

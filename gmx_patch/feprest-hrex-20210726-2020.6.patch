@@ -165,62 +165,10 @@ index 1346c6218e..59c3b9b59d 100644
  
  #endif /* GMX_GPU_UTILS_CUDA_KERNEL_UTILS_CUH */
 diff --git a/src/gromacs/listed_forces/bonded.cpp b/src/gromacs/listed_forces/bonded.cpp
-index 129ab880d3..da4518160b 100644
+index 129ab880d3..6499702f7d 100644
 --- a/src/gromacs/listed_forces/bonded.cpp
 +++ b/src/gromacs/listed_forces/bonded.cpp
-@@ -1029,12 +1029,13 @@ angles(int             nbonds,
-     SimdReal                                 rijx_S, rijy_S, rijz_S;
-     SimdReal                                 rkjx_S, rkjy_S, rkjz_S;
-     SimdReal                                 one_S(1.0);
--    SimdReal min_one_plus_eps_S(-1.0 + 2.0 * GMX_REAL_EPS); // Smallest number > -1
-+    SimdReal one_min_eps_S(1.0_real - GMX_REAL_EPS); // Largest number < 1
- 
-     SimdReal                         rij_rkj_S;
-     SimdReal                         nrij2_S, nrij_1_S;
-     SimdReal                         nrkj2_S, nrkj_1_S;
-     SimdReal                         cos_S, invsin_S;
-+    SimdReal                         cos2_S;
-     SimdReal                         theta_S;
-     SimdReal                         st_S, sth_S;
-     SimdReal                         cik_S, cii_S, ckk_S;
-@@ -1103,18 +1104,28 @@ angles(int             nbonds,
- 
-         cos_S = rij_rkj_S * nrij_1_S * nrkj_1_S;
- 
--        /* To allow for 180 degrees, we take the max of cos and -1 + 1bit,
--         * so we can safely get the 1/sin from 1/sqrt(1 - cos^2).
--         * This also ensures that rounding errors would cause the argument
--         * of simdAcos to be < -1.
--         * Note that we do not take precautions for cos(0)=1, so the outer
--         * atoms in an angle should not be on top of each other.
-+        /* We compute cos^2 using a division instead of squaring cos_S,
-+         * as we would then get additional error contributions from
-+         * the two invsqrt operations, which get amplified by
-+         * the 1/sqrt(1-cos^2) for cos values close to 1.
-+         *
-+         * Note that the non-SIMD version of angles() avoids this issue
-+         * by computing the cosine using double precision.
-          */
--        cos_S = max(cos_S, min_one_plus_eps_S);
-+        cos2_S = rij_rkj_S * rij_rkj_S / (nrij2_S * nrkj2_S);
-+
-+        /* To allow for 0 and 180 degrees, we need to avoid issues when
-+         * the cosine is close to -1 and 1. For acos() the argument needs
-+         * to be in that range. For cos^2 we take the min of cos^2 and 1 - 1bit,
-+         * so we can safely compute 1/sin as 1/sqrt(1 - cos^2).
-+         */
-+        cos_S  = max(cos_S, -one_S);
-+        cos_S  = min(cos_S, one_S);
-+        cos2_S = min(cos2_S, one_min_eps_S);
- 
-         theta_S = acos(cos_S);
- 
--        invsin_S = invsqrt(one_S - cos_S * cos_S);
-+        invsin_S = invsqrt(one_S - cos2_S);
- 
-         st_S  = k_S * (theta0_S - theta_S) * invsin_S;
-         sth_S = st_S * cos_S;
-@@ -3059,7 +3070,7 @@ real cmap_dihs(int                   nbonds,
+@@ -3059,7 +3059,7 @@ real cmap_dihs(int                   nbonds,
  
      for (n = 0; n < nbonds;)
      {
@@ -229,7 +177,7 @@ index 129ab880d3..da4518160b 100644
          type = forceatoms[n++];
          ai   = forceatoms[n++];
          aj   = forceatoms[n++];
-@@ -3068,8 +3079,10 @@ real cmap_dihs(int                   nbonds,
+@@ -3068,8 +3068,10 @@ real cmap_dihs(int                   nbonds,
          am   = forceatoms[n++];
  
          /* Which CMAP type is this */
@@ -242,7 +190,7 @@ index 129ab880d3..da4518160b 100644
  
          /* First torsion */
          a1i = ai;
-@@ -3227,173 +3240,198 @@ real cmap_dihs(int                   nbonds,
+@@ -3227,173 +3229,198 @@ real cmap_dihs(int                   nbonds,
          pos3 = ip1p1 * cmap_grid->grid_spacing + ip2p1;
          pos4 = iphi1 * cmap_grid->grid_spacing + ip2p1;
  
@@ -893,7 +841,7 @@ index 796e479490..86b76b7488 100644
          { "-imdwait",
            FALSE,
 diff --git a/src/gromacs/mdrun/md.cpp b/src/gromacs/mdrun/md.cpp
-index 7df4a68b21..7835e307f9 100644
+index 7df4a68b21..39f07c52c0 100644
 --- a/src/gromacs/mdrun/md.cpp
 +++ b/src/gromacs/mdrun/md.cpp
 @@ -55,6 +55,7 @@
@@ -1086,7 +1034,7 @@ index 7df4a68b21..7835e307f9 100644
  
      auto mdatoms = mdAtoms->mdatoms();
  
-@@ -445,14 +586,27 @@ void gmx::LegacySimulator::do_md()
+@@ -445,10 +586,21 @@ void gmx::LegacySimulator::do_md()
                                  startingBehavior != StartingBehavior::NewSimulation,
                                  shellfc != nullptr, opt2fn("-awh", nfile, fnm), pull_work);
  
@@ -1108,17 +1056,9 @@ index 7df4a68b21..7835e307f9 100644
      }
 +
      /* PME tuning is only supported in the Verlet scheme, with PME for
--     * Coulomb. It is not supported with only LJ PME. */
-+     * Coulomb. It is not supported with only LJ PME.
-+     * Also disabled upon hREX hot-cold separation. */
+      * Coulomb. It is not supported with only LJ PME. */
      bPMETune = (mdrunOptions.tunePme && EEL_PME(fr->ic->eeltype) && !mdrunOptions.reproducible
--                && ir->cutoff_scheme != ecutsGROUP);
-+                && ir->cutoff_scheme != ecutsGROUP
-+                && !bSplitHotColdPotential);
- 
-     pme_load_balancing_t* pme_loadbal = nullptr;
-     if (bPMETune)
-@@ -774,6 +928,7 @@ void gmx::LegacySimulator::do_md()
+@@ -774,6 +926,7 @@ void gmx::LegacySimulator::do_md()
  
          bDoReplEx = (useReplicaExchange && (step > 0) && !bLastStep
                       && do_per_step(step, replExParams.exchangeInterval));
@@ -1126,7 +1066,7 @@ index 7df4a68b21..7835e307f9 100644
  
          if (doSimulatedAnnealing)
          {
-@@ -1221,7 +1376,7 @@ void gmx::LegacySimulator::do_md()
+@@ -1221,7 +1374,7 @@ void gmx::LegacySimulator::do_md()
          else
          {
              update_tcouple(step, ir, state, ekind, &MassQ, mdatoms);
@@ -1135,7 +1075,7 @@ index 7df4a68b21..7835e307f9 100644
          }
  
          if (EI_VV(ir->eI))
-@@ -1584,11 +1739,184 @@ void gmx::LegacySimulator::do_md()
+@@ -1584,11 +1737,185 @@ void gmx::LegacySimulator::do_md()
              }
          }
  
@@ -1230,6 +1170,7 @@ index 7df4a68b21..7835e307f9 100644
 +                         fcd, other_state_local->lambda, graph, fr, runScheduleWork, vsite, mu_tot, t,
 +                         ed ? ed->getLegacyED() : nullptr,
 +                         force_flags | GMX_FORCE_NS | GMX_FORCE_ENERGY, ddBalanceRegionHandler);
++                // FIXME: why am I using force_vir not force_vir_temp? perhaps need to repalce pres mutot and _vir
 +                compute_globals(gstat, cr, ir, fr, ekind, other_state_local->x.rvec_array(),
 +                                other_state_local->v.rvec_array(), other_state_local->box, other_state_local->lambda[efptVDW], mdatoms,
 +                                nrnb, &vcm, wcycle, hrex_enerd, force_vir_temp, shake_vir_temp, total_vir_temp,
@@ -1321,7 +1262,7 @@ index 7df4a68b21..7835e307f9 100644
          }
  
          if ((bExchanged || bNeedRepartition) && DOMAINDECOMP(cr))
-@@ -1652,6 +1980,10 @@ void gmx::LegacySimulator::do_md()
+@@ -1652,6 +1979,10 @@ void gmx::LegacySimulator::do_md()
       * before stopping the time measurements. */
      mdoutf_tng_close(outf);
  
