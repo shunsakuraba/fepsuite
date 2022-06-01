@@ -1,7 +1,5 @@
 # action resname atomname resname atomname
-# Reject PRO, all but C O
-REJECT PRO N * *
-REJECT PRO CA * *
+# Reject PRO, all but N CA C O
 REJECT PRO HA * *
 REJECT PRO CB * *
 REJECT PRO HB1 * *
