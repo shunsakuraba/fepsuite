@@ -210,6 +210,278 @@ int find_closest(const Matrix3Xd &Acoords,
   return curmin;
 }
 
+static const vector<double> get_bond_entry(const topology &top, topology::bondkeytype& key)
+{
+  assert(top.bonds.count(key) > 0);
+  const vector<double> &entry = top.bonds.at(key);
+  if(!entry.empty()) {
+    return entry;
+  }else{
+    // read from bondtype
+    const string& at1 = top.types[std::get<0>(key)];
+    const string& at2 = top.types[std::get<1>(key)];
+    const string& bat1 = top.bondatomtypes.at(at1);
+    const string& bat2 = top.bondatomtypes.at(at2);
+    topology::bondtype btk(bat1, bat2, std::get<2>(key));
+    const vector<string>& ret_str = top.bondtypes.at(btk);
+    // FIXME we need to store bondtypes by vector<double>, otherwise we have too many memory assignments here
+    vector<double> ret;
+    for(const string& v: ret_str) {
+      ret.push_back(stod(v));
+    }
+    return ret;
+  }
+}
+
+/*
+Returns expected bond base distance between two atoms
+*/
+static double topological_min_dist(const topology &Atop, int a, int b)
+{
+  for(int functype: {1, 2, 3, 4, 6}) { // bond, G96bond, Morse, cubic, harmonic restraint
+    for(int order: {0, 1}) {
+      topology::bondkeytype key;
+      if(order == 0) {
+        key = topology::bondkeytype(a, b, functype);
+      }else{
+        key = topology::bondkeytype(b, a, functype);
+      }
+      if(Atop.bonds.count(key) > 0) {
+        const vector<double> entry = get_bond_entry(Atop, key);
+        assert(entry.size() > 0);
+        return entry[0] * 10.0; // for angle types 1-4 & 6 first element is b0 (nm), returns in angstrom
+      }
+    }
+  }
+  cerr << "Error: failed to find distance between" << Atop.names[a] << " - " << Atop.names[b] << endl;
+  exit(1);
+}
+
+static const vector<double> get_angle_entry(const topology &top, topology::anglekeytype& key)
+{
+  assert(top.angles.count(key) > 0);
+  const vector<double> &entry = top.angles.at(key);
+  if(!entry.empty()) {
+    return entry;
+  }else{
+    // read from angletype
+    const string& at1 = top.types[std::get<0>(key)];
+    const string& at2 = top.types[std::get<1>(key)];
+    const string& at3 = top.types[std::get<2>(key)];
+    const string& bat1 = top.bondatomtypes.at(at1);
+    const string& bat2 = top.bondatomtypes.at(at2);
+    const string& bat3 = top.bondatomtypes.at(at3);
+    topology::angletype btk(bat1, bat2, bat3, std::get<3>(key));
+    const vector<string>& ret_str = top.angletypes.at(btk);
+    // FIXME we need to store angletypes by vector<double>, otherwise we have too many memory assignments here
+    vector<double> ret;
+    for(const string& v: ret_str) {
+      ret.push_back(stod(v));
+    }
+    return ret;
+  }
+}
+
+/*
+Returns expected bond base angle between two atoms
+*/
+static double topological_min_angle(const topology &Atop, int a, int b, int c)
+{
+  for(int functype: {1, 2, 5, 10 }) { // harmonic, g96, U-B, restraint
+    for(int order: {0, 1}) {
+      topology::anglekeytype key;
+      if(order == 0) {
+        key = topology::anglekeytype(a, b, c, functype);
+      }else{
+        key = topology::anglekeytype(c, b, a, functype);
+      }
+      if(Atop.angles.count(key) > 0) {
+        const vector<double> entry = get_angle_entry(Atop, key);
+        assert(entry.size() > 0);
+        return entry[0]; // for angle types 1,2,5 and 10 first element is theta0 (degree)
+      }
+    }
+  }
+  cerr << "Error: failed to find angle between" << Atop.names[a] << " - " << Atop.names[b] << " - " << Atop.names[c] << endl;
+  exit(1);
+}
+
+static const vector<double> get_dihedral_entry(const topology &top, topology::dihedkeytype& key)
+{
+  assert(top.diheds.count(key) > 0);
+  const vector<double> &entry = top.diheds.at(key);
+  if(!entry.empty()) {
+    return entry;
+  }else{
+    // read from angletype
+    const string& at1 = top.types[std::get<0>(key)];
+    const string& at2 = top.types[std::get<1>(key)];
+    const string& at3 = top.types[std::get<2>(key)];
+    const string& at4 = top.types[std::get<3>(key)];
+    const string& bat1 = top.bondatomtypes.at(at1);
+    const string& bat2 = top.bondatomtypes.at(at2);
+    const string& bat3 = top.bondatomtypes.at(at3);
+    const string& bat4 = top.bondatomtypes.at(at4);
+    topology::dihedraltype dtk(bat1, bat2, bat3, bat4, std::get<3>(key));
+    const vector<string>& ret_str = top.dihedraltypes.at(dtk);
+    // FIXME we need to store angletypes by vector<double>, otherwise we have too many memory assignments here
+    vector<double> ret;
+    for(const string& v: ret_str) {
+      ret.push_back(stod(v));
+    }
+    return ret;
+  }
+}
+
+/*
+FIXME untested
+ */
+static vector<double> scan_rb(const vector<double>& rbfactor)
+{
+  int slice = 36;
+  vector<double> pots;
+  for(int i = 0; i < slice; ++i) {
+    double angle = 2.0 * M_PI * i / slice;
+    double value = 0;
+    double cosphi = cos(angle);
+    for(int degree = 0; degree < 6; ++degree) {
+      value += rbfactor[degree] * pow(cosphi, degree);
+    }
+    pots.push_back(value);
+  } 
+  double thresh = *std::min_element(pots.begin(), pots.end()) + 5e-1; // with this 0.5kJ threshold it only accepts close to global minimum
+  pots.push_back(pots[0]);
+  pots.push_back(pots[1]);
+  vector<double> rets;
+  for(int i = 1; i <= slice; ++i) {
+    if(pots[i] < thresh && pots[i - 1] >= pots[i] && pots[i] <= pots[i + 1]) {
+      rets.push_back((i % slice) * 360.0 / slice);
+    }
+  }
+  return rets;
+}
+
+/*
+FIXME untested
+ */
+static vector<double> scan_mult(const vector<vector<double> >& entry)
+{
+  int slice = 36;
+  vector<double> pots;
+  for(int i = 0; i < slice; ++i) {
+    double angle = 2.0 * M_PI * i / slice;
+    double value = 0;
+    for(const vector<double> &e: entry) {
+      double phi = e[0] * M_PI / 180.0; // radian
+      double k = e[1];
+      int mult = (int) e[2];
+      // k (1 + cos(n phi - phi_s))
+      value += k * (1. + cos(mult * angle - phi));
+    }
+    pots.push_back(value);
+  }
+  double thresh = *std::min_element(pots.begin(), pots.end()) + 5e-1; // with this 0.5kJ threshold it only accepts close to global minimum
+  pots.push_back(pots[0]);
+  pots.push_back(pots[1]);
+  vector<double> rets;
+  for(int i = 1; i <= slice; ++i) {
+    if(pots[i] < thresh && pots[i - 1] >= pots[i] && pots[i] <= pots[i + 1]) {
+      rets.push_back((i % slice) * 360.0 / slice);
+    }
+  }
+  return rets;
+}
+
+
+/*
+Returns expected bond base angle between two atoms
+*/
+static vector<double> topological_min_dihed(const topology &Atop, int a, int b, int c, int d)
+{
+  static bool warned = false;
+  const int mult_max_degree = 6; // scans up to n=6
+  for(int functype: {1, 2, 3, 4, 5, 9, 10}) { // supports proper, improper, R-B, periodic improper, fourier, mult. proper, restricted
+    for(int order: {0, 1}) {
+      vector<vector<double>> found;
+      int multmax = (functype == 9 ? mult_max_degree : 0);
+      int multmin = (functype == 9 ? 1 : 0);
+      for(int addenda = multmin; addenda <= multmax; ++addenda) {
+        topology::dihedkeytype key;
+        if(order == 0) {
+          key = topology::dihedkeytype(a, b, c, d, functype, addenda);
+        }else{
+          key = topology::dihedkeytype(d, c, b, a, functype, addenda);
+        }
+        if(Atop.diheds.count(key) > 0) {
+          const vector<double> entry = get_dihedral_entry(Atop, key);
+          assert(entry.size() > 0);
+          found.emplace_back(entry); // for angle types 1,2,5 and 10 first element is theta0
+        }
+      }
+      if(!found.empty()) {
+        // return best angle
+        vector<double> ret;
+        switch(functype) {
+          case 1: // proper
+          case 4: // periodic improper
+            // argmin phi [1 + cos (n phi - phi_s)]
+            // <=> n phi - phi_s == 180 (mod 360) # degrees
+            // <=> n phi = 180 + phi_s + 360 m
+            // <=> phi = (360m + 180 + phi_s) / n
+            assert(found.size() == 1);
+            {
+              double phi = found[0][0];
+              int mult = found[0][2]; // phi k mult
+              for(int m = 0; m < mult; ++m) {
+                ret.push_back((360.0 * m + 180.0 + phi) / mult);
+              }
+            }
+            return ret;
+            break;
+          case 2: // improper
+          case 10: // restraint
+            assert(found.size() == 1);
+            ret.push_back(found[0][0]);
+            return ret;
+            break;
+          case 3: // R-B
+          case 5: // Fourier
+            assert(found.size() == 1);
+            {
+              vector<double> RBfactor;
+              if(functype == 3){
+                RBfactor = found[0];
+              }else{
+                const vector<double>& ff = found[0];
+                RBfactor = {
+                  ff[2] + 0.5 * (ff[1] + ff[3]),
+                  0.5 * (-ff[1] + 3 * ff[3]),
+                  -ff[2] + 4 * ff[4],
+                  -2 * ff[3],
+                  -4 * ff[4],
+                  0
+                }; // gromacs manual 
+              }
+              return scan_rb(RBfactor);
+            }
+            break;
+          case 9: // multiple
+            return scan_mult(found);
+            break;
+          default:
+            if(!warned) {
+              cerr << "Warninig: unsupported dihedral type called in topological_min_dihed" << endl;
+              warned = true;
+            }
+        }
+      }
+    }
+  }
+  cerr << "Error: failed to find angle between" << Atop.names[a] << " - " << Atop.names[b] << " - " << Atop.names[c] << " " << Atop.names[d] << endl;
+  exit(1);
+}
+
+
 void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords, 
                     double force_bond,
                     double force_angluar,
@@ -218,7 +490,7 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
                     const vector<int>& assignBofO,
                     const vector<int>& assignOofA,
                     const topology &Atop, 
-                    bool isA, bool wang_approximation)
+                    bool isA, bool wang_approximation, bool use_topological_min)
 {
   int N = (int)assignAofO.size();
   vector<int> Aphantoms; // A's atoms which is phantom in state B, numbered in O
@@ -278,6 +550,9 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
       int ba = assignAofO[bond_o];
 
       double d = (Acoords.col(pa) - Acoords.col(ba)).norm();
+      if(use_topological_min) {
+        d = topological_min_dist(Atop, pa, ba);
+      }
       Ofs << setw(6) << p + 1 << " "
           << setw(6) << bond_o + 1 << " "
           << setw(4) << 6 << " " // Harmonic, non-excl
@@ -305,7 +580,9 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
       int aa = assignAofO[angle_o];
 
       double ang_rad = angle(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa));
-
+      if(use_topological_min) {
+        ang_rad = topological_min_angle(Atop, pa, ba, aa) * M_PI / 180.0;
+      }
       Ofs << setw(6) << p + 1 << " "
           << setw(6) << bond_o + 1 << " "
           << setw(6) << angle_o + 1 << " "
@@ -335,7 +612,30 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
     int da = assignAofO[dihed_o];
 
     double dih_rad = dihedral(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa), Acoords.col(da));
-    
+    if(use_topological_min) {
+      vector<double> dih_cands = topological_min_dihed(Atop, pa, ba, aa, da);
+      assert(dih_cands.size() > 0);
+      if(verbose) {
+        cerr << "DEBUG Topomin dihed " << (p + 1) << " " << (bond_o + 1) << " " << (angle_o + 1) << " " << (dihed_o + 1) << " base " << dih_rad << endl;
+        for(double d: dih_cands) {
+          cerr << d << " ";
+        }
+        cerr << endl;
+      }
+      double dih_best_angle = dih_cands[0];
+      double curbest = 1e9;
+      for(double d: dih_cands) {
+        double drad = d * M_PI / 180.0;
+        double diff = drad - dih_rad;
+        diff -= 2 * M_PI * round(diff / (2 * M_PI)); // normalize to -PI .. PI
+        diff = abs(diff);
+        if(curbest > diff){
+          curbest = diff;
+          dih_best_angle = drad;
+        }
+      }
+      dih_rad = dih_best_angle;
+    }
     Ofs << setw(6) << p + 1 << " "
         << setw(6) << bond_o + 1 << " "
         << setw(6) << angle_o + 1 << " "
@@ -667,6 +967,7 @@ void generate_topology(const string& outfilename,
                        bool gen_exclusion,
                        bool wang_approximation,
                        bool disable_pairs_error,
+                       bool use_topological_min,
                        const string& restraints_atomname)
 {
   int N = assignAofO.size();
@@ -1510,7 +1811,7 @@ void generate_topology(const string& outfilename,
                    assignAofO,
                    assignBofO,
                    assignOofA,
-                   Atop, true, wang_approximation);
+                   Atop, true, wang_approximation, use_topological_min);
     Ofs << "; Atoms existing in B state" << endl;
     output_dummies(Ofs, Bcoords, 
                    cparams.force_bond,
@@ -1519,7 +1820,7 @@ void generate_topology(const string& outfilename,
                    assignBofO,
                    assignAofO,
                    assignOofB,
-                   Btop, false, wang_approximation);
+                   Btop, false, wang_approximation, use_topological_min);
   }
   Ofs << endl;
 
@@ -1709,6 +2010,8 @@ int main(int argc, char* argv[])
   p.add("wang-approximation", 0, "Enable an approximation described in Supp. Info in Wang et al. 10.1073/pnas.1114017109");
   p.add("disable-cmap-error", 0, "FEP of CMAP requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
   p.add("disable-pairs-error", 0, "FEP of pairs section requires a specially patched GROMACS. Only if you know what you are doing specify this flag.");
+  p.add("use-topological-min", 0, "To calculate the restraint bond length, angle and dihedral, use information in topology file rather than the structure. "
+    "Useful when one of input structures are suboptimal.");
 
   bool ok = p.parse(argc, argv);
 
@@ -1995,6 +2298,7 @@ int main(int argc, char* argv[])
                     p.exist("gen-exclusion"),
                     p.exist("wang-approximation"),
                     p.exist("disable-pairs-error"),
+                    p.exist("use-topological-min"),
                     p.get<string>("generate-restraint"));
 
   // Generate PDB
