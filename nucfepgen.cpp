@@ -1734,7 +1734,7 @@ int main(int argc, char* argv[])
   const vector<string>& Anames = Apdb.get_atomnames();
   const vector<string>& Bnames = Bpdb.get_atomnames();
 
-  // fit Bpdb structure into Apdb by comparing P-coordinates
+  // fit Bpdb structure into Apdb by comparing CA or P-coordinates
   if(p.exist("protein")){
     VectorXd Amass = set_selected_mass(Anames, "CA");
     VectorXd Bmass = set_selected_mass(Bnames, "CA");

@@ -8,6 +8,6 @@ Eigen::VectorXd set_selected_mass(const std::vector<std::string>& atomnames,
                   const std::string& sel);
 void fit_selected(const Eigen::VectorXd& Amass,
                   const Eigen::VectorXd& Bmass,
-                  Eigen::Matrix3Xd& Acoords,
+                  const Eigen::Matrix3Xd& Acoords,
                   Eigen::Matrix3Xd& Bcoords);
 
