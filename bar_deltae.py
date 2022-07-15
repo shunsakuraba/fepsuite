@@ -50,12 +50,15 @@ def parse_deltae(fs, subsample, simindex):
             for l in fh:
                 if len(l) == 0:
                     continue
+                if l[-1] != "\n":
+                    # typically broken file
+                    break
                 if l[0] in ['#', '@']:
                     pass
                 else:
                     ls = l.split()
                     tt = float(ls[0])
-                    if tprev == tt:
+                    if tprev >= tt:
                         # prevent double counting
                         continue
                     tprev = tt
