@@ -301,6 +301,40 @@ main() {
                 cp $d/run.tpr $d/run_ph0.tpr
             done 
             ;;
+        # step 99: for analysis
+        query,99)
+            echo "DEPENDS=(); (( PROCS = 1 ))"
+            ;;
+        run,99)
+            for state in A B; do
+                case $state in
+                A)
+                    REPNO=0 || true
+                    ;;
+                B)
+                    REPNO=$((NREP - 1))
+                    ;;
+                esac
+                ipart=1
+                ndxfile=$ID/prodrun/fepbase_$state.ndx
+                if [[ ! -e $ndxfile ]]; then
+                    python3 $FEPREST_ROOT/make_ndx_trjconv_analysis.py -i $ID/fepbase_$state.pdb -o $ndxfile
+                fi
+                while true; do
+                    (( ipart += 1 ))
+                    ipartstr=$(printf '%04d' $ipart)
+                    sourcefile=$ID/prodrun/rep$REPNO/prodrun.part$ipartstr.trr
+                    destfile=$ID/prodrun/state$state.part$ipartstr.xtc
+                    if [[ ! -e $sourcefile ]]; then
+                        break
+                    fi
+                    if [[ -e $destfile ]] && [[ $destfile -nt $sourcefile ]]; then
+                        continue
+                    fi
+                    echo "centering\noutput" | $SINGLERUN $GMX trjconv -s $ID/prodrun/rep$REPNO/run.tpr -f $sourcefile -o $destfile -pbc atom -ur compact -center -n $ndxfile
+                done
+            done
+            ;;
         query,*)
             (( PREV = stateno - 1 ))
             echo "DEPENDS=($PREV); (( PROCS = PARA * NREP ))"
