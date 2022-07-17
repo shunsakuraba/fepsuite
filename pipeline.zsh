@@ -218,6 +218,7 @@ main() {
             for i in {0..$((NREP-1))}; do
                 prevgro+=$ID/min$i/min$i.gro
             done
+            NINITIALTUNE=${NTUNE:-0} || true
             for p in {1..$NTUNE}; do
                 work=$ID/nvt$p
                 mkdir $work || true
@@ -240,7 +241,11 @@ main() {
                 done
                 prep_gpucpu_parameters # sets NB_WHICH
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu # extend 50 ps
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $((i + 1))
+                (( STEPCOUNT = p - NINITIALTUNE )) || true
+                if (( STEPCOUNT < 1 )); then
+                    (( STEPCOUNT = 1 ))
+                fi
+                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $STEPCOUNT
                 cat $ID/replica_states
                 prev=$work
                 prevgro=()
