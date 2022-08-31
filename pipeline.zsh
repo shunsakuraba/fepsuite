@@ -225,10 +225,6 @@ do_product_runs() {
             $SINGLERUN $GMX grompp -f $MDP -p $ID/$topol -c $prevcrd.pdb -t $prevcrd.cpt -o $RUNDIR/$phase$infix.tpr -po $ID/$output.$phase$infix.$i.mdp $ndx_grompp -maxwarn $maxwarn
             DIRS+=$RUNDIR
         done
-        # this hack exists because, in zsh 5.0.5, an error (ZERR) occuring inside the above procedure executes exit but does not exit the shell (looks weird, someone please help; cannot reproduce in small subset script)
-        if (( $? != 0 )); then
-            exit $ERRORCODE
-        fi
         nstlist_cmd=()
         if [[ -n $NSTLIST ]]; then
             nstlist_cmd=(-nstlist $NSTLIST)
@@ -326,6 +322,9 @@ charge_correction() {
     if (( ABSTOTCHARGE < 1e-4 )); then
         echo "No charge correction needed"
         echo 0.0 > $ID/charge_correction.txt
+    else
+        echo "Error: charge correction is not implemented yet."
+        exit 1
     fi
 }
 
@@ -333,8 +332,6 @@ charge_correction() {
 
 main() {
     if [[ $reqstate = run ]]; then
-        #set -e
-        #trap '{ echo "Aborting job"; set +e; exit $ERRORCODE }' ZERR
         set -x
     fi
     case $reqstate,$stateno in

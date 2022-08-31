@@ -1,8 +1,9 @@
 #!/bin/zsh
 #$ -cwd
 
-export ABFE_ROOT=_ABFE_PATH_
-export PIPELINE=$ABFE_ROOT/pipeline.zsh
+export FEPABFE_ROOT=_FEPABFE_PATH_
+export PIPELINE=$FEPABFE_ROOT/pipeline.zsh
+export GMX_DIR=_PATH_TO_GMX_
 source para_conf.zsh
 
 if [[ -z $JOB_NAME ]]; then
@@ -24,6 +25,7 @@ if [[ -z $JOB_NAME ]]; then
     CPN=4       # Cores / node. Real procs are 28 but we want one GPU per run
     SYSTEMCPN=4 # Cores / node (hardware)
     T=24        # 24 hr run. Modify this part depending on your system size
+    NOGPU_STAGE=
     DEPENDS=()
     EXTRA=()
     waitcmd=()
@@ -84,9 +86,8 @@ echo "STEP=$STEPNO"
 # Site-specific settings starts from here
 source /etc/profile.d/modules.sh
 
-# Since Tsubame3 does not provide newer gromacs, we use 2019.4 here, but we urge you to compile 2019.6 by yourself because .5 and .6 have FEP-related bug fixes
+# Modify this part based on modules you used during the compilation
 module load cuda/9.2.148 intel-mpi/19.0.117
-module load gromacs/2019.4
 
 mpirun_() {
     np=$1
@@ -99,6 +100,7 @@ mpirun_() {
 SINGLERUN=()
 # ---- Site-specific settings ends here
 
+source $GMX_DIR/bin/GMXRC.zsh
 PYTHON3=python3
 
 GMX=$(which gmx_mpi)
