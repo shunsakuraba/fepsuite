@@ -188,8 +188,7 @@ do_product_runs() {
         fi
         if (( iprerun != 0 )); then
             update=(--update $ID/$phase.0/$phase.pre$((iprerun-1)).log --update-nth $iprerun)
-        fi
-        if (( iprerun == 0 )) && [[ $phase = "annihilation-complex" ]]; then
+        elif (( iprerun == 0 )) && [[ $phase = "annihilation-complex" ]]; then
             # use annihilation-lig's final prerun output to update the lambda values
             update=(--update $ID/annihilation-lig.0/annihilation-lig.pre$(($ANNIH_LAMBDA_OPT-1)).log --update-nth $ANNIH_LAMBDA_OPT)
         fi
