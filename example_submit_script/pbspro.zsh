@@ -4,8 +4,8 @@
 # User customize point 1: change ^^: default queue submission settings
 
 # User customize point 2: change paths here
-export FEPABFE_ROOT=_PATH_TO_FEPABFE_
-export PIPELINE=$FEPABFE_ROOT/pipeline.zsh
+export ABFE_ROOT=_PATH_TO_ABFE_
+export PIPELINE=$ABFE_ROOT/pipeline.zsh
 export GMX_DIR=_GMX_DIR_
 
 # Current directory may be either $PWD or $PBS_O_WORKDIR

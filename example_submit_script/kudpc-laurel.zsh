@@ -4,8 +4,8 @@
 #QSUB -W 96:00
 #QSUB -ry
 
-export FEPABFE_ROOT=_FEPABFE_PATH_
-export PIPELINE=$FEPABFE_ROOT/pipeline.zsh
+export ABFE_ROOT=_ABFE_PATH_
+export PIPELINE=$ABFE_ROOT/pipeline.zsh
 export GMX_DIR=_GMX_DIR_
 source para_conf.zsh
 

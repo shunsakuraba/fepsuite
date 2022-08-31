@@ -1,7 +1,7 @@
 #!/home/shun/lcl/bin/zsh
 
-export FEPABFE_ROOT=_FEPABFE_
-export PIPELINE=$FEPABFE_ROOT/pipeline.zsh
+export ABFE_ROOT=_ABFE_
+export PIPELINE=$ABFE_ROOT/pipeline.zsh
 export GMX_DIR=_GMX_DIR_
 source para_conf.zsh
 

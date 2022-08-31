@@ -4,8 +4,8 @@
 # Customization point 1: ^^ elapse time
 
 # Customization point 2: Directory
-export FEPABFE_ROOT=_PATH_TO_FEPABFE_
-export PIPELINE=${FEPABFE_ROOT}/pipeline.zsh
+export ABFE_ROOT=_PATH_TO_ABFE_
+export PIPELINE=${ABFE_ROOT}/pipeline.zsh
 export GMX_DIR=_PATH_TO_GMX_
 
 source para_conf.zsh
