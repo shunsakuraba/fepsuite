@@ -152,10 +152,17 @@ do_prep_runs() {
     initialrestr=$4
     ndx=$5
     pullmdp=$6
-    do_run $topol $conf $output steep "$initialrestr" "$ndx" "$pullmdp" nocont prep 1 # maxwarn 1 for switching
-    do_run $topol ${output}.steep $output cg "$initialrestr" "$ndx" "$pullmdp" nocont prep 1 # 1 for switching
-    do_run $topol ${output}.cg $output nvt "$initialrestr" "$ndx" "$pullmdp" nocont prep 0 # 
-    do_run $topol ${output}.nvt $output npt "$initialrestr" "$ndx" "$pullmdp" cont prep 1 # 1 for gen-vel
+    EXPECTED_WARN=0
+    case $conf in 
+        ligand-*)
+        # expect warning from -DPOSRES. This is hacky but other solutions are equally dirty...
+        EXPECTED_WARN=1
+        ;;
+    esac
+    do_run $topol $conf $output steep "$initialrestr" "$ndx" "$pullmdp" nocont prep $((EXPECTED_WARN + 1)) # maxwarn 1 for switching
+    do_run $topol ${output}.steep $output cg "$initialrestr" "$ndx" "$pullmdp" nocont prep $((EXPECTED_WARN + 1)) # 1 for switching
+    do_run $topol ${output}.cg $output nvt "$initialrestr" "$ndx" "$pullmdp" nocont prep $((EXPECTED_WARN + 0)) # 
+    do_run $topol ${output}.nvt $output npt "$initialrestr" "$ndx" "$pullmdp" cont prep $((EXPECTED_WARN + 1)) # 1 for gen-vel
 }
 
 do_product_runs() {
