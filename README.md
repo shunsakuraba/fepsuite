@@ -2,9 +2,9 @@
 
 # Prepration
 
-Before running the script, prepare mdtraj and panedr package for python3.
+Before running the script, prepare mdtraj and pyedr package for python3.
 ```sh
-% pip3 install mdtraj panedr --user
+% pip3 install mdtraj pyedr --user
 % python3 -c "import mdtraj"
 ```
 You may also need to make sure these modules can be accessed through your job submission system (a.k.a. qsub).

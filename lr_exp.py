@@ -1,4 +1,4 @@
-import panedr
+import pyedr
 import argparse
 import numpy
 import scipy.special
@@ -13,8 +13,8 @@ def expcal(du, kbt):
     return - 1./kbt * lnexp
 
 def lr_exp(args):
-    original = panedr.panedr.EDRFile(args.short)
-    reeval = panedr.panedr.EDRFile(args.long)
+    original = pyedr.pyedr.EDRFile(args.short)
+    reeval = pyedr.pyedr.EDRFile(args.long)
     original_e_ixs = []
     reeval_e_ixs = []
 
