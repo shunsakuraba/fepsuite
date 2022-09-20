@@ -32,7 +32,7 @@ To run this script you need to compile enhanced version of GROMACS.
 Then, follow the next order to run the FEP-REST-PP.
 
 1. Prepare topology with `nucfepgen`.
-2. Set topology file name as `topol_ionized.top` and coorinate file as `conf_ionized.pdb` or `conf_ionized.gro`. (You can use symlink for that).
+2. Set topology file name as `topol_ionized.top` and coordinate file as `conf_ionized.pdb` or `conf_ionized.gro`. (You can use symlink for that).
 3. Prepare a directory with two depths, e.g. `feprestrun/A123V`. Put topology and structure files under `feprestrun/A123V`. Similarly put reference state files under `feprestrun/A123V_ref`.
 4. Clone this git repository to somewhere, e.g. `$HOME/repos/feprest`.
 5. Copy `para_conf.zsh` from feprest repository to `feprestrun`. Find an appropriate submission script under `$HOME/repos/feprest/example_submit_script` to `feprestrun/`. Copy whole `mdp_template` directory to `feprestrun/`, and rename the directory name to `mdp`. If necessary, modify mdp files according to your calculation conditions.
