@@ -61,7 +61,7 @@ def find_matching_dihedral(dihtype, ai, aj, ak, al, dfun):
             (ret, wildcards) = next_permutation(wildcards)
             if not ret:
                 break
-    raise RuntimeError("Could not find dihedral for %s-%s-%s-%d" % ai, aj, ak, al, dfun)
+    raise RuntimeError("Could not find dihedral for %s-%s-%s-%s-%d" % (ai, aj, ak, al, dfun))
 
 def find_matching_bond(bondtype_params, ai, aj, fun):
     for key in [(ai, aj, fun), (aj, ai, fun)]:
@@ -167,23 +167,27 @@ if __name__ == "__main__":
                     raise RuntimeError("Atomtype contains < 6 fields")
                 # here everything is mess but toppush.cpp is actually super mess 
                 if len(ls[5]) == 1 and ls[5][0].isalpha():
+                    # "If field 5 is a single char we have both."
                     have_bonded_type = True
                     have_atomic_number = True
                 elif len(ls[3]) == 1 and ls[3][0].isalpha():
+                    # "If field 3 (starting from 0) is a single char, 
+                    #  we have neither bonded_type or atomic numbers."
                     have_bonded_type = False
                     have_atomic_number = False
                 else:
+                    # "If field 4 is a single char we check field 1. If this begins with
+                    #  an alphabetical character we have bonded types, otherwise atomic numbers.""
                     have_bonded_type = ls[1][0].isalpha()
                     have_atomic_number = not have_bonded_type
 
                 atomtype = ls[0]
                 (mass, charge, particle, sigc6, epsc12) = ls[1 + int(have_bonded_type) + int(have_atomic_number):]
 
-                # Issue an error for amber14sb.ff
-                if atomtype[0].isdigit():
-                    sys.stderr.write("""[ atomtypes ] contains type %s which starts from non-alphabets.
-This is invalid atomtype in GROMACS (but some user-generated force field, such as amber14sb.ff, contains the entries because AmberTools allow such kind of atom types.
-Consider renaming all such atomtypes to start from alphabets, e.g. 2C -> A2C.
+                # Issue an error for bonded type
+                if have_bonded_type and not all(map(isdigit, ls[1])):
+                    sys.stderr.write("""[ atomtypes ] contains bondtype %s which starts from non-alphabets.
+This is invalid atomtype in GROMACS.
 """ % atomtype)
                     raise RuntimeError("Invalid force field")
 
