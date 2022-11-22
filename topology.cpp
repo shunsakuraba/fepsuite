@@ -113,15 +113,6 @@ topology::topology(const string& fname)
       is >> atype;
       atomtypes[atype] = line;
 
-      // check for badly formatted ones (typically amber14sb.ff)
-      if(isdigit(atype[0])) {
-        cerr << "[ atomtypes ] contains type " << atype << " which starts from non-alphabets." << endl;
-        cerr << "This is invalid atomtype in GROMACS (but some user-generated force field, such as amber14sb.ff, contains the entries because AmberTools allow such kind of atom types.)" << endl;
-        cerr << "Consider renaming all such atomtypes to start from alphabets, e.g. 2C -> A2C." << endl;
-        throw runtime_error("topology::topology: invalid force field file detected");
-        // Do you know why I added this error message? Otherwise I will be messed with such ill-formed force fields.
-      }
-
       // Old-type [ atomtypes ] may still exist, just to be sure
       vector<string> inputs;
       while(is){
@@ -129,26 +120,38 @@ topology::topology(const string& fname)
         is >> token;
         if(is) inputs.push_back(token);
       }
+      // See gmxpreprocess/toppush.cpp for this historical mess
+      // Field 0 (atype, mandatory) is nonbonded type name.
+      // Field 1 (inputs[0]) (optional) is bonded type (string)
+      // Field 2 (inputs[0-1]) (optional) is atomic number (int)
+      // Field 3 (inputs[0-2]) (mandatory) is mass (numerical)
+      // Field 4 (inputs[1-3]) (mandatory) is charge (numerical)
+      // Field 5 (inputs[2-4]) (mandatory) is the particle type (single char)
+      // and number of nonbonde parameter follows.
       if(inputs.size() < 6) {
         cerr << "[ atomtypes ] line is too short" << endl;
         cerr << "\"" << line << "\"" << endl;
         throw runtime_error("topology::topology: failed to parse");
       }
       bool have_bonded_type, have_atomic_number;
-      if(inputs[5].length() == 1 && isalpha(inputs[5][0])) {
-        have_bonded_type = true;
-        have_atomic_number = true;
-      }else if(inputs[3].length() == 1 && isalpha(inputs[3][0])) {
-        have_bonded_type = false;
-        have_atomic_number = false;
+      if(inputs[2].length() == 1 && isalpha(inputs[2][0])) {
+        // "If field 3 (starting from 0) is a single char, 
+        //  we have neither bonded_type or atomic numbers."
+        // note inputs are -1 shifted compared to field position.
+        have_bonded_type = have_atomic_number = false;
+      }else if(inputs[4].length() == 1 && isalpha(inputs[4][0])) {
+        // "If field 5 is a single char we have both.
+        have_bonded_type = have_atomic_number = true;
       }else{
-        have_bonded_type = isalpha(inputs[1][0]);
+        // "If field 4 is a single char we check field 1. If this begins with
+        //  an alphabetical character we have bonded types, otherwise atomic numbers.""
+        have_bonded_type = isalpha(inputs[0][0]);
         have_atomic_number = ! have_bonded_type;
         if(!have_bonded_type) {
           // atomic number should be integer
-          if(!std::all_of(inputs[1].begin(), inputs[1].end(), [](char c) { return isdigit(c); })) {
+          if(!std::all_of(inputs[0].begin(), inputs[0].end(), [](char c) { return isdigit(c); })) {
             cerr << "In [ atomtypes ], type " << atype << ": " << endl;
-            cerr << "The second entry starts from numerics. This is not a valid atom type for bonds. " << endl;
+            cerr << "The second entry starts from digits but is not entirely digit. This is not a valid atom type format. " << endl;
             throw runtime_error("topology::topology: bondtype assignment error");
           }
         }
@@ -185,7 +188,9 @@ topology::topology(const string& fname)
       is >> atype >> btype >> ctype >> dtype >> func;
       dihedraltypes[make_tuple(atype, btype, ctype, dtype, func)].push_back(line);
     }else if(state == "cmaptypes") {
-      // this is mostly unnecessary, but to 0-filld cmaptype if one of state do not have cmap potential.
+      // this is mostly unnecessary and just copying to the output;
+      // but we need to make 0-filled cmaptype if one of state do not have cmap potential.
+      // Thus we need to at least analyze which are listed and which not...
       istringstream is(line);
       string atype, btype, ctype, dtype, etype;
       int func;
