@@ -1,8 +1,8 @@
-#!/home/shun/lcl/bin/zsh
+#!/bin/zsh
 
-export FEPREST_ROOT=_FEPREST_
+export FEPREST_ROOT=_FEPREST_ # <-- rewrite here
 export PIPELINE=$FEPREST_ROOT/pipeline.zsh
-export GMX_DIR=_GMX_DIR_
+export GMX_DIR=_GMX_DIR_ # <-- rewrite here too
 source para_conf.zsh
 
 if [[ -z $STEPNO ]]; then

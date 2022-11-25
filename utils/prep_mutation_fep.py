@@ -13,6 +13,20 @@ import argparse
 import re
 import warnings
 
+def log_with_color(message):
+    col = 33 # yellow?
+    prefix = ">> "
+    suffix = ""
+    if os.isatty(sys.stdout.fileno()):
+        prefix = "\x1b[" + str(col) + ";1m>> "
+        suffix = "\x1b[0m"
+    print(prefix + message + suffix, file=sys.stdout)
+
+def check_call_verbose(cmdline: List[str]):
+    message = " ".join(cmdline)
+    log_with_color(message)
+    subprocess.check_call(cmdline)
+
 def parse_pdb(pdb):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", Bio.PDB.PDBExceptions.PDBConstructionWarning)
@@ -113,7 +127,7 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
             if totmut != len(mutations):
                 raise RuntimeError(f"Not all mutations are consumed, requested mutations: {mutations}")
 
-        subprocess.check_call([args.faspr, "-i", args.pdb, "-o", f"{ddir}/completed.pdb", "-s", f"{ddir}/seq.txt"])
+        check_call_verbose([args.faspr, "-i", args.pdb, "-o", f"{ddir}/completed.pdb", "-s", f"{ddir}/seq.txt"])
         # faspr often returns 0 even if there is an error
         if not os.path.exists(f"{ddir}/completed.pdb") or \
             os.path.getmtime(f"{ddir}/completed.pdb") < os.path.getmtime(f"{ddir}/seq.txt"):
@@ -126,7 +140,7 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
         os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
 
     # Generate GMX topology as well as structures
-    subprocess.check_call([args.gmx] + f"pdb2gmx -f completed.pdb -o conf.pdb -water {args.water_model} -ignh -ff {args.ff} -merge all".split())
+    check_call_verbose([args.gmx] + f"pdb2gmx -f completed.pdb -o conf.pdb -water {args.water_model} -ignh -ff {args.ff} -merge all".split())
 
 
     # "canonicalize" the topology
@@ -144,8 +158,8 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
     incdirs = []
     if "GMXDATA" in os.environ:
         incdirs += ["-I", f"{os.environ['GMXDATA']}/top"]
-    subprocess.check_call([args.cpp, "-P", "-o", "topol_pp.top", "topol_m.top"] + incdirs)
-    subprocess.check_call([args.python3, f"{args.feprest}/rest2py/canonicalize_top.py", "topol_pp.top", "topol_can.top"])
+    check_call_verbose([args.cpp, "-P", "-o", "topol_pp.top", "topol_m.top"] + incdirs)
+    check_call_verbose([args.python3, f"{args.feprest}/rest2py/canonicalize_top.py", "topol_pp.top", "topol_can.top"])
 
     os.chdir(curdir)
     return
@@ -185,7 +199,7 @@ def mut_name(mutstr: str):
     return mutstr.replace(":", "_")
 
 def solvate_conf_topology(radius):
-    subprocess.check_call([args.gmx] + f"editconf -f fepbase.pdb -d {radius} -bt dodecahedron -o conf_box".split())
+    check_call_verbose([args.gmx] + f"editconf -f fepbase.pdb -d {radius} -bt dodecahedron -o conf_box".split())
     with open("fepbase.top") as fh, open("topol_solvated.top", "w") as ofh:
         for l in fh:
             ls = l.split()
@@ -199,12 +213,14 @@ def solvate_conf_topology(radius):
     waterbox = "spc216.gro"
     if args.water_model in ["tip4p", "tip4pew"]:
         waterbox = "tip4p.gro"
-    subprocess.check_call([args.gmx] + f"solvate -cp conf_box -p topol_solvated -cs {waterbox} -o conf_solvated.pdb".split())
+    check_call_verbose([args.gmx] + f"solvate -cp conf_box -p topol_solvated -cs {waterbox} -o conf_solvated.pdb".split())
     with open("dummy.mdp", "w") as ofh:
         pass # clear dummy file
-    subprocess.check_call([args.gmx] +  "grompp -f dummy.mdp -p topol_solvated.top -c conf_solvated.pdb -po dummy_out -o topol_solvated -maxwarn 1".split())
+    check_call_verbose([args.gmx] +  "grompp -f dummy.mdp -p topol_solvated.top -c conf_solvated.pdb -po dummy_out -o topol_solvated -maxwarn 1".split())
     shutil.copy("topol_solvated.top", "topol_ionized.top")
-    genion_pipe = subprocess.Popen([args.gmx] + f"genion -s topol_solvated -o conf_ionized.pdb -p topol_ionized.top -pname {args.ion_positive} -nname {args.ion_negative} -conc {args.ion} -neutral".split(), stdin=subprocess.PIPE)
+    cmds = [args.gmx] + f"genion -s topol_solvated -o conf_ionized.pdb -p topol_ionized.top -pname {args.ion_positive} -nname {args.ion_negative} -conc {args.ion} -neutral".split()
+    log_with_color(" ".join(cmds))
+    genion_pipe = subprocess.Popen(cmds, stdin=subprocess.PIPE)
     genion_pipe.communicate(bytes("SOL\n", "utf-8"))
 
 def main(args):
@@ -226,28 +242,36 @@ def main(args):
             refdirs.append(f"{fepdir}_ref{i+1}")
     mutdir = f"{mutname}"
     if not os.path.exists(fepdir):
+        log_with_color(f"mkdir {fepdir}")
         os.mkdir(fepdir)
     curdir = os.getcwd()
+    log_with_color(f"cd {fepdir}")
     os.chdir(fepdir)
     if os.path.exists(f"../{args.ff}.ff") and not os.path.exists(f"{args.ff}.ff"):
         # use local force field file
+        log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
         os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-    subprocess.check_call([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA".split())
+    check_call_verbose([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA".split())
     solvate_conf_topology(args.solv)
     generate_para_conf(args, mutation_list)
+    log_with_color(f"cd ..")
     os.chdir(curdir)
 
     for refdir, m in zip(refdirs, mutation_list):
         # FIXME: we do not consider the case that mutations are continuous like 25A_26A
         if not os.path.exists(refdir):
+            log_with_color(f"mkdir {refdir}")
             os.mkdir(refdir)
+        log_with_color(f"cd {refdir}")
         os.chdir(refdir)
         if os.path.exists(f"../{args.ff}.ff") and not os.path.exists(f"{args.ff}.ff"):
             # use local force field file
+            log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
             os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-        subprocess.check_call([args.python3, f"{args.feprest}/utils/selectres.py"] + f"../{fepdir}/fepbase.top ../{fepdir}/fepbase.pdb {m['resid']} fepbase.top fepbase.pdb".split())
+        check_call_verbose([args.python3, f"{args.feprest}/utils/selectres.py"] + f"../{fepdir}/fepbase.top ../{fepdir}/fepbase.pdb {m['resid']} fepbase.top fepbase.pdb".split())
         solvate_conf_topology(args.solv_ref)
         generate_para_conf(args, [m])
+        log_with_color(f"cd ..")
         os.chdir(curdir)
 
 
