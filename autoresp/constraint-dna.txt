@@ -1,1 +1,0 @@
-dihedral C4' C3' O3' HO3' -60

@@ -1,2 +1,0 @@
-dihedral C4' C3' O3' HO3' -60
-dihedral O4' C4' C3' C2' asis

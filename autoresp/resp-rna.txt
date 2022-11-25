@@ -1,2 +1,0 @@
-# restrains 12 + 4 atoms from sugar 
--0.1160 HO5' O5' C5' H5' H5'' C4' H4' O4' C3' H3' C2' H2' O2' HO2' O3' HO3'
