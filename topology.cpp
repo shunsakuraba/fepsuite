@@ -140,7 +140,7 @@ topology::topology(const string& fname)
         // note inputs are -1 shifted compared to field position.
         have_bonded_type = have_atomic_number = false;
       }else if(inputs[4].length() == 1 && isalpha(inputs[4][0])) {
-        // "If field 5 is a single char we have both.
+        // "If field 5 is a single char we have both."
         have_bonded_type = have_atomic_number = true;
       }else{
         // "If field 4 is a single char we check field 1. If this begins with
