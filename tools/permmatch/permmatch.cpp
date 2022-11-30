@@ -94,7 +94,41 @@ bool match_impl(size_t curptr, vector<size_t> &input2ref,
   return false;
 }
 
-vector<size_t> match_atoms(const pdb &ref, const pdb &inp)
+void debug_print(const pdb &ref, vector<vector<bool>>& refconn, const pdb &inp, vector<vector<bool>>& targetconn, const string &debugout)
+{
+  {
+    ofstream ofs((debugout + "inp").c_str());
+    ofs << "graph ref {" << endl;
+    for (size_t i = 0; i < refconn.size(); ++i)
+    {
+      for (size_t j = i + 1; j < refconn.size(); ++j)
+      {
+        if (refconn[i][j])
+        {
+          ofs << "  " << ref.get_atomnames()[i] << " -- " << ref.get_atomnames()[j] << ";" << endl;
+        }
+      }
+    }
+    ofs << "}" << endl;
+  }
+  {
+    ofstream ofs((debugout + "ref").c_str());
+    ofs << "graph target {" << endl;
+    for (size_t i = 0; i < targetconn.size(); ++i)
+    {
+      for (size_t j = i + 1; j < targetconn.size(); ++j)
+      {
+        if (targetconn[i][j])
+        {
+          ofs << "  " << inp.get_atomnames()[i] << " -- " << inp.get_atomnames()[j] << ";" << endl;
+        }
+      }
+    }
+    ofs << "}" << endl;
+  }
+}
+
+vector<size_t> match_atoms(const pdb &ref, const pdb &inp, const string &debugout)
 {
   vector<size_t> input2ref;
 
@@ -102,6 +136,10 @@ vector<size_t> match_atoms(const pdb &ref, const pdb &inp)
   size_t ninp = inp.get_atomnames().size();
   vector<vector<bool>> refconn = get_connectivity(ref);
   vector<vector<bool>> targetconn = get_connectivity(inp);
+
+  if(!debugout.empty()) {
+    debug_print(ref, refconn, inp, targetconn, debugout);
+  }
 
   vector<vector<bool>> match_atomtype(nref, vector<bool>(ninp, false));
   for(size_t i = 0; i < nref; ++i) {
@@ -181,6 +219,7 @@ int main(int argc, char* argv[])
   p.add<string>("reference", 'r', "Reference PDB", true);
   p.add<string>("input", 'f', "Input PDB", true);
   p.add<string>("output", 'o', "Output PDB", true);
+  p.add<string>("debug", 0, "Debug output (dot file)", false);
   p.add("reorder-to-reference", 0, "Reorder to refernce structure (input and reference must have same number of atoms");
 
   {
@@ -195,9 +234,17 @@ int main(int argc, char* argv[])
   pdb refpdb(p.get<string>("reference"));
   pdb targetpdb(p.get<string>("input"));
 
+  cerr << "There are " << refpdb.get_coords().cols() << " atoms in reference" << endl;
+  cerr << "There are " << targetpdb.get_coords().cols() << " atoms in input" << endl;
+
+  if(refpdb.get_coords().cols() < targetpdb.get_coords().cols()) {
+    cerr << "Refs size is smaller than target size (unsupported)" << endl;
+    exit(EXIT_FAILURE);
+  }
+
   ofstream crdfs(p.get<string>("output"));
   crdfs.setf(ios::fixed);
-  vector<size_t> input2ref = match_atoms(refpdb, targetpdb);
+  vector<size_t> input2ref = match_atoms(refpdb, targetpdb, p.get<string>("debug"));
   vector<size_t> printorder(input2ref.size());
   if(p.exist("reorder-to-reference")) {
     if(refpdb.get_atomnames().size() != targetpdb.get_atomnames().size()) {
