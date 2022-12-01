@@ -272,7 +272,7 @@ do_exp() {
     non_lr_output=$2
     non_lr_repl=$3
     TEMP=$4
-    python3 $ABFE_ROOT/lr_exp.py --long $ID/$lr_output.edr --short $ID/$non_lr_output.$non_lr_repl/$non_lr_output.edr --temp $TEMP --time-begin $RUN_PROD --output $ID/$lr_output.lrc.txt
+    $PYTHON3 $ABFE_ROOT/lr_exp.py --long $ID/$lr_output.edr --short $ID/$non_lr_output.$non_lr_repl/$non_lr_output.edr --temp $TEMP --time-begin $RUN_PROD --output $ID/$lr_output.lrc.txt
 }
 
 do_solvate() {
@@ -312,7 +312,7 @@ generate_ndx() {
         echo "Conformation not found (expected $conf.{pdb or gro}" 1>&2
         return 1
     fi
-    python3 $ABFE_ROOT/make_ndx.py --structure $conf --topology $pptop --ligand $LIG_GMX $receptor --output $output
+    $PYTHON3 $ABFE_ROOT/make_ndx.py --structure $conf --topology $pptop --ligand $LIG_GMX $receptor --output $output
 }
 
 charge_correction() {
@@ -372,12 +372,12 @@ main() {
             echo "Receptor\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -center -pbc mol -n $ID/complex.ndx -ur compact
             echo "Receptor\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.pdb -o $ID/prerun.run.final.pdb -center -pbc mol -n $ID/complex.ndx -ur compact
             echo "Receptor\nLigand" | $SINGLERUN $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
-            python3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
-            python3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
+            $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
+            $PYTHON3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
             # Restraint for annihilation and charging
-            python3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --mdp $ID/restr_pull.mdp --ndx $ID/restr_pull.ndx
+            $PYTHON3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --mdp $ID/restr_pull.mdp --ndx $ID/restr_pull.ndx
             # Restraint decoupling, used in restraint phase
-            python3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --decouple-B --mdp $ID/restr_pull_decouple.mdp --ndx $ID/restr_pull_decouple.ndx
+            $PYTHON3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --decouple-B --mdp $ID/restr_pull_decouple.mdp --ndx $ID/restr_pull_decouple.ndx
             diff -q $ID/restr_pull.ndx $ID/restr_pull_decouple.ndx || { echo "Two pull indices are not identical" 1>&2; false }
 
             # generate topologies and conformations:
@@ -391,7 +391,7 @@ main() {
             
             # prepare pp because we calculate ligand's total charge here
             $SINGLERUN $GMX grompp -f mdp/run.mdp -p $ID/topol_ionized.top -c $ID/prerun.run.pdb -t $ID/prerun.run.cpt -o $ID/pp.tpr -po $ID/pp.mdp $restrcmd -maxwarn 0 -pp $ID/pp_run.top
-            python3 $ABFE_ROOT/generate_ligand_topology.py --mol $LIG_GMX --topology $ID/pp_run.top --structure $ID/prerun.run.final.pdb --index $ID/complex.ndx --output-ligand-structure $ID/ligand.pdb --output-ligand-topology $ID/ligand.top --total-charge $ID/totalcharge.txt
+            $PYTHON3 $ABFE_ROOT/generate_ligand_topology.py --mol $LIG_GMX --topology $ID/pp_run.top --structure $ID/prerun.run.final.pdb --index $ID/complex.ndx --output-ligand-structure $ID/ligand.pdb --output-ligand-topology $ID/ligand.top --total-charge $ID/totalcharge.txt
 
             # solvate ligand-only confs
             $SINGLERUN $GMX editconf -f $ID/ligand.pdb -d $WATER_THICKNESS -bt dodecahedron -o $ID/ligand-box.pdb
@@ -407,7 +407,7 @@ main() {
             for d in $TEMPLATE/*-{lig,complex}.mdp; do
                 cp $d $ID/
             done
-            python3 $ABFE_ROOT/resurrect_flexible.py --flexible $ID/pp_flex.top --top $ID/ligand-ion.top --output $ID/ligand-ion-flex.top
+            $PYTHON3 $ABFE_ROOT/resurrect_flexible.py --flexible $ID/pp_flex.top --top $ID/ligand-ion.top --output $ID/ligand-ion-flex.top
             cat $ID/complex.ndx $ID/restr_pull.ndx > $ID/complex_with_pull.ndx
             ;;
         query,4)
