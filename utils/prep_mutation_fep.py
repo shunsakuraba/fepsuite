@@ -155,10 +155,7 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
                 ofh.write(l)
             if re.search("ions.itp", l):
                 out = True
-    incdirs = []
-    if "GMXDATA" in os.environ:
-        incdirs += ["-I", f"{os.environ['GMXDATA']}/top"]
-    check_call_verbose([args.cpp, "-P", "-o", "topol_pp.top", "topol_m.top"] + incdirs)
+    check_call_verbose([args.python3, f"{args.feprest}/utils/pp.py", "-o", "topol_pp.top", "topol_m.top"])
     check_call_verbose([args.python3, f"{args.feprest}/rest2py/canonicalize_top.py", "topol_pp.top", "topol_can.top"])
 
     os.chdir(curdir)
@@ -301,7 +298,6 @@ def argparse_options():
     parser.add_argument("--feprest", required=True, help="Path to feprest pipeline directory")
     parser.add_argument("--nucfepgen", required=True, help="Path to nucfepgen directory")
     parser.add_argument("--python3", default=sys.executable, help="Path to python3")
-    parser.add_argument("--cpp", default="cpp", help="Path to cpp")
     
     parser.add_argument("--wtdir", default="wt", help="Where we store wild-type residue informations")
     parser.add_argument("--pdb", required=True, help="Input PDB file")
