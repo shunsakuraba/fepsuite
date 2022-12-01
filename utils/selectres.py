@@ -1,6 +1,6 @@
 import sys
 
-
+# FIXME: I know this script's quality is abysmal and needs updating
 
 [_, topfrom, pdbfrom, targetresid, topto, pdbto] = sys.argv
 targetresid = int(targetresid)
@@ -14,6 +14,7 @@ numatoms = {
         "angles": 3,
         "dihedrals": 4,
         "pairs": 2,
+        "cmap": 5,
         "position_restraints": 1
         }
 with open(topfrom) as fh, open(topto, "w") as ofh:
@@ -64,8 +65,8 @@ with open(topfrom) as fh, open(topto, "w") as ofh:
 with open(pdbfrom) as fh, open(pdbto, "w") as ofh:
     for l in fh:
         if l.startswith("ATOM  "):
-            ls = l.split()
-            if int(ls[5]) in targetresids:
+            resid = l[22:26].strip()
+            if int(resid) in targetresids:
                 ofh.write(l)
 
 
