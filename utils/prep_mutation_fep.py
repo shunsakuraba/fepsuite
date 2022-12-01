@@ -200,15 +200,16 @@ def mut_name(mutstr: str):
 
 def solvate_conf_topology(radius):
     check_call_verbose([args.gmx] + f"editconf -f fepbase.pdb -d {radius} -bt dodecahedron -o conf_box".split())
+    maybe_relative = ""
+    if os.path.exists(f"{args.ff}.ff"):
+        maybe_relative = "./"
+
     with open("fepbase.top") as fh, open("topol_solvated.top", "w") as ofh:
         for l in fh:
             ls = l.split()
             if ls == ['[', 'system', ']']:
-                maybe_relative = ""
-                if os.path.exists(f"{args.ff}.ff"):
-                    maybe_relative = "./"
-                print(f'#include "{maybe_relative}{args.ff}.ff/{args.water_model}.itp', file=ofh)
-                print(f'#include "{maybe_relative}{args.ff}.ff/ions.itp', file=ofh)
+                print(f'#include "{maybe_relative}{args.ff}.ff/{args.water_model}.itp"', file=ofh)
+                print(f'#include "{maybe_relative}{args.ff}.ff/ions.itp"', file=ofh)
             ofh.write(l)
     waterbox = "spc216.gro"
     if args.water_model in ["tip4p", "tip4pew"]:
@@ -216,6 +217,8 @@ def solvate_conf_topology(radius):
     check_call_verbose([args.gmx] + f"solvate -cp conf_box -p topol_solvated -cs {waterbox} -o conf_solvated.pdb".split())
     with open("dummy.mdp", "w") as ofh:
         pass # clear dummy file
+    log_with_color("Note: if error about \"no default Bond types\" occurs on next grompp, remove molecules containing [ bonds ] from corresponding \"ions.itp\""
+        "or add bond, angle, dihedral parameters. This happens only with recent CHARMM36 parameters")
     check_call_verbose([args.gmx] +  "grompp -f dummy.mdp -p topol_solvated.top -c conf_solvated.pdb -po dummy_out -o topol_solvated -maxwarn 1".split())
     shutil.copy("topol_solvated.top", "topol_ionized.top")
     cmds = [args.gmx] + f"genion -s topol_solvated -o conf_ionized.pdb -p topol_ionized.top -pname {args.ion_positive} -nname {args.ion_negative} -conc {args.ion} -neutral".split()
@@ -251,7 +254,7 @@ def main(args):
         # use local force field file
         log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
         os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-    check_call_verbose([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA".split())
+    check_call_verbose([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA --disable-cmap-error".split())
     solvate_conf_topology(args.solv)
     generate_para_conf(args, mutation_list)
     log_with_color(f"cd ..")
