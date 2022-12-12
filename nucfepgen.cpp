@@ -481,8 +481,19 @@ static vector<double> topological_min_dihed(const topology &Atop, int a, int b, 
   exit(1);
 }
 
+// Returns true if angle is defined and close to 180 degree. 
+bool unfavored_for_dihedral_restraint(const Matrix3Xd &coords, int a1, int a2, int a3)
+{
+  if(a1 == -1 || a2 == -1 || a3 == -1) {
+    return false;
+  }
+  const double linear_angle_threshold = 170.0 * M_PI / 180.0;
 
-void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords, 
+  double a = angle(coords.col(a1), coords.col(a2), coords.col(a3));
+  return (a > linear_angle_threshold);
+}
+
+void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
                     double force_bond,
                     double force_angluar,
                     double force_dihedral,
@@ -610,6 +621,15 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
     int aa = assignAofO[angle_o];
     int dihed_o = dihedral_atom[p];
     int da = assignAofO[dihed_o];
+
+    // Here I assume that, there are no three atoms that are linear in state B and non-linear in state A - are there any major counterexample?
+    if(unfavored_for_dihedral_restraint(Acoords, pa, ba, aa) ||
+       unfavored_for_dihedral_restraint(Acoords, ba, aa, da)){
+      if(verbose) {
+        cerr << "Skipping dihedral restraint " << (p + 1) << "-" << (bond_o + 1) << "-" << (angle_o + 1) << "-" << (dihed_o + 1) << " because some atoms are linear" << endl;
+      }
+      continue;
+    }
 
     double dih_rad = dihedral(Acoords.col(pa), Acoords.col(ba), Acoords.col(aa), Acoords.col(da));
     if(use_topological_min) {
@@ -2001,7 +2021,7 @@ int main(int argc, char* argv[])
   p.add<string>("structureOB", 0, "PDB structure to output (optional, for stateB)", false);
   p.add<string>("topologyO", 'o', ".top output", true);
   p.add<string>("assign-dictionary", 0, "Specify assignment matching pair", false, "assign-dictionary.txt");
-  p.add<string>("generate-restraint", 0, "Comma-separated list. If non-empty, restraints are be generated for this atom name, with 1000 kJ/mol/nm^2", false, "");
+  p.add<string>("generate-restraint", 0, "Comma-separated list. If non-empty, restraints are generated for the specified atom name, with 1000 kJ/mol/nm^2", false, "");
   p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
