@@ -5,7 +5,7 @@ import math
 cycle_contribution = {
         "charging-lig": ("bar", "charging", 1.0),
         "charging-complex": ("bar", "charging", -1.0),
-        "restrain-analytic": ("restrcor", "restrain", 1.0),
+        "restrain-analytical": ("restrcor", "restrain", 1.0),
         "restrain": ("bar", "restrain", 1.0),
         "annihilation-lig": ("bar", "annihilation", 1.0),
         "annihilation-complex": ("bar", "annihilation", -1.0),
@@ -68,19 +68,19 @@ def read_restr(args):
         avgs = [float(x) for x in ls[1].split()]
 
     v0 = 1.66 # 1M standard state in nm^3
-    RT = args.temp * gasconstant
+    RT = args.temp * gasconstant # kJ/mol
     mdeltaf = math.log(8 * math.pi ** 2 * v0) + 0.5 * math.log(args.distance_spring) + 1.0 * math.log(args.angle_spring) + 1.5 * math.log(args.dihedral_spring) \
         - 2. * math.log(avgs[0]) - math.log(math.sin(avgs[1])) - math.log(math.sin(avgs[2])) - 3. * math.log(2 * math.pi * RT) # avogadro const in R cancels with kJ/mols in springs consts
-    return - RT * mdeltaf
+    return - RT * mdeltaf # kJ/mol
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--basedir", default=".", type=str, help="Base directory")
     parser.add_argument("--restrinfo", required=True, type=str, help="Restrain info")
-    parser.add_argument("--distance-spring", type=float, default=418.68, help="Spring constant to apply (kJ/mol/nm^2)")
-    parser.add_argument("--angle-spring", type=float, default=4.1868, help="Weight to the angle stdev (kJ/mol/rad^2)")
-    parser.add_argument("--dihedral-spring", type=float, default=4.1868, help="Weight to the dihedral stdev (kJ/mol/rad^2)")
+    parser.add_argument("--distance-spring", type=float, default=4184.0, help="Spring constant to apply (kJ/mol/nm^2)")
+    parser.add_argument("--angle-spring", type=float, default=41.848, help="Weight to the angle stdev (kJ/mol/rad^2)")
+    parser.add_argument("--dihedral-spring", type=float, default=41.84, help="Weight to the dihedral stdev (kJ/mol/rad^2)")
     parser.add_argument("--temp", type=float, default=300.0, help="Temperature")
 
     args = parser.parse_args()
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     read_update_lrc(args.basedir, bar_res, individual_bar_res)
     analytical_e = read_restr(args)
     restre, var = bar_res["restrain"] 
-    bar_res["restrain"] = (restre - analytical_e, var) # ArVBA: P...L -> P+L, thus NEGATIVE contribution
+    bar_res["restrain"] = (restre - analytical_e, var) # ArVBA in paper corresponds to  P...L -> P+L, thus NEGATIVE contribution
     individual_bar_res["restrain-analytical"] = (-analytical_e, 0)
     total = 0.
     totalvar = 0.
