@@ -173,7 +173,7 @@ main() {
             ;;
         run,4)
             # initialize for state A to B
-            python3 $FEPREST_ROOT/add_underline.py $ID/$BASECONF $ID/fep_pp.top $ID/fep_underlined.top
+            python3 $FEPREST_ROOT/add_underline.py -c $ID/$BASECONF -t $ID/fep_pp.top -o $ID/fep_underlined.top --distance $REST_REGION_DISTANCE
             prev=$ID/nptA
             top=$ID/fep_underlined.top
             if [[ $CHARGED = yes ]]; then

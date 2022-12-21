@@ -48,3 +48,5 @@ DOMAIN_SHRINK=0.6
 AT_POSITIVE=Na
 AT_NEGATIVE=Cl
 
+# Atoms within ($REST_REGION_DISTANCE) nm, and same residues as these atoms, are considered "hot" region
+REST_REGION_DISTANCE=0.4
