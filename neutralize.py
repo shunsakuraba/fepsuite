@@ -5,7 +5,14 @@ import random
 
 natompersol = 3 # FIXME for TIP4P
 
-[_, topin, groin, topout, groout, positive_at, negative_at] = sys.argv
+[_, topin, groin, topout, groout, positive_at, negative_at] = sys.argv[0:7]
+if len(sys.argv) > 7:
+    otype = sys.argv[7]
+    htype = sys.argv[8]
+else:
+    otype = "OW"
+    htype = "HW"
+
 dtotal = 0.0
 
 with open(topin) as fh, \
@@ -31,17 +38,24 @@ with open(topin) as fh, \
                 if dtotal < -0.5:
                     # increase charge
                     ofh.write(f"""
-     1     OW      1     SOL     OW      1     -0.834    8.00000    {positive_at}      1.000  8.00000
-     2     HW      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
-     3     HW      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
+     1     {otype}      1     SOL     OW      1     -0.834    8.00000    {positive_at}      1.000  8.00000
+     2     {htype}      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
+     3     {htype}      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
 """)
                 elif dtotal > 0.5:
                     # decrease charge
                     ofh.write(f"""
-     1     OW      1     SOL     OW      1     -0.834    8.00000    {negative_at}     -1.000  8.00000
-     2     HW      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
-     3     HW      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
+     1     {otype}      1     SOL     OW      1     -0.834    8.00000    {negative_at}     -1.000  8.00000
+     2     {htype}      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
+     3     {htype}      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
 """)
+                else:
+                    ofh.write(f"""
+     1     {otype}      1     SOL     OW      1     -0.834    8.00000    {otype}     -0.834  8.00000
+     2     {htype}      1     SOL    HW1      1      0.417    4.00000    {htype}     0.417  4.00000
+     3     {htype}      1     SOL    HW2      1      0.417    4.00000    {htype}     0.417  4.00000
+""")
+                    
 
                 ofh.write("""
 
