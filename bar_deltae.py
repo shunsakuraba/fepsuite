@@ -137,8 +137,7 @@ def main():
         print("Finished loading %s with %d points %d frames" % (", ".join(files), len(data), len(time_all[se]))) # time_all[se] shall exist
         sys.stdout.flush()
 
-    # is this legit?
-    #for k in energies:
+    # Since I am rewriting energies[k], just for the safety I don't use "for k in energies"
     for k in list(energies.keys()):
         energies[k] = numpy.array(energies[k]) * beta
         time_all[k] = numpy.array(time_all[k])

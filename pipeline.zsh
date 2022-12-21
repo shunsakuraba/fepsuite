@@ -181,7 +181,7 @@ main() {
                 prev=$ID/nptA_neut
                 top=$ID/fep_underlined_neut.top
             fi
-            python3 $FEPREST_ROOT/underlined_group.py $top $ID/for_rest.ndx
+            python3 $FEPREST_ROOT/underlined_group.py -t $top -o $ID/for_rest.ndx
             python3 $FEPREST_ROOT/rest2py/replica_optimizer.py init $NREP feprest --basedir $ID
             mkdir $ID/genmdps || true
             python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/cg.mdp $ID/genmdps/cg%d.mdp --basedir $ID
@@ -347,7 +347,7 @@ main() {
         run,*)
             # extend run
             (( PHASE = stateno - 7 )) || true
-            TEMP=$(grep ref_t mdp/run.mdp | cut -d '=' -f2)
+            TEMP=$(grep 'ref[_|-]t' mdp/run.mdp | cut -d '=' -f2)
             work=$ID/prodrun
             reps=()
             for i in {0..$((NREP - 1))}; do
