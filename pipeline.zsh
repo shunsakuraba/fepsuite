@@ -17,21 +17,30 @@ mdrun_find_possible_np() {
     shift
     args=($@)
     log_basename="" || true
+    dir_basename="."
     #set +e
     is_log=0
+    is_prefix=0
     for arg in $args; do
         if [[ $is_log = 1 ]]; then
             log_basename=$arg
+        elif [[ $is_prefix = 1 ]]; then
+            dir_basename=$arg
+            is_prefix=0
         fi
         case $arg in
             -deffnm|-l)
                 is_log=1
+                ;;
+            -multidir)
+                is_prefix=1
                 ;;
             *)
                 is_log=0
                 ;;
         esac
     done
+    log_basename=$dir_basename/$log_basename
     if [[ -n $PROCS_SAVED ]]; then
         NP=$PROCS_SAVED
     else
@@ -39,6 +48,7 @@ mdrun_find_possible_np() {
     fi
     while true; do
         echo "Trying with NP=$NP"
+        unsetopt ERR_EXIT
         mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
@@ -51,8 +61,10 @@ mdrun_find_possible_np() {
                 exit $ERRORCODE
             fi
         else
+            setopt ERR_EXIT
             break
         fi
+        setopt ERR_EXIT
     done
     PROCS_SAVED=$NP
     echo "Normal termination of mdrun"
@@ -77,7 +89,7 @@ check_replica_probs ()
             continue
         fi
         if (( $v < threshold )); then
-            echo "Error: replica exchange probabilities are too low. You need to increase \$NCHARGE or \$NANNIH."
+            echo "Error: replica exchange probabilities are too low. You need to increase \$NRESTR, \$NCHARGE or \$NANNIH."
             exit $ERRORCODE
         fi
     done
@@ -182,7 +194,9 @@ do_product_runs() {
         mdprestr=(--additional-mdp $ID/$pullmdp)
     fi
     nprerun=0
-    if [[ $phase = "annihilation-lig" ]]; then
+    # In both annihilation phases we optimize separately, because solvent and protein are totally different environments.
+    # In annihilation-complex phase we restart from optimized lambda values in annihilation-lig
+    if [[ $phase = "annihilation-lig" ]] || [[ $phase = "annihilation-complex" ]]; then
         nprerun=$ANNIH_LAMBDA_OPT
     fi
     prevcrd=$ID/$prev
@@ -238,7 +252,7 @@ do_product_runs() {
         stdout=$ID/$phase.stdout
         stderr=$ID/$phase.stderr
         mdrun_find_possible_np $nrepl -multidir $DIRS -deffnm $phase$infix -c $phase$infix.pdb -replex 500 $nstlist_cmd > >(tee $stdout) 2> >(tee $stderr >&2)
-        if (( iprerun = nprerun )); then
+        if (( iprerun == nprerun )); then
             check_replica_probs $ID/$phase.0/$phase.log
         fi
     done
