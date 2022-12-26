@@ -1,109 +1,70 @@
 import argparse
 import math
-import warnings
 import common_gmx_files
+import numpy
+import mdtraj
+import itertools
 
 def find_restraints(args):
-    # importing at this timing is discouraged in python, but it's too heavy to just show --help
-    import numpy
-    import mdtraj 
-
-    nm_of_angstrom = 0.1
-
     refstructure = mdtraj.load(args.topology)
     topology = refstructure.topology
-    iterbegin_trajectory = lambda: mdtraj.iterload(args.trajectory, top=topology)
+    def iterbegin_trajectory():
+        return mdtraj.iterload(args.trajectory, top=topology)
 
     indices = common_gmx_files.parse_index(args.index)
     protix = indices[args.prot_sel]
     ligix = indices[args.lig_sel]
-    ligheavyix = list(set(topology.select("not type H")) & set(ligix))
+    ligheavyix = list(set(topology.select("not type H")).intersection(set(ligix)))
     # before scanning the trajectory, check whether --anchor-atoms are sane
     anchor_names = args.anchor_atoms.split(',')
-    [anc1, anc2, anc3] = anchor_names
-    _anchors = topology.select("name %s %s %s" % (anc1, anc2, anc3))
-    if len(_anchors) == 0:
+    anchors = list(set(topology.select(f'name {" ".join(anchor_names)}')).intersection(protix))
+    if len(anchors) == 0:
         raise RuntimeError("No match for anchor atoms in system")
+    if len(set(ligheavyix).intersection(anchors)) > 0:
+        raise RuntimeError("Ligand and receptor atoms are overlapping")
 
-    # pass 0: determine ligand representative atoms
-    # first atom (a): center of the ligand. Assumes that refstructure makes ligand whole.
-    center = mdtraj.compute_center_of_mass(refstructure.atom_slice(ligheavyix))[0, :]
-    d2s = numpy.sum((refstructure.xyz[0, ligheavyix, :] - center[numpy.newaxis, :])**2, axis=1)
-    lig_a_ix = ligheavyix[numpy.argmin(d2s)]
-    print("ligand first atom:", lig_a_ix, topology.atom(lig_a_ix))
+    # find neighboring atoms in both state
+    neighbors_lig = mdtraj.compute_neighbors(refstructure, args.search_dist, anchors, haystack_indices=ligheavyix)[0]
+    neighbors_anchor = mdtraj.compute_neighbors(refstructure, args.search_dist, ligheavyix, haystack_indices=anchors)[0]
 
-    # second atom (b): farthest from the first
-    lig_a = refstructure.xyz[0, lig_a_ix, :]
-    d2s = numpy.sum((refstructure.xyz[0, ligheavyix, :] - center[numpy.newaxis, :])**2, axis=1)
-    lig_b_ix = ligheavyix[numpy.argmax(d2s)]
-    assert lig_a_ix != lig_b_ix
-    print("ligand second atom:", lig_b_ix, topology.atom(lig_b_ix))
+    if len(neighbors_lig) == 0 or len(neighbors_anchor) == 0:
+        raise RuntimeError(f"Number of neighbor atoms in ligand was {len(neighbors_lig)}, in anchor was {len(neighbors_anchor)}")
 
-    # third atom (c): 45 < b-a-c < 135, farthest from the first
-    # this ensures correct harmonic approximation in the analytical correction
-    angle_indices = [[lig_b_ix, lig_a_ix, ix] for ix in ligheavyix]
-    assert numpy.shape(numpy.array(angle_indices))[1] == 3
+    atom_pairs = list(itertools.product(neighbors_anchor, neighbors_lig))
+    distances = mdtraj.compute_distances(refstructure, atom_pairs)[0, :] # [1, num_pairs] -> [num_pairs]
+    filtered_pairs = [p for p, d in zip(atom_pairs, distances) if d <= args.search_dist]
 
-    def calc_angle(indices):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            angles = mdtraj.compute_angles(refstructure, indices)[0]
-            angles[numpy.isnan(angles)] = 0.0
-        return angles
-    angles = calc_angle(angle_indices)
-    angmin = (45.0 * math.pi / 180.0) 
-    angmax = (135.0 * math.pi / 180.0) 
-    mask = (angmin < angles) & (angles < angmax)
-    d2s[numpy.logical_not(mask)] = 0.0
-    lig_c_ix = ligheavyix[numpy.argmax(d2s)]
-    assert lig_a_ix != lig_c_ix
-    assert lig_b_ix != lig_c_ix
-    print("ligand third atom:", lig_c_ix, topology.atom(lig_c_ix))
+    print(f"There are {len(filtered_pairs)} pairs of atoms considered")
+    if len(filtered_pairs) == 0:
+        raise RuntimeError(f"Could not find pairs within {args.search_dist} nm")
+    # for each combination find a possible combination of 6 atoms
 
+    def find_bonded(a, searchindex):
+        threshold = 0.22 # 0.22 nm, should be sufficiently long for any atoms
+        found = mdtraj.compute_neighbors(refstructure, threshold, [a], [x for x in searchindex if x != a])[0]
+        return found
+    
+    def find_two_bonds(a, searchindex):
+        bonded = find_bonded(a, searchindex)
+        ret = []
+        for b in bonded:
+            angled = find_bonded(b, searchindex)
+            angled = [x for x in angled if x != a]
+            for c in angled:
+                ret.append((a, b, c))
+        return ret
 
-    # pass 1: find neighboring protein atoms
-    neighbor_sets = set()
-    for chunk in iterbegin_trajectory():
-        # update neighboring atoms list
-        matcheslist = mdtraj.compute_neighbors(chunk, nm_of_angstrom * args.search_dist,
-                ligix, protix, periodic=True)
-        for m in matcheslist:
-            neighbor_sets |= set(m)
-
-    # pass 1.5: determine residues
-    residues = set()
-    for a in neighbor_sets:
-        residues.add(topology.atom(a).residue.index)
-    residues = list(residues)
-    residues.sort()
-    print("Nearby residue ids (0-origin):", residues)
-    residues_filtered = []
-    anchors = []
-    # I do believe this is an extreme case, but just in case...
-    for r in residues:
-        anchors_cur = [list(set(topology.select("resid %d and name %s" % (r, n))) & set(protix)) for n in anchor_names]
-        fail = False
-        for al in anchors_cur:
-            if len(al) != 1:
-                fail = True
-                break
-        if fail:
-            continue
-        anchors_cur = [x for [x] in anchors_cur]
-        residues_filtered.append(r)
-        anchors.append(numpy.array(anchors_cur, dtype=int))
-    print("Filtered out %d residues" % (len(residues) - len(residues_filtered)))
-
-    # generate pass
-    lig_indices = numpy.array([lig_a_ix, lig_b_ix, lig_c_ix], dtype=int)
-    ind_perm = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+    # enumerate evey possible 6-atom combinations
     anclig_list = []
-    for (i, r) in enumerate(residues_filtered):
-        for ancperm in ind_perm:
-            for ligperm in ind_perm:
-                anclig_list.append((anchors[i][ancperm], lig_indices[ligperm]))
+    for (anc, lig) in filtered_pairs:
+        anc_angles = find_two_bonds(anc, anchors)
+        lig_angles = find_two_bonds(lig, ligheavyix)
+        anc_rev_angles = [(c, b, a) for (a, b, c) in anc_angles]
+        anclig_list.extend(itertools.product(anc_rev_angles, lig_angles))
 
-    # pass 2: determine the best residue and its ordering
+    print(f"There are {len(anclig_list)} sets of 6-atom tuples considered")
+
+    # determine the best residue and its ordering
     dihed_indices_a = [[anc[0], anc[1], anc[2], lig[0]] for anc, lig in anclig_list]
     dihed_indices_b = [[anc[1], anc[2], lig[0], lig[1]] for anc, lig in anclig_list]
     dihed_indices_c = [[anc[2], lig[0], lig[1], lig[2]] for anc, lig in anclig_list]
@@ -112,6 +73,7 @@ def find_restraints(args):
     dist_indices = [[anc[2], lig[0]] for anc, lig in anclig_list]
 
     npairs = len(dist_indices)
+    # all these values have the same dimension of [frame, pairs]
     diheds_a = numpy.zeros((0, npairs))
     diheds_b = numpy.zeros((0, npairs))
     diheds_c = numpy.zeros((0, npairs))
@@ -139,9 +101,13 @@ def find_restraints(args):
         diheds_c = numpy.concatenate((diheds_c, dihed_chunk_c), axis=0)
 
     def periodic_diheds(dh):
-        for i in range(1, dh.shape[1]):
-            diff = dh[:, i] - dh[:, i - 1]
-            dh[:, i] -= (2 * math.pi) * numpy.round(diff / (2 * math.pi))
+        def periodic_impl(dh, baseval):
+            diff = dh[:, :] - baseval[numpy.newaxis, :] # baseval have [pairs] dimension
+            dh[:, :] -= (2 * math.pi) * numpy.round(diff / (2 * math.pi))
+        periodic_impl(dh, dh[0, :])
+        xmean = numpy.mean(dh, axis=0)
+        xmean -= (2 * math.pi) * numpy.round(xmean / (2 * math.pi)) # shift the average to be around [-pi, pi]
+        periodic_impl(dh, xmean)
 
     periodic_diheds(diheds_a)
     periodic_diheds(diheds_b)
@@ -153,12 +119,12 @@ def find_restraints(args):
             args.dihedral_weight * (numpy.var(diheds_a, axis=0) + numpy.var(diheds_b, axis=0) + numpy.var(diheds_c, axis=0))
             )
     # prevent ang < 45 or ang > 135 (log sin theta part gets unstable)
-    # FIXME(shun): actually such an angle should not be chosen from the beginning
     avgangle_a_all = numpy.mean(angles_a, axis=0)
     avgangle_b_all = numpy.mean(angles_b, axis=0)
     banned_a = numpy.logical_or(avgangle_a_all < (math.pi * 45.0 / 180.0), avgangle_a_all > (math.pi * 135.0 / 180.0))
     banned_b = numpy.logical_or(avgangle_b_all < (math.pi * 45.0 / 180.0), avgangle_b_all > (math.pi * 135.0 / 180.0))
     banned = numpy.logical_or(banned_a, banned_b)
+    print(f"Removed {numpy.sum(banned)} tuples due to bad angles")
     total_weights[banned] = 1e+6
 
     bestcand = numpy.argmin(total_weights)
@@ -192,14 +158,14 @@ def init_args():
     parser.add_argument("--prot-sel", type=str, default="Receptor", help="Index name for receptor selection")
     parser.add_argument("--lig-sel", type=str, default="Ligand", help="Index name for ligand selection")
     parser.add_argument("--index", type=str, default="index.ndx", help="Index file name")
-    parser.add_argument("--search-dist", type=float, default=5.0, help="Distance as an upper limit to search contacting atoms. [angstrom]")
-    parser.add_argument("--anchor-atoms", type=str, default="CA,C,N", help="Anchor atom names. Atoms are chosen to be in the same residue.")
+    parser.add_argument("--search-dist", type=float, default=0.5, help="Distance as an upper limit to search contacting atoms. [nm]")
+    parser.add_argument("--anchor-atoms", type=str, default="CB,CA,C,N,O", help="Anchor atom names.")
     parser.add_argument("--topology", type=str, help="Topology file, possibly .pdb or .gro file.", required=True)
     parser.add_argument("--trajectory", type=str, help="Trajectory file.", required=True)
     parser.add_argument("--output", type=str, help="Output configuration file", required=True)
-    parser.add_argument("--distance-weight", type=float, default=1.0, help="Weight to the distance stdev")
-    parser.add_argument("--angle-weight", type=float, default=1.0, help="Weight to the angle stdev")
-    parser.add_argument("--dihedral-weight", type=float, default=1.0, help="Weight to the dihedral stdev")
+    parser.add_argument("--distance-weight", type=float, default=4184.0, help="Weight to the distance stdev. Default weight values comes from restraint energy constants.")
+    parser.add_argument("--angle-weight", type=float, default=41.84, help="Weight to the angle stdev.")
+    parser.add_argument("--dihedral-weight", type=float, default=41.84, help="Weight to the dihedral stdev.")
 
     return parser.parse_args()
 

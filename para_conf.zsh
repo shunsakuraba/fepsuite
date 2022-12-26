@@ -26,15 +26,12 @@ RUN_PROD=2000
 #*************************
 # System setups
 #*************************
-# Ligand selection string, uses python "mdtraj" library's selection syntax
-# Note in the mdtraj library's syntax, "residue" or "resSeq" is PDB-based residue ID (probably 1-origin), while "resid" is 0-origin residue number from the beginning.
-LIG_MDTRAJ="resname MOL"
 
 # Gromacs [ moleculetype ] name of the ligand.
-# FIXME: actually LIG_MDTRAJ should be unnecessary.
 LIG_GMX="MOL"
 
-# Receptor selection string for mdtraj (used to determine restraint)
+# Receptor selection string (used to determine restraints). Python "mdtraj" library's selection syntax.
+# Note in the mdtraj library's syntax, "residue" or "resSeq" is PDB-based residue ID (probably 1-origin), while "resid" is 0-origin residue number from the beginning.
 RECEPTOR_MDTRAJ="protein"
 
 #*************************

@@ -59,7 +59,7 @@ def parse_index(ndx):
             if l.startswith('['):
                 group = ls[1]
                 if group in ret:
-                    raise RuntimeError("Multiple groups in index file")
+                    raise RuntimeError("Same group appeared more than once in the index file")
                 else:
                     ret[group] = []
                 continue
