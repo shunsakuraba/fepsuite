@@ -52,13 +52,22 @@ mdrun_find_possible_np() {
         mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
-            tail -20 $log_basename.log | grep -q -i "\\(domain\\|prime\\)" || { echo "Error: domain-unrelated error"; exit $ERRORCODE }
+            if [[ ! -e $log_basename.log ]]; then
+                echo "Error: failed during mpirun-mdrun startup. This typically happens when there are a problem with mpirun command."
+                exit 1
+            fi
+            if tail -20 $log_basename.log | grep -q -i "\\(domain\\|prime\\)"; then
+                true
+            else
+                echo "Error: mdrun stopped with errors unrelated to domain size"
+                exit 1
+            fi 
             PREVNP=$NP
             # round up
             (( NP = (NP - 1) / least_unit * least_unit ))
             if (( NP == 0 )) || (( PREVNP == NP )); then
                 echo "Error: unable to find proper parallel processes"
-                exit $ERRORCODE
+                exit 1
             fi
         else
             setopt ERR_EXIT
