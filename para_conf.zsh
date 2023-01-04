@@ -46,6 +46,9 @@ EQ_RMSD_CUTOFF=0.4
 # (unit: nm)
 MAX_BONDED_INTERACTION_DIST=0
 
+# change this value to max possible ligand diamter (nm). This is usually unnecessary as the proper values are set automatically.
+LIGAND_DIAMETER=0
+
 #*************************
 # Parameter optimization
 #*************************
@@ -69,7 +72,3 @@ IONIC_STRENGTH=0.150
 ION_POSITIVE=NA
 # negative ion
 ION_NEGATIVE=CL
-
-#**************************
-# default is exit 100 on error; this is necessary for Grid Engine family
-ERRORCODE=100

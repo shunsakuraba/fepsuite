@@ -19,7 +19,7 @@ gen_vel = yes
 gen_temp = 300
 tc_grps = System
 
-pcoupl = Berendsen
+pcoupl = C-rescale
 ref_p = 1.013
 tau_p = 10.00
 nstpcouple = 10

@@ -62,6 +62,10 @@ mdrun_find_possible_np() {
                 echo "Error: mdrun stopped with errors unrelated to domain size"
                 exit 1
             fi 
+            if tail -20 $log_basename.log | grep -q -i "There are perturbed non-bonded pair interactions beyond the pair-list cutoff"; then
+                echo "Error: mdrun stopped because ligand atom-atom distance exceeded automatically determined rlist value. Try specifying LIGAND_DIAMETER in para_conf.zsh manually."
+                exit 1
+            fi 
             PREVNP=$NP
             # round up
             (( NP = (NP - 1) / least_unit * least_unit ))
@@ -102,6 +106,38 @@ check_replica_probs ()
             exit $ERRORCODE
         fi
     done
+}
+
+set_and_add_rlist ()
+{
+    MDP=$1
+
+    sync $MDP
+
+    # set rlist, required because we decouple via couple-intramol=no, where exclusions are used within the ligand
+    if (( LIGAND_DIAMETER == 0 )); then
+        rlist=0.
+        while read line; do
+            case $line in
+            rvdw|rcoulomb)
+                d=$(cut -f2 -d '=' <<< $line | tr -d ' \t') || true
+                if (( rlist < d )); then
+                    (( rlist = d * 1.2 )) # 1.2 for buffering, should be enough for any kernel
+                fi
+                ;;
+            esac
+        done < $MDP
+        safe_rlist=$(grep safe $ID/diameter.txt | cut -f2 -d ' ')
+        if (( safe_rlist > rlist )); then
+            (( rlist = safe_rlist ))
+        fi
+    else
+        rlist=$LIGAND_DIAMETER
+    fi
+    echo "rlist=$rlist" >> $MDP
+    echo "verlet-buffer-tolerance=-1" >> $MDP
+    
+    sync $MDP
 }
 
 do_run() {
@@ -239,6 +275,9 @@ do_product_runs() {
                 postprocess=(sed "1,/LRCONLY_BEGIN/{/compressed/d}")
             fi
             cat ./mdp/run.mdp $ID/mdp_addenda/${phase}-$i.mdp | $postprocess  > $MDP
+
+            set_and_add_rlist $MDP
+
             if (( iprerun < nprerun )); then
                 sync $MDP
                 dt=$(grep "^\\s*dt\\s*=" $MDP | cut -d '=' -f2 | cut -d ';' -f1)
@@ -280,6 +319,7 @@ do_eval_run() {
     if [[ -n $ndx ]]; then
         ndx_grompp=(-n $ID/$ndx)
     fi
+    set_and_add_rlist $ID/$phase.mdp
     $SINGLERUN $GMX grompp -f $ID/$phase.mdp -p $ID/$topol -c $ID/$prev.pdb -t $ID/$prev.cpt -o $ID/$phase.tpr -po $ID/$output.$phase.mdp $ndx_grompp -maxwarn $maxwarn
     mdrun_find_possible_np 1 -deffnm $ID/$phase -rerun $ID/$prev.xtc $nstlist_cmd
 }
@@ -396,6 +436,7 @@ main() {
             echo "Receptor\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.pdb -o $ID/prerun.run.final.pdb -center -pbc mol -n $ID/complex.ndx -ur compact
             echo "Receptor\nLigand" | $SINGLERUN $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
             $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
+            $PYTHON3 $ABFE_ROOT/ligand_diameter.py --traj=$ID/prerun.run.xtc --structure=$ID/prerun.run.pdb --index=$ID/complex.ndx > $ID/diameter.txt
             $PYTHON3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
             # Restraint for annihilation and charging
             $PYTHON3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --mdp $ID/restr_pull.mdp --ndx $ID/restr_pull.ndx
