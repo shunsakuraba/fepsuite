@@ -1,0 +1,27 @@
+integrator = sd
+nsteps = 5000000 ; 10 ns
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+dispcorr = EnerPres
+
+tcoupl = no
+ref_t = 300
+tau_t = 1
+tc_grps = System
+
+pcoupl = Berendsen
+ref_p = 1.013
+tau_p = 1.00
+nstpcouple = 10
+compressibility = 4.5e-5
+
+refcoord-scaling = com
+

@@ -1,0 +1,3146 @@
+diff --git a/src/gromacs/fileio/checkpoint.cpp b/src/gromacs/fileio/checkpoint.cpp
+index 9c6cfe4213..6dc9a5e35d 100644
+--- a/src/gromacs/fileio/checkpoint.cpp
++++ b/src/gromacs/fileio/checkpoint.cpp
+@@ -157,7 +157,8 @@ const char* est_names[estNR] = { "FE-lambda",
+                                  "fep_state",
+                                  "MC-rng-unsupported",
+                                  "MC-rng-i-unsupported",
+-                                 "barostat-integral" };
++                                 "barostat-integral",
++                                 "winvm" };
+ 
+ enum
+ {
+@@ -1298,6 +1299,9 @@ static int do_cpt_state(XDR* xd, int fflags, t_state* state, FILE* list)
+                 case estPULLCOMPREVSTEP:
+                     ret = doVector<double>(xd, part, i, sflags, &state->pull_com_prev_step, list);
+                     break;
++                case estWINVM:
++                    ret = do_cpte_matrix(xd, part, i, sflags, state->winvm, list);
++                    break;
+                 default:
+                     gmx_fatal(FARGS,
+                               "Unknown state entry %d\n"
+diff --git a/src/gromacs/gmxpreprocess/toppush.cpp b/src/gromacs/gmxpreprocess/toppush.cpp
+index af199cdc79..34560b6f95 100644
+--- a/src/gromacs/gmxpreprocess/toppush.cpp
++++ b/src/gromacs/gmxpreprocess/toppush.cpp
+@@ -1635,32 +1635,49 @@ static bool default_cmap_params(gmx::ArrayRef<InteractionsOfType> bondtype,
+     /* Match the current cmap angle against the list of cmap_types */
+     for (int i = 0; i < bondtype[F_CMAP].nct() && !bFound; i += 6)
+     {
+-        if (bB) {}
++        bool bIdentical = true;
++        if (bB)
++        {
++            bIdentical =
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->ai()].typeB)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 0]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->aj()].typeB)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 1]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->ak()].typeB)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 2]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->al()].typeB)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 3]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->am()].typeB)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 4]);
++        }
+         else
+         {
+-            if ((atypes->bondAtomTypeFromAtomType(at->atom[p->ai()].type)
+-                 == bondtype[F_CMAP].cmapAtomTypes[i])
+-                && (atypes->bondAtomTypeFromAtomType(at->atom[p->aj()].type)
+-                    == bondtype[F_CMAP].cmapAtomTypes[i + 1])
+-                && (atypes->bondAtomTypeFromAtomType(at->atom[p->ak()].type)
+-                    == bondtype[F_CMAP].cmapAtomTypes[i + 2])
+-                && (atypes->bondAtomTypeFromAtomType(at->atom[p->al()].type)
+-                    == bondtype[F_CMAP].cmapAtomTypes[i + 3])
+-                && (atypes->bondAtomTypeFromAtomType(at->atom[p->am()].type)
+-                    == bondtype[F_CMAP].cmapAtomTypes[i + 4]))
+-            {
+-                /* Found cmap torsion */
+-                bFound       = true;
+-                ct           = bondtype[F_CMAP].cmapAtomTypes[i + 5];
+-                nparam_found = 1;
+-            }
++            bIdentical =
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->ai()].type)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 0]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->aj()].type)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 1]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->ak()].type)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 2]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->al()].type)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 3]) && 
++                (atypes->bondAtomTypeFromAtomType(at->atom[p->am()].type)
++                 == bondtype[F_CMAP].cmapAtomTypes[i + 4]);
++        }
++        if (bIdentical)
++        {
++            /* Found cmap torsion */
++            bFound       = true;
++            ct           = bondtype[F_CMAP].cmapAtomTypes[i + 5];
++            nparam_found = 1;
+         }
+     }
+ 
+     /* If we did not find a matching type for this cmap torsion */
+     if (!bFound)
+     {
+-        auto message = gmx::formatString("Unknown cmap torsion between atoms %d %d %d %d %d", p->ai() + 1,
++        auto message = gmx::formatString("Unknown cmap torsion between atoms%s %d %d %d %d %d",
++                                         (bB? " (stateB)" : ""), p->ai() + 1,
+                                          p->aj() + 1, p->ak() + 1, p->al() + 1, p->am() + 1);
+         warning_error_and_exit(wi, message, FARGS);
+     }
+@@ -2281,8 +2298,8 @@ void push_cmap(Directive                         d,
+         "%d", "%d%d", "%d%d%d", "%d%d%d%d", "%d%d%d%d%d", "%d%d%d%d%d%d", "%d%d%d%d%d%d%d"
+     };
+ 
+-    int  ftype, nral, nread, ncmap_params;
+-    int  cmap_type;
++    int  ftype, nral, nread, ncmap_params, ncmap_paramsB;
++    int  cmap_type, cmap_typeB;
+     int  aa[MAXATOMLIST + 1];
+     bool bFound;
+ 
+@@ -2334,14 +2351,32 @@ void push_cmap(Directive                         d,
+     }
+     std::array<real, MAXFORCEPARAM> forceParam = { 0.0 };
+     InteractionOfType               param(atoms, forceParam, "");
++    bool bPert = 
++        PERTURBED(at->atom[param.ai()]) ||
++        PERTURBED(at->atom[param.aj()]) ||
++        PERTURBED(at->atom[param.ak()]) ||
++        PERTURBED(at->atom[param.al()]) ||
++        PERTURBED(at->atom[param.am()]);
++
+     /* Get the cmap type for this cmap angle */
+     bFound = default_cmap_params(bondtype, at, atypes, &param, FALSE, &cmap_type, &ncmap_params, wi);
++    if(bPert)
++    {
++        bFound = bFound && default_cmap_params(bondtype, at, atypes, &param, TRUE, &cmap_typeB, &ncmap_paramsB, wi);
++    }
+ 
+-    /* We want exactly one parameter (the cmap type in state A (currently no state B) back */
+-    if (bFound && ncmap_params == 1)
++    /* We want exactly one parameter back */
++    if (bFound && ncmap_params == 1 && (!bPert || ncmap_paramsB == 1))
+     {
+         /* Put the values in the appropriate arrays */
+         param.setForceParameter(0, cmap_type);
++        if(bPert) {
++            param.setForceParameter(1, cmap_typeB);
++        }
++        else
++        {
++            param.setForceParameter(1, cmap_type);
++        }
+         add_param_to_list(&bond[ftype], param);
+     }
+     else
+@@ -2354,7 +2389,6 @@ void push_cmap(Directive                         d,
+     }
+ }
+ 
+-
+ void push_vsitesn(Directive d, gmx::ArrayRef<InteractionsOfType> bond, t_atoms* at, char* line, warninp* wi)
+ {
+     char*   ptr;
+diff --git a/src/gromacs/gpu_utils/cuda_kernel_utils.cuh b/src/gromacs/gpu_utils/cuda_kernel_utils.cuh
+index 1346c6218e..59c3b9b59d 100644
+--- a/src/gromacs/gpu_utils/cuda_kernel_utils.cuh
++++ b/src/gromacs/gpu_utils/cuda_kernel_utils.cuh
+@@ -99,5 +99,11 @@ static __forceinline__ __device__ T fetchFromParamLookupTable(const T*
+     return result;
+ }
+ 
++static __forceinline__ __device__ int groupid_packed(int igrp, int jgrp)
++{
++    int xgrp = min(igrp, jgrp);
++    int ygrp = max(igrp, jgrp);
++    return xgrp + (ygrp * (ygrp + 1) >> 1);
++}
+ 
+ #endif /* GMX_GPU_UTILS_CUDA_KERNEL_UTILS_CUH */
+diff --git a/src/gromacs/listed_forces/bonded.cpp b/src/gromacs/listed_forces/bonded.cpp
+index 6b6ad952ca..47d603f592 100644
+--- a/src/gromacs/listed_forces/bonded.cpp
++++ b/src/gromacs/listed_forces/bonded.cpp
+@@ -3071,7 +3071,7 @@ real cmap_dihs(int                   nbonds,
+ 
+     for (n = 0; n < nbonds;)
+     {
+-        /* Five atoms are involved in the two torsions */
++       /* Five atoms are involved in the two torsions */
+         type = forceatoms[n++];
+         ai   = forceatoms[n++];
+         aj   = forceatoms[n++];
+@@ -3080,8 +3080,10 @@ real cmap_dihs(int                   nbonds,
+         am   = forceatoms[n++];
+ 
+         /* Which CMAP type is this */
+-        const int   cmapA = forceparams[type].cmap.cmapA;
+-        const real* cmapd = cmap_grid->cmapdata[cmapA].cmap.data();
++        const int   cmapA  = forceparams[type].cmap.cmapA;
++        const real* cmapdA = cmap_grid->cmapdata[cmapA].cmap.data();
++        const int   cmapB  = forceparams[type].cmap.cmapB;
++        const real* cmapdB = cmap_grid->cmapdata[cmapB].cmap.data();
+ 
+         /* First torsion */
+         a1i = ai;
+@@ -3239,173 +3241,198 @@ real cmap_dihs(int                   nbonds,
+         pos3 = ip1p1 * cmap_grid->grid_spacing + ip2p1;
+         pos4 = iphi1 * cmap_grid->grid_spacing + ip2p1;
+ 
+-        ty[0] = cmapd[pos1 * 4];
+-        ty[1] = cmapd[pos2 * 4];
+-        ty[2] = cmapd[pos3 * 4];
+-        ty[3] = cmapd[pos4 * 4];
+-
+-        ty1[0] = cmapd[pos1 * 4 + 1];
+-        ty1[1] = cmapd[pos2 * 4 + 1];
+-        ty1[2] = cmapd[pos3 * 4 + 1];
+-        ty1[3] = cmapd[pos4 * 4 + 1];
+-
+-        ty2[0] = cmapd[pos1 * 4 + 2];
+-        ty2[1] = cmapd[pos2 * 4 + 2];
+-        ty2[2] = cmapd[pos3 * 4 + 2];
+-        ty2[3] = cmapd[pos4 * 4 + 2];
+-
+-        ty12[0] = cmapd[pos1 * 4 + 3];
+-        ty12[1] = cmapd[pos2 * 4 + 3];
+-        ty12[2] = cmapd[pos3 * 4 + 3];
+-        ty12[3] = cmapd[pos4 * 4 + 3];
+-
+-        /* Switch to degrees */
+-        dx    = 360.0 / cmap_grid->grid_spacing;
+-        xphi1 = xphi1 * RAD2DEG;
+-        xphi2 = xphi2 * RAD2DEG;
+-
+-        for (i = 0; i < 4; i++) /* 16 */
+-        {
+-            tx[i]      = ty[i];
+-            tx[i + 4]  = ty1[i] * dx;
+-            tx[i + 8]  = ty2[i] * dx;
+-            tx[i + 12] = ty12[i] * dx * dx;
+-        }
+-
+-        real tc[16] = { 0 };
+-        for (int idx = 0; idx < 16; idx++) /* 1056 */
++        // store dvdl for one bond in a separate variable to prevent underflow
++        real dvdlambda_onebond = 0.;
++        // for state A and B
++        for(int state = 0; state < 2; state++)
+         {
+-            for (int k = 0; k < 16; k++)
++            real lambda_multiplier;
++            if(state == 0)
+             {
+-                tc[idx] += cmap_coeff_matrix[k * 16 + idx] * tx[k];
++                lambda_multiplier = 1.0 - lambda;
++            }
++            else
++            {
++                lambda_multiplier = lambda;
+             }
+-        }
+-
+-        tt = (xphi1 - iphi1 * dx) / dx;
+-        tu = (xphi2 - iphi2 * dx) / dx;
+ 
+-        e   = 0;
+-        df1 = 0;
+-        df2 = 0;
++            // The latter conditions is necessary to correctly calculate dvdl
++            if(lambda_multiplier == 0. && cmapA == cmapB)
++            {
++                continue;
++            }
++            const real* cmapd = (state == 0 ? cmapdA : cmapdB);
++
++            ty[0] = cmapd[pos1 * 4];
++            ty[1] = cmapd[pos2 * 4];
++            ty[2] = cmapd[pos3 * 4];
++            ty[3] = cmapd[pos4 * 4];
++
++            ty1[0] = cmapd[pos1 * 4 + 1];
++            ty1[1] = cmapd[pos2 * 4 + 1];
++            ty1[2] = cmapd[pos3 * 4 + 1];
++            ty1[3] = cmapd[pos4 * 4 + 1];
++
++            ty2[0] = cmapd[pos1 * 4 + 2];
++            ty2[1] = cmapd[pos2 * 4 + 2];
++            ty2[2] = cmapd[pos3 * 4 + 2];
++            ty2[3] = cmapd[pos4 * 4 + 2];
++
++            ty12[0] = cmapd[pos1 * 4 + 3];
++            ty12[1] = cmapd[pos2 * 4 + 3];
++            ty12[2] = cmapd[pos3 * 4 + 3];
++            ty12[3] = cmapd[pos4 * 4 + 3];
++
++            /* Switch to degrees */
++            dx    = 360.0 / cmap_grid->grid_spacing;
++            xphi1 = xphi1 * RAD2DEG;
++            xphi2 = xphi2 * RAD2DEG;
++
++            for (i = 0; i < 4; i++) /* 16 */
++            {
++                tx[i]      = ty[i];
++                tx[i + 4]  = ty1[i] * dx;
++                tx[i + 8]  = ty2[i] * dx;
++                tx[i + 12] = ty12[i] * dx * dx;
++            }
+ 
+-        for (i = 3; i >= 0; i--)
+-        {
+-            l1 = loop_index[i][3];
+-            l2 = loop_index[i][2];
+-            l3 = loop_index[i][1];
++            real tc[16] = { 0 };
++            for (int idx = 0; idx < 16; idx++) /* 1056 */
++            {
++                for (int k = 0; k < 16; k++)
++                {
++                    tc[idx] += cmap_coeff_matrix[k * 16 + idx] * tx[k];
++                }
++            }
+ 
+-            e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
+-            df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
+-            df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
+-        }
++            tt = (xphi1 - iphi1 * dx) / dx;
++            tu = (xphi2 - iphi2 * dx) / dx;
+ 
+-        fac = RAD2DEG / dx;
+-        df1 = df1 * fac;
+-        df2 = df2 * fac;
++            e   = 0;
++            df1 = 0;
++            df2 = 0;
+ 
+-        /* CMAP energy */
+-        vtot += e;
++            for (i = 3; i >= 0; i--)
++            {
++                l1 = loop_index[i][3];
++                l2 = loop_index[i][2];
++                l3 = loop_index[i][1];
+ 
+-        /* Do forces - first torsion */
+-        fg1  = iprod(r1_ij, r1_kj);
+-        hg1  = iprod(r1_kl, r1_kj);
+-        fga1 = fg1 * ra2r1 * rgr1;
+-        hgb1 = hg1 * rb2r1 * rgr1;
+-        gaa1 = -ra2r1 * rg1;
+-        gbb1 = rb2r1 * rg1;
++                e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
++                df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
++                df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
++            }
+ 
+-        for (i = 0; i < DIM; i++)
+-        {
+-            dtf1[i] = gaa1 * a1[i];
+-            dtg1[i] = fga1 * a1[i] - hgb1 * b1[i];
+-            dth1[i] = gbb1 * b1[i];
+-
+-            f1[i] = df1 * dtf1[i];
+-            g1[i] = df1 * dtg1[i];
+-            h1[i] = df1 * dth1[i];
+-
+-            f1_i[i] = f1[i];
+-            f1_j[i] = -f1[i] - g1[i];
+-            f1_k[i] = h1[i] + g1[i];
+-            f1_l[i] = -h1[i];
+-
+-            f[a1i][i] = f[a1i][i] + f1_i[i];
+-            f[a1j][i] = f[a1j][i] + f1_j[i]; /* - f1[i] - g1[i] */
+-            f[a1k][i] = f[a1k][i] + f1_k[i]; /* h1[i] + g1[i] */
+-            f[a1l][i] = f[a1l][i] + f1_l[i]; /* h1[i] */
+-        }
++            fac = RAD2DEG / dx * lambda_multiplier;
++            df1 = df1 * fac;
++            df2 = df2 * fac;
+ 
+-        /* Do forces - second torsion */
+-        fg2  = iprod(r2_ij, r2_kj);
+-        hg2  = iprod(r2_kl, r2_kj);
+-        fga2 = fg2 * ra2r2 * rgr2;
+-        hgb2 = hg2 * rb2r2 * rgr2;
+-        gaa2 = -ra2r2 * rg2;
+-        gbb2 = rb2r2 * rg2;
++            /* CMAP energy */
++            vtot += lambda_multiplier * e;
++            dvdlambda_onebond += (state * 2 - 1) * e;
+ 
+-        for (i = 0; i < DIM; i++)
+-        {
+-            dtf2[i] = gaa2 * a2[i];
+-            dtg2[i] = fga2 * a2[i] - hgb2 * b2[i];
+-            dth2[i] = gbb2 * b2[i];
+-
+-            f2[i] = df2 * dtf2[i];
+-            g2[i] = df2 * dtg2[i];
+-            h2[i] = df2 * dth2[i];
+-
+-            f2_i[i] = f2[i];
+-            f2_j[i] = -f2[i] - g2[i];
+-            f2_k[i] = h2[i] + g2[i];
+-            f2_l[i] = -h2[i];
+-
+-            f[a2i][i] = f[a2i][i] + f2_i[i]; /* f2[i] */
+-            f[a2j][i] = f[a2j][i] + f2_j[i]; /* - f2[i] - g2[i] */
+-            f[a2k][i] = f[a2k][i] + f2_k[i]; /* h2[i] + g2[i] */
+-            f[a2l][i] = f[a2l][i] + f2_l[i]; /* - h2[i] */
+-        }
++            /* Do forces - first torsion */
++            fg1  = iprod(r1_ij, r1_kj);
++            hg1  = iprod(r1_kl, r1_kj);
++            fga1 = fg1 * ra2r1 * rgr1;
++            hgb1 = hg1 * rb2r1 * rgr1;
++            gaa1 = -ra2r1 * rg1;
++            gbb1 = rb2r1 * rg1;
+ 
+-        /* Shift forces */
+-        if (fshift != nullptr)
+-        {
+-            if (g)
++            for (i = 0; i < DIM; i++)
+             {
+-                copy_ivec(SHIFT_IVEC(g, a1j), jt1);
+-                ivec_sub(SHIFT_IVEC(g, a1i), jt1, dt1_ij);
+-                ivec_sub(SHIFT_IVEC(g, a1k), jt1, dt1_kj);
+-                ivec_sub(SHIFT_IVEC(g, a1l), jt1, dt1_lj);
+-                t11 = IVEC2IS(dt1_ij);
+-                t21 = IVEC2IS(dt1_kj);
+-                t31 = IVEC2IS(dt1_lj);
+-
+-                copy_ivec(SHIFT_IVEC(g, a2j), jt2);
+-                ivec_sub(SHIFT_IVEC(g, a2i), jt2, dt2_ij);
+-                ivec_sub(SHIFT_IVEC(g, a2k), jt2, dt2_kj);
+-                ivec_sub(SHIFT_IVEC(g, a2l), jt2, dt2_lj);
+-                t12 = IVEC2IS(dt2_ij);
+-                t22 = IVEC2IS(dt2_kj);
+-                t32 = IVEC2IS(dt2_lj);
++                dtf1[i] = gaa1 * a1[i];
++                dtg1[i] = fga1 * a1[i] - hgb1 * b1[i];
++                dth1[i] = gbb1 * b1[i];
++
++                f1[i] = df1 * dtf1[i];
++                g1[i] = df1 * dtg1[i];
++                h1[i] = df1 * dth1[i];
++
++                f1_i[i] = f1[i];
++                f1_j[i] = -f1[i] - g1[i];
++                f1_k[i] = h1[i] + g1[i];
++                f1_l[i] = -h1[i];
++
++                f[a1i][i] = f[a1i][i] + f1_i[i];
++                f[a1j][i] = f[a1j][i] + f1_j[i]; /* - f1[i] - g1[i] */
++                f[a1k][i] = f[a1k][i] + f1_k[i]; /* h1[i] + g1[i] */
++                f[a1l][i] = f[a1l][i] + f1_l[i]; /* h1[i] */
+             }
+-            else if (pbc)
++
++            /* Do forces - second torsion */
++            fg2  = iprod(r2_ij, r2_kj);
++            hg2  = iprod(r2_kl, r2_kj);
++            fga2 = fg2 * ra2r2 * rgr2;
++            hgb2 = hg2 * rb2r2 * rgr2;
++            gaa2 = -ra2r2 * rg2;
++            gbb2 = rb2r2 * rg2;
++
++            for (i = 0; i < DIM; i++)
+             {
+-                t31 = pbc_rvec_sub(pbc, x[a1l], x[a1j], h1);
+-                t32 = pbc_rvec_sub(pbc, x[a2l], x[a2j], h2);
++                dtf2[i] = gaa2 * a2[i];
++                dtg2[i] = fga2 * a2[i] - hgb2 * b2[i];
++                dth2[i] = gbb2 * b2[i];
++
++                f2[i] = df2 * dtf2[i];
++                g2[i] = df2 * dtg2[i];
++                h2[i] = df2 * dth2[i];
++
++                f2_i[i] = f2[i];
++                f2_j[i] = -f2[i] - g2[i];
++                f2_k[i] = h2[i] + g2[i];
++                f2_l[i] = -h2[i];
++
++                f[a2i][i] = f[a2i][i] + f2_i[i]; /* f2[i] */
++                f[a2j][i] = f[a2j][i] + f2_j[i]; /* - f2[i] - g2[i] */
++                f[a2k][i] = f[a2k][i] + f2_k[i]; /* h2[i] + g2[i] */
++                f[a2l][i] = f[a2l][i] + f2_l[i]; /* - h2[i] */
+             }
+-            else
++
++            /* Shift forces */
++            if (fshift != nullptr)
+             {
+-                t31 = CENTRAL;
+-                t32 = CENTRAL;
+-            }
++                if (g)
++                {
++                    copy_ivec(SHIFT_IVEC(g, a1j), jt1);
++                    ivec_sub(SHIFT_IVEC(g, a1i), jt1, dt1_ij);
++                    ivec_sub(SHIFT_IVEC(g, a1k), jt1, dt1_kj);
++                    ivec_sub(SHIFT_IVEC(g, a1l), jt1, dt1_lj);
++                    t11 = IVEC2IS(dt1_ij);
++                    t21 = IVEC2IS(dt1_kj);
++                    t31 = IVEC2IS(dt1_lj);
++
++                    copy_ivec(SHIFT_IVEC(g, a2j), jt2);
++                    ivec_sub(SHIFT_IVEC(g, a2i), jt2, dt2_ij);
++                    ivec_sub(SHIFT_IVEC(g, a2k), jt2, dt2_kj);
++                    ivec_sub(SHIFT_IVEC(g, a2l), jt2, dt2_lj);
++                    t12 = IVEC2IS(dt2_ij);
++                    t22 = IVEC2IS(dt2_kj);
++                    t32 = IVEC2IS(dt2_lj);
++                }
++                else if (pbc)
++                {
++                    t31 = pbc_rvec_sub(pbc, x[a1l], x[a1j], h1);
++                    t32 = pbc_rvec_sub(pbc, x[a2l], x[a2j], h2);
++                }
++                else
++                {
++                    t31 = CENTRAL;
++                    t32 = CENTRAL;
++                }
+ 
+-            rvec_inc(fshift[t11], f1_i);
+-            rvec_inc(fshift[CENTRAL], f1_j);
+-            rvec_inc(fshift[t21], f1_k);
+-            rvec_inc(fshift[t31], f1_l);
++                rvec_inc(fshift[t11], f1_i);
++                rvec_inc(fshift[CENTRAL], f1_j);
++                rvec_inc(fshift[t21], f1_k);
++                rvec_inc(fshift[t31], f1_l);
+ 
+-            rvec_inc(fshift[t12], f2_i);
+-            rvec_inc(fshift[CENTRAL], f2_j);
+-            rvec_inc(fshift[t22], f2_k);
+-            rvec_inc(fshift[t32], f2_l);
++                rvec_inc(fshift[t12], f2_i);
++                rvec_inc(fshift[CENTRAL], f2_j);
++                rvec_inc(fshift[t22], f2_k);
++                rvec_inc(fshift[t32], f2_l);
++            }
+         }
++        *dvdlambda += dvdlambda_onebond;
+     }
+     return vtot;
+ }
+diff --git a/src/gromacs/mdlib/coupling.cpp b/src/gromacs/mdlib/coupling.cpp
+index 1fc755084d..0dcec13215 100644
+--- a/src/gromacs/mdlib/coupling.cpp
++++ b/src/gromacs/mdlib/coupling.cpp
+@@ -353,7 +353,7 @@ real calc_temp(real ekin, real nrdf)
+ }
+ 
+ /*! \brief Sets 1/mass for Parrinello-Rahman in wInv; NOTE: PRESFAC is not included, so not in GROMACS units! */
+-static void calcParrinelloRahmanInvMass(const t_inputrec* ir, const matrix box, tensor wInv)
++void calcParrinelloRahmanInvMass(const t_inputrec* ir, const matrix box, tensor wInv)
+ {
+     real maxBoxLength;
+ 
+@@ -380,6 +380,7 @@ void parrinellorahman_pcoupl(FILE*             fplog,
+                              tensor            boxv,
+                              tensor            M,
+                              matrix            mu,
++                             tensor            winv,
+                              gmx_bool          bFirstStep)
+ {
+     /* This doesn't do any coordinate updating. It just
+@@ -419,9 +420,6 @@ void parrinellorahman_pcoupl(FILE*             fplog,
+          * The pressure and compressibility always occur as a product,
+          * therefore the pressure unit drops out.
+          */
+-        tensor winv;
+-        calcParrinelloRahmanInvMass(ir, box, winv);
+-
+         m_sub(pres, ir->ref_p, pdiff);
+ 
+         if (ir->epct == epctSURFACETENSION)
+@@ -1108,6 +1106,31 @@ extern void init_npt_masses(const t_inputrec* ir, t_state* state, t_extmass* Mas
+             }
+         }
+     }
++    if (!EI_VV(ir->eI) && ir->epc == epcPARRINELLORAHMAN)
++    {
++        /* for non-V-V P-R the factor is determined in a backward-compatible manner */
++        real maxl;
++        if (state->vol0 == 0)
++        {
++            maxl = std::max(state->box[XX][XX], state->box[YY][YY]);
++            maxl = std::max(state->box[ZZ][ZZ], maxl);
++            state->vol0 = maxl * maxl * maxl;
++        }
++        else
++        {
++            maxl = cbrt(state->vol0);
++        }
++
++        /* Winv is unused for non-V-V P-R, but just in case */
++        MassQ->Winv = (4*M_PI*M_PI*trace(ir->compress))/(DIM*DIM*ir->tau_p*ir->tau_p*maxl);
++        for (d = 0; d < DIM; d++)
++        {
++            for (n = 0; n < DIM; n++)
++            {
++                MassQ->Winvm[d][n] = (4*M_PI*M_PI*ir->compress[d][n])/(DIM*ir->tau_p*ir->tau_p*maxl);
++            }
++        }
++    }
+ }
+ 
+ std::array<std::vector<int>, ettTSEQMAX>
+diff --git a/src/gromacs/mdlib/enerdata_utils.cpp b/src/gromacs/mdlib/enerdata_utils.cpp
+index ee70f7a130..2eae3179c5 100644
+--- a/src/gromacs/mdlib/enerdata_utils.cpp
++++ b/src/gromacs/mdlib/enerdata_utils.cpp
+@@ -42,6 +42,7 @@
+ #include "gromacs/mdtypes/inputrec.h"
+ #include "gromacs/utility/fatalerror.h"
+ #include "gromacs/utility/smalloc.h"
++#include "gromacs/mdtypes/group.h"
+ 
+ gmx_enerdata_t::gmx_enerdata_t(int numEnergyGroups, int numFepLambdas) :
+     grpp(numEnergyGroups),
+@@ -89,6 +90,41 @@ void sum_epot(gmx_grppairener_t* grpp, real* epot)
+     }
+ }
+ 
++static int eg_shortranged[] = { egCOULSR, egLJSR, egCOUL14, egLJ14, egBHAMSR };
++
++void recalc_potential_hot_cold_split(const gmx_enerdata_t *enerd, double *hotcold, double *coldcold)
++{
++    GMX_RELEASE_ASSERT(enerd, "enerd is null");
++    const gmx_grppairener_t& grpp = enerd->grpp;
++
++    *hotcold = 0.;
++    *coldcold = 0.;
++
++    int nenegrps = (int) round(std::sqrt((double)grpp.nener));
++    GMX_RELEASE_ASSERT(nenegrps * nenegrps == grpp.nener, "Size of nener is not exactly squared number");
++
++    for(int gri = 0; gri < nenegrps; ++gri)
++    {
++        for(int grj = 0; grj <= gri; ++grj)
++        {
++            double *e = (gri == nenegrps - 1 && grj == nenegrps - 1) ? coldcold : hotcold;
++            int i = GID(gri, grj, nenegrps);
++            for(int eg: eg_shortranged) {
++                *e += (double)grpp.ener[eg][i];
++            }
++        }
++    }
++
++    for (int i = 0; (i < F_EPOT); i++)
++    {
++        if(i == F_COUL_SR || i == F_LJ || i == F_LJ14 || i == F_COUL14 ||
++            i == F_DISRESVIOL || i == F_ORIRESDEV) {
++            continue;
++        }
++        *hotcold += (double)enerd->term[i];
++    }
++}
++
+ void sum_dhdl(gmx_enerdata_t* enerd, gmx::ArrayRef<const real> lambda, const t_lambda& fepvals)
+ {
+     int index;
+diff --git a/src/gromacs/mdlib/enerdata_utils.h b/src/gromacs/mdlib/enerdata_utils.h
+index 67e84377f8..579096ae48 100644
+--- a/src/gromacs/mdlib/enerdata_utils.h
++++ b/src/gromacs/mdlib/enerdata_utils.h
+@@ -55,6 +55,12 @@ void reset_enerdata(gmx_enerdata_t* enerd);
+ void sum_epot(gmx_grppairener_t* grpp, real* epot);
+ /* Locally sum the non-bonded potential energy terms */
+ 
++void recalc_potential_hot_cold_split(const gmx_enerdata_t *enerd, double *hotcold, double *coldcold);
++/* Sum up potentials but separate the other-other group (cold-cold) in group energy. Used in REST2 with Hamiltonian replica exchange hack */
++
++void recalc_potential_ignoring_other_other_group(const gmx_enerdata_t *enerd, gmx_enerdata_t *other_enerd);
++/* Sum potential ignoring other-other group in group energy. Used in Hamiltonian replica exchange hack */
++
+ void sum_dhdl(gmx_enerdata_t* enerd, gmx::ArrayRef<const real> lambda, const t_lambda& fepvals);
+ /* Sum the free energy contributions */
+ 
+diff --git a/src/gromacs/mdlib/sim_util.cpp b/src/gromacs/mdlib/sim_util.cpp
+index f2528d78b4..eabba48ec9 100644
+--- a/src/gromacs/mdlib/sim_util.cpp
++++ b/src/gromacs/mdlib/sim_util.cpp
+@@ -694,8 +694,9 @@ static void alternatePmeNbGpuWaitReduce(nonbonded_verlet_t* nbv,
+             GpuTaskCompletion completionType =
+                     (isPmeGpuDone) ? GpuTaskCompletion::Wait : GpuTaskCompletion::Check;
+             isNbGpuDone = Nbnxm::gpu_try_finish_task(
+-                    nbv->gpu_nbv, stepWork, AtomLocality::Local, enerd->grpp.ener[egLJSR].data(),
+-                    enerd->grpp.ener[egCOULSR].data(), forceWithShiftForces.shiftForces(),
++                    nbv->gpu_nbv, stepWork, AtomLocality::Local,
++                    enerd,
++                    forceWithShiftForces.shiftForces(),
+                     completionType, wcycle);
+ 
+             if (isNbGpuDone)
+@@ -1563,8 +1564,9 @@ void do_force(FILE*                               fplog,
+             if (simulationWork.useGpuNonbonded)
+             {
+                 cycles_wait_gpu += Nbnxm::gpu_wait_finish_task(
+-                        nbv->gpu_nbv, stepWork, AtomLocality::NonLocal, enerd->grpp.ener[egLJSR].data(),
+-                        enerd->grpp.ener[egCOULSR].data(), forceWithShiftForces.shiftForces(), wcycle);
++                        nbv->gpu_nbv, stepWork, AtomLocality::NonLocal,
++                        enerd,
++                        forceWithShiftForces.shiftForces(), wcycle);
+             }
+             else
+             {
+@@ -1670,8 +1672,8 @@ void do_force(FILE*                               fplog,
+          */
+         const float gpuWaitApiOverheadMargin = 2e6F; /* cycles */
+         const float waitCycles               = Nbnxm::gpu_wait_finish_task(
+-                nbv->gpu_nbv, stepWork, AtomLocality::Local, enerd->grpp.ener[egLJSR].data(),
+-                enerd->grpp.ener[egCOULSR].data(), forceOut.forceWithShiftForces().shiftForces(), wcycle);
++                nbv->gpu_nbv, stepWork, AtomLocality::Local,
++                enerd, forceOut.forceWithShiftForces().shiftForces(), wcycle);
+ 
+         if (ddBalanceRegionHandler.useBalancingRegion())
+         {
+diff --git a/src/gromacs/mdlib/update.cpp b/src/gromacs/mdlib/update.cpp
+index 2e6dd74950..169648af73 100644
+--- a/src/gromacs/mdlib/update.cpp
++++ b/src/gromacs/mdlib/update.cpp
+@@ -1421,6 +1421,7 @@ void update_pcouple_before_coordinates(FILE*             fplog,
+                                        const t_inputrec* inputrec,
+                                        t_state*          state,
+                                        matrix            parrinellorahmanMu,
++                                       tensor            winvm,
+                                        matrix            M,
+                                        gmx_bool          bInitStep)
+ {
+@@ -1433,7 +1434,7 @@ void update_pcouple_before_coordinates(FILE*             fplog,
+         real dtpc = inputrec->nstpcouple * inputrec->delta_t;
+ 
+         parrinellorahman_pcoupl(fplog, step, inputrec, dtpc, state->pres_prev, state->box,
+-                                state->box_rel, state->boxv, M, parrinellorahmanMu, bInitStep);
++                                state->box_rel, state->boxv, M, parrinellorahmanMu, winvm, bInitStep);
+     }
+ }
+ 
+diff --git a/src/gromacs/mdlib/update.h b/src/gromacs/mdlib/update.h
+index 472d5e6bbf..e2de35933a 100644
+--- a/src/gromacs/mdlib/update.h
++++ b/src/gromacs/mdlib/update.h
+@@ -116,6 +116,7 @@ void update_pcouple_before_coordinates(FILE*             fplog,
+                                        const t_inputrec* inputrec,
+                                        t_state*          state,
+                                        matrix            parrinellorahmanMu,
++                                       tensor            winv,
+                                        matrix            M,
+                                        gmx_bool          bInitStep);
+ 
+@@ -308,6 +309,7 @@ void parrinellorahman_pcoupl(FILE*             fplog,
+                              tensor            boxv,
+                              tensor            M,
+                              matrix            mu,
++                             tensor            winv,
+                              gmx_bool          bFirstStep);
+ 
+ void berendsen_pcoupl(FILE*             fplog,
+@@ -333,6 +335,7 @@ void berendsen_pscale(const t_inputrec*    ir,
+                       bool                 scaleCoordinates);
+ 
+ void pleaseCiteCouplingAlgorithms(FILE* fplog, const t_inputrec& ir);
++void calcParrinelloRahmanInvMass(const t_inputrec* ir, const matrix box, tensor wInv);
+ 
+ /*! \brief Computes the atom range for a thread to operate on, ensuring SIMD aligned ranges
+  *
+diff --git a/src/gromacs/mdrun/isimulator.h b/src/gromacs/mdrun/isimulator.h
+index e1ee7ccbcb..a84db3ace7 100644
+--- a/src/gromacs/mdrun/isimulator.h
++++ b/src/gromacs/mdrun/isimulator.h
+@@ -127,6 +127,7 @@ public:
+                gmx_wallcycle*                      wcycle,
+                t_forcerec*                         fr,
+                gmx_enerdata_t*                     enerd,
++	       gmx_enerdata_t*                     hrex_enerd,
+                gmx_ekindata_t*                     ekind,
+                MdrunScheduleWorkload*              runScheduleWork,
+                const ReplicaExchangeParameters&    replExParams,
+@@ -162,6 +163,7 @@ public:
+         wcycle(wcycle),
+         fr(fr),
+         enerd(enerd),
++        hrex_enerd(hrex_enerd),
+         ekind(ekind),
+         runScheduleWork(runScheduleWork),
+         replExParams(replExParams),
+@@ -229,6 +231,8 @@ protected:
+     t_forcerec* fr;
+     //! Data for energy output.
+     gmx_enerdata_t* enerd;
++    //! Data for intermediate energy value for replica exchange 'Hrex' mode
++    gmx_enerdata_t* hrex_enerd;
+     //! Kinetic energy data.
+     gmx_ekindata_t* ekind;
+     //! Schedule of work for each MD step for this task.
+diff --git a/src/gromacs/mdrun/legacymdrunoptions.cpp b/src/gromacs/mdrun/legacymdrunoptions.cpp
+index 2b8e3a0760..0159cec29a 100644
+--- a/src/gromacs/mdrun/legacymdrunoptions.cpp
++++ b/src/gromacs/mdrun/legacymdrunoptions.cpp
+@@ -156,6 +156,8 @@ int LegacyMdrunOptions::updateFromCommandLine(int argc, char** argv, ArrayRef<co
+     domdecOptions.numCells[YY] = roundToInt(realddxyz[YY]);
+     domdecOptions.numCells[ZZ] = roundToInt(realddxyz[ZZ]);
+ 
++    replExParams.exchangeGraphFile = opt2fn_null("-replexgraph", filenames.size(), filenames.data());
++
+     return 1;
+ }
+ 
+diff --git a/src/gromacs/mdrun/legacymdrunoptions.h b/src/gromacs/mdrun/legacymdrunoptions.h
+index 796e479490..86b76b7488 100644
+--- a/src/gromacs/mdrun/legacymdrunoptions.h
++++ b/src/gromacs/mdrun/legacymdrunoptions.h
+@@ -121,7 +121,9 @@ public:
+                                           { efTOP, "-mp", "membed", ffOPTRD },
+                                           { efNDX, "-mn", "membed", ffOPTRD },
+                                           { efXVG, "-if", "imdforces", ffOPTWR },
+-                                          { efXVG, "-swap", "swapions", ffOPTWR } } };
++                                          { efXVG, "-swap", "swapions", ffOPTWR },
++                                          { efDAT, "-replexgraph", "replexgraph", ffOPTRD },
++                                          { efXVG, "-othersim", "othersim", ffOPTWR } } };
+ 
+     //! Print a warning if any force is larger than this (in kJ/mol nm).
+     real pforce = -1;
+@@ -156,7 +158,7 @@ public:
+ 
+     ImdOptions& imdOptions = mdrunOptions.imdOptions;
+ 
+-    t_pargs pa[48] = {
++    t_pargs pa[50] = {
+ 
+         { "-dd", FALSE, etRVEC, { &realddxyz }, "Domain decomposition grid, 0 is optimize" },
+         { "-ddorder", FALSE, etENUM, { ddrank_opt_choices }, "DD rank order" },
+@@ -327,6 +329,16 @@ public:
+           etINT,
+           { &replExParams.randomSeed },
+           "Seed for replica exchange, -1 is generate a seed" },
++        { "-hrex",
++          FALSE,
++          etBOOL,
++          { &replExParams.doHrex },
++          "Whether to perform Hamiltonian replica exchange with arbitrary topologies" },
++        { "-othersiminterval",
++          FALSE,
++          etINT,
++          { &mdrunOptions.evaluateOtherSimInterval },
++          "Interval to evaluate neighboring simulation's potential" },
+         { "-imdport", FALSE, etINT, { &imdOptions.port }, "HIDDENIMD listening port" },
+         { "-imdwait",
+           FALSE,
+diff --git a/src/gromacs/mdrun/md.cpp b/src/gromacs/mdrun/md.cpp
+index 7df4a68b21..7835e307f9 100644
+--- a/src/gromacs/mdrun/md.cpp
++++ b/src/gromacs/mdrun/md.cpp
+@@ -55,6 +55,7 @@
+ #include "gromacs/commandline/filenm.h"
+ #include "gromacs/domdec/collect.h"
+ #include "gromacs/domdec/dlbtiming.h"
++#include "gromacs/domdec/dlb.h"
+ #include "gromacs/domdec/domdec.h"
+ #include "gromacs/domdec/domdec_network.h"
+ #include "gromacs/domdec/domdec_struct.h"
+@@ -64,6 +65,7 @@
+ #include "gromacs/ewald/pme.h"
+ #include "gromacs/ewald/pme_load_balancing.h"
+ #include "gromacs/fileio/trxio.h"
++#include "gromacs/fileio/xvgr.h"
+ #include "gromacs/gmxlib/network.h"
+ #include "gromacs/gmxlib/nrnb.h"
+ #include "gromacs/gpu_utils/gpu_utils.h"
+@@ -147,6 +149,107 @@
+ 
+ using gmx::SimulationSignaller;
+ 
++static void gather_states(t_state *state_local, t_state *state_global, t_commrec *cr, bool *is_dlb_locked)
++{
++    *is_dlb_locked = false;
++
++    if (DOMAINDECOMP(cr))
++    {
++        dd_collect_state(cr->dd, state_local, state_global);
++        *is_dlb_locked = dd_dlb_is_locked(cr->dd);
++    }
++    else
++    {
++        copy_state_serial(state_local, state_global);
++    }
++
++    return;
++}
++
++static void scatter_states(t_state*                          state_local,
++                           t_state*                          state_global,
++                           t_commrec*                        cr,
++                           FILE*                             fplog,
++                           gmx::MDLogger                     mdlog,
++                           int64_t                           step,
++                           const gmx_mtop_t*                 top_global,
++                           const t_inputrec*                 ir,
++                           gmx::ImdSession*                  imdSession,
++                           pull_t*                           pull_work,
++                           gmx::PaddedHostVector<gmx::RVec>* f,
++                           gmx::MDAtoms*                     mdAtoms,
++                           gmx_localtop_t*                   top,
++                           t_forcerec*                       fr,
++                           gmx_vsite_t*                      vsite,
++                           gmx::Constraints*                 constr,
++                           t_nrnb*                           nrnb,
++                           gmx_wallcycle_t                   wcycle,
++                           bool                              is_dlb_locked)
++{
++
++    // Repartition.
++    if (DOMAINDECOMP(cr))
++    {
++        if (!is_dlb_locked)
++        {
++            // Need to lock DLB/auto, to prevent DLB to work during the hrex exchange
++            dd_dlb_lock(cr->dd);
++        }
++        dd_partition_system(fplog, mdlog, step, cr, TRUE, 1, state_global, *top_global, ir,
++                            imdSession, pull_work, state_local, f, mdAtoms, top, fr, vsite, constr,
++                            nrnb, wcycle, FALSE);
++        if (!is_dlb_locked)
++        {
++            dd_dlb_unlock(cr->dd);
++        }
++    }
++    else
++    {
++        // copy back to local state
++        copy_state_serial(state_global, state_local);
++    }
++    return;
++}
++
++// Do hrex exchange
++static void shift_scatter_coordinate(int                               sendto,
++                                     int                               recvfrom,
++                                     const t_state*                    state_from_global,
++                                     t_state*                          state_to_local,
++                                     t_state*                          state_to_global,
++                                     FILE*                             fplog,
++                                     gmx::MDLogger                     mdlog,
++                                     int64_t                           step,
++                                     t_commrec*                        cr,
++                                     const gmx_multisim_t*             ms,
++                                     const gmx_mtop_t*                 top_global,
++                                     const t_inputrec*                 ir,
++                                     gmx::ImdSession*                  imdSession,
++                                     pull_t*                           pull_work,
++                                     gmx::PaddedHostVector<gmx::RVec>* f,
++                                     gmx::MDAtoms*                     mdAtoms,
++                                     gmx_localtop_t*                   top,
++                                     t_forcerec*                       fr,
++                                     gmx_vsite_t*                      vsite,
++                                     gmx::Constraints*                 constr,
++                                     t_nrnb*                           nrnb,
++                                     gmx_wallcycle_t                   wcycle,
++                                     bool                              is_dlb_locked)
++{
++    // All the information (coords, box, thermostats) are at master node.
++    // Start exchanging (only in master).
++    if (MASTER(cr))
++    {
++        send_recv_state(ms, sendto, recvfrom, state_from_global, state_to_global);
++    }
++
++    // Repartition.
++    scatter_states(state_to_local, state_to_global, cr, fplog, mdlog, step, top_global, ir, imdSession,
++                   pull_work, f, mdAtoms, top, fr, vsite, constr, nrnb, wcycle, is_dlb_locked);
++
++    return;
++}
++
+ void gmx::LegacySimulator::do_md()
+ {
+     // TODO Historically, the EM and MD "integrators" used different
+@@ -189,6 +292,23 @@ void gmx::LegacySimulator::do_md()
+     t_extmass MassQ;
+     char      sbuf[STEPSTRSIZE], sbuf2[STEPSTRSIZE];
+ 
++    /* for extra delta-E output */
++    FILE *otherSimXvgFile = nullptr;
++    // In future we may allow more neighbors
++    const int evaluateOtherSimNeighbor = 1;
++    const int evaluateOtherSimBufferChunkSize = evaluateOtherSimNeighbor * 2 + 1;
++    std::vector<double> evaluateOtherSimBuffer; // stores hREX-type energy in [sim x evaled by x-1, sim x evaled by x, sim x evaled by x+1] order
++    // helper function to support index access
++    auto evalOtherSimIndex = [&](int coordsim, int evalsim)
++    {
++        return evalsim * evaluateOtherSimBufferChunkSize + (coordsim - evalsim) + evaluateOtherSimNeighbor;
++    };
++
++    // For REST calculation in float
++    bool bSplitHotColdPotential = ir->userint1 > 0;
++    // compute buffer
++    std::unique_ptr<PaddedHostVector<RVec>> ftemp;
++
+     /* PME load balancing data for GPU kernels */
+     gmx_bool bPMETune         = FALSE;
+     gmx_bool bPMETunePrinting = FALSE;
+@@ -250,11 +370,32 @@ void gmx::LegacySimulator::do_md()
+                   "Either specify the -ei option to mdrun, or do not use this checkpoint file.");
+     }
+ 
++    if (opt2bSet("-othersim", nfile, fnm))
++    {
++        if(mdrunOptions.evaluateOtherSimInterval <= 0 && !replExParams.doHrex)
++        {
++            gmx_fatal(FARGS,
++                      "If -othersim is set, -othersiminterval or -hrex must also be set.");
++        }
++        if(MASTER(cr)) {
++            otherSimXvgFile = xvgropen(opt2fn_null("-othersim", nfile, fnm),
++                "Potential energy",
++                "Time (ps)",
++                "List of (state no. and potential value), state no. indicates evaluation state (similar to dhdl.xvg)",
++                oenv);
++        }
++    }
++
+     initialize_lambdas(fplog, *ir, MASTER(cr), &state_global->fep_state, state_global->lambda, lam0);
+     Update     upd(ir, deform);
+     const bool doSimulatedAnnealing = initSimulatedAnnealing(ir, &upd);
+     const bool useReplicaExchange   = (replExParams.exchangeInterval > 0);
+ 
++    int evaluateOtherSimInterval = 0;
++    if(mdrunOptions.evaluateOtherSimInterval > 0) {
++        evaluateOtherSimInterval = mdrunOptions.evaluateOtherSimInterval;
++    }
++
+     bool simulationsShareState = false;
+     int  nstSignalComm         = nstglobalcomm;
+     {
+@@ -309,7 +450,7 @@ void gmx::LegacySimulator::do_md()
+     // Local state only becomes valid now.
+     std::unique_ptr<t_state> stateInstance;
+     t_state*                 state;
+-
++    std::shared_ptr<t_state> other_state_local, other_state_global;
+ 
+     auto mdatoms = mdAtoms->mdatoms();
+ 
+@@ -445,14 +586,27 @@ void gmx::LegacySimulator::do_md()
+                                 startingBehavior != StartingBehavior::NewSimulation,
+                                 shellfc != nullptr, opt2fn("-awh", nfile, fnm), pull_work);
+ 
+-    if (useReplicaExchange && MASTER(cr))
++    bool bHrex = false;
++    if (useReplicaExchange)
+     {
+-        repl_ex = init_replica_exchange(fplog, ms, top_global->natoms, ir, replExParams);
++        if (MASTER(cr))
++        {
++            repl_ex = init_replica_exchange(fplog, ms, top_global->natoms, ir, replExParams);
++            bHrex = is_hrex_enabled(repl_ex);
++        }
++
++    }
++    gmx_bcast(sizeof(bHrex), &bHrex, cr);
++    if(ms) {
++        evaluateOtherSimBuffer.resize(evaluateOtherSimBufferChunkSize * ms->nsim);
+     }
++
+     /* PME tuning is only supported in the Verlet scheme, with PME for
+-     * Coulomb. It is not supported with only LJ PME. */
++     * Coulomb. It is not supported with only LJ PME.
++     * Also disabled upon hREX hot-cold separation. */
+     bPMETune = (mdrunOptions.tunePme && EEL_PME(fr->ic->eeltype) && !mdrunOptions.reproducible
+-                && ir->cutoff_scheme != ecutsGROUP);
++                && ir->cutoff_scheme != ecutsGROUP
++                && !bSplitHotColdPotential);
+ 
+     pme_load_balancing_t* pme_loadbal = nullptr;
+     if (bPMETune)
+@@ -774,6 +928,7 @@ void gmx::LegacySimulator::do_md()
+ 
+         bDoReplEx = (useReplicaExchange && (step > 0) && !bLastStep
+                      && do_per_step(step, replExParams.exchangeInterval));
++        bool bEvaluateOtherSimThisStep = do_per_step(step, evaluateOtherSimInterval) || (replExParams.doHrex && bDoReplEx);
+ 
+         if (doSimulatedAnnealing)
+         {
+@@ -1221,7 +1376,7 @@ void gmx::LegacySimulator::do_md()
+         else
+         {
+             update_tcouple(step, ir, state, ekind, &MassQ, mdatoms);
+-            update_pcouple_before_coordinates(fplog, step, ir, state, pressureCouplingMu, M, bInitStep);
++            update_pcouple_before_coordinates(fplog, step, ir, state, pressureCouplingMu, MassQ.Winvm, M, bInitStep);
+         }
+ 
+         if (EI_VV(ir->eI))
+@@ -1584,11 +1739,184 @@ void gmx::LegacySimulator::do_md()
+             }
+         }
+ 
++        if (bEvaluateOtherSimThisStep)
++        {
++            bool is_dlb_locked;
++            gather_states(state, state_global, cr, &is_dlb_locked);
++            if(!other_state_local) {
++                other_state_global.reset(new t_state(*state)); // copy the entire state at global level. FIXME: is this copy relevant on non-master process?
++                if(state == state_global) {
++                    other_state_local = other_state_global;
++                }else{
++                    other_state_local.reset(new t_state(*state));
++                }
++
++            }
++            tensor force_vir_temp, shake_vir_temp, total_vir_temp, pres_temp;
++            rvec mu_tot_temp;
++
++            if(!ftemp) {
++                // copy on its first use
++                ftemp.reset(new PaddedHostVector<RVec>(f));
++            }
++
++            std::fill(evaluateOtherSimBuffer.begin(), evaluateOtherSimBuffer.end(), 0.);
++
++            // If only replica exchange matters, get neighbor information
++            bool calc_replica_neighbor_only = bDoReplEx && !do_per_step(step, evaluateOtherSimInterval);
++            int neighbor = -1;
++            if (calc_replica_neighbor_only) 
++            {
++                if(MASTER(cr)) 
++                {
++                    hrex_init_deltae(repl_ex);
++                    neighbor = get_replica_exchange_opponent(repl_ex, step);
++                }
++                else
++                {
++                    neighbor = 0;
++                }
++                gmx_sumi(1, &neighbor, cr);
++            }
++
++            // shift=0 is also calculated in this loop, because enerd at this point may be calculated differently (e.g. due to NS recalc)
++            // FIXME: I am still not sure why but sometimes up to 100 kJ/mol difference is observed. Intended?
++            for(int shift = -evaluateOtherSimNeighbor; shift <= evaluateOtherSimNeighbor; ++shift)
++            {
++                int sendto = ms->sim + shift;
++                int recvfrom = ms->sim - shift;
++                if(calc_replica_neighbor_only && shift != 0 && sendto != neighbor)
++                {
++                    continue;
++                }
++
++
++                if(calc_replica_neighbor_only && shift != 0) {
++                    recvfrom = neighbor;
++                }
++                if(sendto < 0 || sendto >= ms->nsim) {
++                    sendto = -1;
++                }
++                if(recvfrom < 0 || recvfrom >= ms->nsim) {
++                    recvfrom = -1;
++                }
++
++                // copy state from other multisim rank indicated by the shift value. 
++                // When calc_neighbor_only is true, this call only sends to / receives from the neighbor.
++                // When calc_neighbor_only is false, this call synchronizes with each shift value (bacause of sendrecv).
++                // Either way, desynchronization and/or deadlock should not occur
++                shift_scatter_coordinate(sendto, recvfrom, state_global, other_state_local.get(),
++                                         other_state_global.get(), fplog, mdlog, step, cr, ms, top_global,
++                                         ir, imdSession, pull_work, &f, mdAtoms, &top, fr, vsite,
++                                         constr, nrnb, wcycle, is_dlb_locked);
++
++                if(recvfrom == -1) {
++                    // no need to evaluate the potential
++                    continue;
++                }
++
++                // reevaluate potentials.
++                clear_mat(force_vir_temp);
++                clear_mat(shake_vir_temp);
++                clear_mat(total_vir_temp);
++                clear_mat(pres_temp);
++                clear_rvec(mu_tot_temp);
++                for(int i = 0; i < F_NRE; ++i) {
++                    hrex_enerd->term[i] = 0.;
++                }
++                do_force(fplog, cr, ms, ir, awh.get(), enforcedRotation, imdSession, pull_work,
++                         step, nrnb, wcycle, &top, other_state_local->box, other_state_local->x.arrayRefWithPadding(),
++                         &other_state_local->hist, ftemp->arrayRefWithPadding(), force_vir_temp, mdatoms, hrex_enerd,
++                         fcd, other_state_local->lambda, graph, fr, runScheduleWork, vsite, mu_tot, t,
++                         ed ? ed->getLegacyED() : nullptr,
++                         force_flags | GMX_FORCE_NS | GMX_FORCE_ENERGY, ddBalanceRegionHandler);
++                compute_globals(gstat, cr, ir, fr, ekind, other_state_local->x.rvec_array(),
++                                other_state_local->v.rvec_array(), other_state_local->box, other_state_local->lambda[efptVDW], mdatoms,
++                                nrnb, &vcm, wcycle, hrex_enerd, force_vir_temp, shake_vir_temp, total_vir_temp,
++                                pres_temp, mu_tot_temp, constr, &nullSignaller, other_state_local->box,
++                                &totalNumberOfBondedInteractions, &bSumEkinhOld,
++                                CGLO_ENERGY | CGLO_GSTAT | CGLO_TEMPERATURE | CGLO_PRESSURE
++                                        | CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS);
++                // Here, exchanged coorinate may have bonded interactions outside the DD partition. Check to ensure the correctness.
++                checkNumberOfBondedInteractions(mdlog, cr, totalNumberOfBondedInteractions,
++                                                top_global, &top, other_state_local->x.rvec_array(), other_state_local->box,
++                                                &shouldCheckNumberOfBondedInteractions);
++                // Then, recover hrex_enerd data
++                if(MASTER(cr)) {
++                    if(bSplitHotColdPotential) {
++                        double hot_and_cold, coldonly;
++                        recalc_potential_hot_cold_split(hrex_enerd, &hot_and_cold, &coldonly);
++                        evaluateOtherSimBuffer[evalOtherSimIndex(recvfrom, ms->sim)] += hot_and_cold;
++                        if(shift == 0) {
++                            for(int ishift = -evaluateOtherSimNeighbor; ishift <= evaluateOtherSimNeighbor; ++ishift) {
++                                int target = ms->sim + ishift;
++                                if(target < 0 || target >= ms->nsim) {
++                                    continue;
++                                }
++                                evaluateOtherSimBuffer[evalOtherSimIndex(ms->sim, target)] += coldonly; // cold part should not change among calcs
++                            }
++                        }
++                    }else{
++                        evaluateOtherSimBuffer[evalOtherSimIndex(recvfrom, ms->sim)] += hrex_enerd->term[F_EPOT];
++                    }
++                }
++            }
++
++            // Sum up potentials to get the final result
++            gmx_sumd_sim(evaluateOtherSimBufferChunkSize * ms->nsim, &evaluateOtherSimBuffer[0], ms);
++
++            scatter_states(state, state_global, cr, fplog, mdlog, step, top_global, ir, imdSession,
++                pull_work, &f, mdAtoms, &top, fr, vsite, constr, nrnb, wcycle, is_dlb_locked);
++
++            if (MASTER(cr) && otherSimXvgFile)
++            {
++                fprintf(otherSimXvgFile, "%.6f", t);
++                        
++                for (int shift = -evaluateOtherSimNeighbor;
++                    shift <= evaluateOtherSimNeighbor; ++shift)
++                {
++                    int targetstate = ms->sim + shift;
++                    if (targetstate < 0 || targetstate >= ms->nsim)
++                    {
++                        continue;
++                    }
++                    if (calc_replica_neighbor_only && targetstate != ms->sim && targetstate != neighbor) {
++                        continue;
++                    }
++                    fprintf(otherSimXvgFile, "\t%d\t%.14e", targetstate,
++                            evaluateOtherSimBuffer[evalOtherSimIndex(ms->sim, targetstate)]);
++                }
++                fprintf(otherSimXvgFile, "\n");
++            }
++        }
++
+         /* Replica exchange */
+         bExchanged = FALSE;
+         if (bDoReplEx)
+         {
+-            bExchanged = replica_exchange(fplog, cr, ms, repl_ex, state_global, enerd, state, step, t);
++            if (bHrex)
++            {
++                int neighbor = 0;
++                if (MASTER(cr))
++                {
++                    hrex_init_deltae(repl_ex);
++                    neighbor = get_replica_exchange_opponent(repl_ex, step);
++                    if(neighbor != -1) {
++                        real deltae =
++                                (real)(evaluateOtherSimBuffer[evalOtherSimIndex(ms->sim, neighbor)]
++                                        - evaluateOtherSimBuffer[evalOtherSimIndex(ms->sim, ms->sim)]);
++
++                        hrex_set_deltae_direct(repl_ex, neighbor, deltae);
++                    }
++                }
++            }
++            bExchanged = replica_exchange(fplog, cr, ms, repl_ex, state_global, enerd, state, &MassQ, step, t);
++        }
++        if (bEvaluateOtherSimThisStep || (bHrex && bDoReplEx))
++        {
++            // Always let GROMACS recalculate virial etc., at every exchanges.
++            // This is necessary to prevent glitches due to wrong CGLO keywords and to recalculate lots of parameters.
++            bExchanged = true;
+         }
+ 
+         if ((bExchanged || bNeedRepartition) && DOMAINDECOMP(cr))
+@@ -1652,6 +1980,10 @@ void gmx::LegacySimulator::do_md()
+      * before stopping the time measurements. */
+     mdoutf_tng_close(outf);
+ 
++    if(otherSimXvgFile) {
++        xvgrclose(otherSimXvgFile);
++    }
++
+     /* Stop measuring walltime */
+     walltime_accounting_end_time(walltime_accounting);
+ 
+diff --git a/src/gromacs/mdrun/replicaexchange.cpp b/src/gromacs/mdrun/replicaexchange.cpp
+index 9ff4b3817d..58c3122525 100644
+--- a/src/gromacs/mdrun/replicaexchange.cpp
++++ b/src/gromacs/mdrun/replicaexchange.cpp
+@@ -50,7 +50,8 @@
+ #include "config.h"
+ 
+ #include <cmath>
+-
++#include <fstream>
++#include <sstream>
+ #include <random>
+ 
+ #include "gromacs/domdec/collect.h"
+@@ -85,6 +86,7 @@ enum
+     ereLAMBDA,
+     ereENDSINGLE,
+     ereTL,
++    ereHREX,
+     ereNR
+ };
+ /*! \brief Strings describing replica exchange flavours.
+@@ -98,7 +100,7 @@ enum
+  *  until we feel better about the pressure control methods giving
+  *  exact ensembles.  Right now, we assume constant pressure */
+ static const char* erename[ereNR] = { "temperature", "lambda", "end_single_marker",
+-                                      "temperature and lambda" };
++                                      "temperature and lambda", "arbitrary Hamiltonian exchange" };
+ 
+ //! Working data for replica exchange.
+ struct gmx_repl_ex
+@@ -127,8 +129,8 @@ struct gmx_repl_ex
+     int nex;
+     //! Random seed
+     int seed;
+-    //! Number of even and odd replica change attempts
+-    int nattempt[2];
++    //! Number of replica change attempts (of size exchange_cycle)
++    int *nattempt;
+     //! Sum of probabilities
+     real* prob_sum;
+     //! Number of moves between replicas i and j
+@@ -136,6 +138,16 @@ struct gmx_repl_ex
+     //! i-th element of the array is the number of exchanges between replica i-1 and i
+     int* nexchange;
+ 
++    //! Exchange_schedule size. Default 2.
++    int exchange_cycle;
++    //! Two-dimensional array that stores exchange opponent.
++    int** exchange_schedule;
++    //! Whether the exchange cycle is default even-odd cycle
++    bool is_default_exchange;
++
++    //! Whether to perform aribtrary topology replica exchange
++    bool is_Hrex;
++
+     /*! \brief Helper arrays for replica exchange; allocated here
+      * so they don't have to be allocated each time */
+     //! \{
+@@ -194,6 +206,155 @@ static gmx_bool repl_quantity(const gmx_multisim_t* ms, struct gmx_repl_ex* re,
+     return bDiff;
+ }
+ 
++static std::vector<int> parse_ints(const std::string &s)
++{
++    std::istringstream is(s);
++    int i;
++    std::vector<int> ret;
++    while(is >> i)
++    {
++        ret.push_back(i);
++    }
++    return std::move(ret);
++}
++
++static
++void init_exchange_graph(FILE* fplog,
++                         struct gmx_repl_ex* re,
++                         const gmx_multisim_t* ms,
++                         const char* replexgraph)
++{
++    /* Load the exchange graph if needed */
++
++    re->exchange_cycle = 0;
++    if(isMasterSim(ms))
++    {
++        if (replexgraph == nullptr)
++        {
++            re->exchange_cycle = 2;
++        }
++        else
++        {
++            std::ifstream ifs(replexgraph);
++            std::string line;
++            int count = 0;
++            // only count lines
++            while (getline(ifs, line))
++            {
++                std::vector<int> v = parse_ints(line);
++                if (!v.empty())
++                {
++                    count += 1;
++                }
++            }
++        }
++    }
++    gmx_sumi_sim(1, &re->exchange_cycle, ms);
++
++    snew(re->exchange_schedule, re->exchange_cycle);
++    int** exchange_schedule = re->exchange_schedule;
++    for(int i = 0; i < re->exchange_cycle; i++)
++    {
++        snew(exchange_schedule[i], re->nrepl);
++        for(int j = 0; j < re->nrepl; j++)
++        {
++            exchange_schedule[i][j] = 0;
++        }
++    }
++
++    re->is_default_exchange = false;
++    int is_default = 0;
++    if(isMasterSim(ms))
++    {
++        for(int i = 0; i < re->exchange_cycle; i++)
++        {
++            for(int j = 0; j < re->nrepl; j++)
++            {
++                exchange_schedule[i][j] = -1;
++            }
++        }
++
++        if (replexgraph == nullptr)
++        {
++            for(int i = 0; i < 2; i++)
++            {
++                for(int j = i; (j + 1) < re->nrepl; j += 2)
++                {
++                    // Standard exchange: exchanges j and j + 1
++                    exchange_schedule[i][j] = j + 1;
++                    exchange_schedule[i][j + 1] = j;
++                }
++            }
++            is_default = 1;
++        }
++        else
++        {
++            std::ifstream ifs(replexgraph);
++            std::string line;
++            int lineno = 1;
++            while (getline(ifs, line))
++            {
++                std::vector<int> v = parse_ints(line);
++                if (v.size() % 2 != 0)
++                {
++                    gmx_fatal(FARGS, "Invalid replex graph at line %d: # of integers per line must be even.", lineno);
++                }
++                for(int j = 0; j < (int)v.size(); j += 2)
++                {
++                    int p1 = v[j]; // 0-origin
++                    int p2 = v[j + 1]; // 0-origin
++                    if (p1 < 0 || p1 >= re->nrepl || p2 < 0 || p2 >= re->nrepl)
++                    {
++                        gmx_fatal(FARGS, "Exchange between %d-%d: replica no. must be between 0 and %d", p1, p2, re->nrepl - 1);
++                    }
++                    if (p1 == p2)
++                    {
++                        gmx_fatal(FARGS, "Self exchange detected (replica id. %d)", p1);
++                    }
++                    if (exchange_schedule[lineno - 1][p1] != -1)
++                    {
++                        gmx_fatal(FARGS, "Line %d: Replica %d is exchanged twice", lineno, p1);
++                    }
++                    if (exchange_schedule[lineno - 1][p2] != -1)
++                    {
++                        gmx_fatal(FARGS, "Line %d: Replica %d is exchanged twice", lineno, p2);
++                    }
++                    exchange_schedule[lineno - 1][p1] = p2;
++                    exchange_schedule[lineno - 1][p2] = p1;
++                }
++                lineno += 1;
++            }
++        }
++    }
++    for(int i = 0; i < re->exchange_cycle; i++)
++    {
++        gmx_sumi_sim(re->nrepl, re->exchange_schedule[i], ms);
++    }
++    snew(re->nattempt, re->exchange_cycle);
++    for(int i = 0; i < re->exchange_cycle; i++)
++    {
++        re->nattempt[i] = 0;
++    }
++
++    fprintf(fplog, "Exchange pairs:\n");
++    for(int i = 0; i < re->exchange_cycle; i++)
++    {
++        fprintf(fplog, "Step %d:", i);
++        for(int j = 0; j < re->nrepl; j++)
++        {
++            int k = re->exchange_schedule[i][j];
++            if(j < k)
++            {
++                fprintf(fplog, " %d<->%d", j, k);
++            }
++        }
++        fprintf(fplog, "\n");
++    }
++    // Set is_default_exchange in all simulations
++    gmx_sumi_sim(1, &is_default, ms);
++    re->is_default_exchange = is_default > 0;
++}
++
+ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+                                     const gmx_multisim_t*            ms,
+                                     int                              numAtomsInSystem,
+@@ -241,6 +402,8 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+ 
+     fprintf(fplog, "Repl  There are %d replicas:\n", re->nrepl);
+ 
++    re->is_Hrex = replExParams.doHrex;
++
+     /* We only check that the number of atoms in the systms match.
+      * This, of course, do not guarantee that the systems are the same,
+      * but it does guarantee that we can perform replica exchange.
+@@ -254,8 +417,11 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+     check_multi_int(fplog, ms, ir->etc, "the temperature coupling", FALSE);
+     check_multi_int(fplog, ms, ir->opts.ngtc, "the number of temperature coupling groups", FALSE);
+     check_multi_int(fplog, ms, ir->epc, "the pressure coupling", FALSE);
+-    check_multi_int(fplog, ms, ir->efep, "free energy", FALSE);
+-    check_multi_int(fplog, ms, ir->fepvals->n_lambda, "number of lambda states", FALSE);
++    if(!re->is_Hrex) {
++      // For arbitrary Hamiltonian Exchange, F.E. state numbers does not matter
++      check_multi_int(fplog, ms, ir->efep, "free energy", FALSE);
++      check_multi_int(fplog, ms, ir->fepvals->n_lambda, "number of lambda states", FALSE);
++    }
+ 
+     re->temp = ir->opts.ref_t[0];
+     for (i = 1; (i < ir->opts.ngtc); i++)
+@@ -272,7 +438,23 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+     }
+ 
+     re->type = -1;
+-    bTemp    = repl_quantity(ms, re, ereTEMP, re->temp);
++    if (re->is_Hrex)
++    {
++        // Initialize TEMP irrespective to temp. difference
++        re->type = ereHREX;
++        snew(re->q[ereTEMP], re->nrepl);
++        for(i = 0; i < re->nrepl; i++)
++        {
++            re->q[ereTEMP][i] = 0;
++        }
++        re->q[ereTEMP][re->repl] = re->temp;
++        gmx_sum_sim(re->nrepl, re->q[ereTEMP], ms);
++        bTemp    = TRUE;
++    }
++    else
++    {
++        bTemp    = repl_quantity(ms, re, ereTEMP, re->temp);
++    }
+     if (ir->efep != efepNO)
+     {
+         bLambda = repl_quantity(ms, re, ereLAMBDA, static_cast<real>(ir->fepvals->init_fep_state));
+@@ -283,7 +465,7 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+                   "The properties of the %d systems are all the same, there is nothing to exchange",
+                   re->nrepl);
+     }
+-    if (bLambda && bTemp)
++    if (bLambda && bTemp && !re->is_Hrex)
+     {
+         re->type = ereTL;
+     }
+@@ -411,6 +593,9 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+             }
+             fprintf(fplog, "\n");
+             break;
++        case ereHREX:
++            fprintf(fplog, "\nReplica exchange with totally different Hamiltonians\n");
++            break;
+         default: gmx_incons("Unknown replica exchange quantity");
+     }
+     if (re->bNPT)
+@@ -454,9 +639,6 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+     fprintf(fplog, "\nReplica exchange interval: %d\n", re->nst);
+     fprintf(fplog, "\nReplica random seed: %d\n", re->seed);
+ 
+-    re->nattempt[0] = 0;
+-    re->nattempt[1] = 0;
+-
+     snew(re->prob_sum, re->nrepl);
+     snew(re->nexchange, re->nrepl);
+     snew(re->nmoves, re->nrepl);
+@@ -492,9 +674,73 @@ gmx_repl_ex_t init_replica_exchange(FILE*                            fplog,
+         snew(re->de[i], re->nrepl);
+     }
+     re->nex = replExParams.numExchanges;
++
++    init_exchange_graph(fplog, re, ms, replExParams.exchangeGraphFile);
++    
+     return re;
+ }
+ 
++#if GMX_MPI
++template<typename T> struct mpi_type_notation
++{
++    MPI_Datatype operator() () const { // MPI_* may not be constexpr in all implementations
++        return MPI_BYTE;
++    }
++};
++
++template<> struct mpi_type_notation<int>
++{
++    MPI_Datatype operator() () const {
++        return MPI_INT;
++    }
++};
++
++template<> struct mpi_type_notation<float>
++{
++    MPI_Datatype operator() () const {
++        return MPI_FLOAT;
++    }
++};
++
++template<> struct mpi_type_notation<double>
++{
++    MPI_Datatype operator() () const {
++        return MPI_DOUBLE;
++    }
++};
++#endif
++
++template<typename T>
++static void send_recv_values(const gmx_multisim_t gmx_unused *ms, int gmx_unused sendto, int gmx_unused recvfrom, const T* sendbuf, T* recvbuf, int gmx_unused n)
++{
++    if(!recvbuf && !sendbuf) {
++        return;
++    }
++    GMX_RELEASE_ASSERT(recvbuf != sendbuf, "send_recv_values shold use different ptrs for sendbuf and recvbuf");
++#if GMX_MPI
++    const MPI_Datatype mpitype = mpi_type_notation<T>()();
++    GMX_RELEASE_ASSERT(mpitype != MPI_BYTE, "Unknown type specified in send_recv_values");
++
++    MPI_Request mpi_req;
++
++    if(sendbuf && sendto != -1) {
++        MPI_Isend(sendbuf, n, mpitype, MSRANK(ms, sendto), 0, ms->mpi_comm_masters, &mpi_req);
++    }
++    if(recvbuf && recvfrom != -1) {
++        MPI_Recv(recvbuf, n, mpitype, MSRANK(ms, recvfrom), 0, ms->mpi_comm_masters, MPI_STATUS_IGNORE);
++    }
++    if(sendbuf && sendto != -1) {
++        MPI_Wait(&mpi_req, MPI_STATUS_IGNORE);
++    }
++#endif
++}
++
++template<>
++void send_recv_values(const gmx_multisim_t *ms, int sendto, int recvfrom, const rvec* sendbuf, rvec* recvbuf, int n)
++{
++    send_recv_values<real>(ms, sendto, recvfrom, &sendbuf[0][0], &recvbuf[0][0], DIM * n);
++}
++
+ static void exchange_reals(const gmx_multisim_t gmx_unused* ms, int gmx_unused b, real* v, int n)
+ {
+     real* buf;
+@@ -589,7 +835,67 @@ static void exchange_rvecs(const gmx_multisim_t gmx_unused* ms, int gmx_unused b
+     }
+ }
+ 
+-static void exchange_state(const gmx_multisim_t* ms, int b, t_state* state)
++int get_replica_exchange_opponent(const gmx_repl_ex_t re, int64_t step)
++{
++    int m (step / re->nst);
++    int ecycle = m % re->exchange_cycle;
++    int ret = re->exchange_schedule[ecycle][re->repl];
++    return ret;
++}
++
++void hrex_init_deltae(gmx_repl_ex_t re)
++{
++    real **de = re->de;
++    for(int i = 0; i < re->nrepl; i++)
++    {
++        for(int j = 0; j < re->nrepl; j++)
++        {
++            de[i][j] = 0.;
++        }
++    }
++}
++
++void hrex_set_deltae_direct(gmx_repl_ex_t re, int opponent, real pot_opponent_minus_me)
++{
++    /*
++      Only two values have to be filled, de[me][opponent] and de[opponent][me].
++       de[me][opponent] = H_me (x_opponent) - H_opponent(x_opponent)
++       de[opponent][me] = H_opponent (x_me) - H_me(x_me)
++
++       Only de[opponent][me] is handled by this rank.
++       de is then summed over by test_for_replica_exchange.
++    */
++    real **de = re->de;
++    int me = re->repl;
++    de[opponent][me] = pot_opponent_minus_me;
++}
++
++void hrex_set_deltae(gmx_repl_ex_t re,
++                     int opponent,
++                     const gmx_enerdata_t *unexchanged,
++                     const gmx_enerdata_t *exchanged)
++{
++    real **de = re->de;
++    int me = re->repl;
++
++    real origpot = unexchanged->term[F_EPOT];
++    real newpot = exchanged->term[F_EPOT];
++
++    /*
++      Only two values have to be filled, de[me][opponent] and de[opponent][me].
++       de[me][opponent] = H_me (x_opponent)* - H_opponent(x_opponent)
++       de[opponent][me] = H_opponent (x_me) - H_me(x_me)*
++
++       Only starred values can be calculated in local.
++    */
++
++    de[me][opponent] = newpot;
++    de[opponent][me] = -origpot;
++
++    // summation is taken inside test_for_replica_exchange.
++}
++
++void exchange_state(const gmx_multisim_t* ms, int b, t_state* state)
+ {
+     /* When t_state changes, this code should be updated. */
+     int ngtc, nnhpres;
+@@ -613,7 +919,31 @@ static void exchange_state(const gmx_multisim_t* ms, int b, t_state* state)
+     exchange_rvecs(ms, b, state->v.rvec_array(), state->natoms);
+ }
+ 
+-static void copy_state_serial(const t_state* src, t_state* dest)
++void send_recv_state(const gmx_multisim_t* ms, int sendto, int recvfrom, const t_state *state_send, t_state *state_recv)
++{
++    int ngtc, nnhpres;
++    // assumes state_send is equal among ms
++    ngtc    = state_send->ngtc * state_send->nhchainlength;
++    nnhpres = state_send->nnhpres * state_send->nhchainlength;
++    send_recv_values(ms, sendto, recvfrom, state_send->box, state_recv->box, DIM);
++    send_recv_values(ms, sendto, recvfrom, state_send->box_rel, state_recv->box_rel, DIM);
++    send_recv_values(ms, sendto, recvfrom, state_send->boxv, state_recv->boxv, DIM);
++    send_recv_values(ms, sendto, recvfrom, &(state_send->veta), &(state_recv->veta), 1);
++    send_recv_values(ms, sendto, recvfrom, &(state_send->vol0), &(state_recv->vol0), 1);
++    send_recv_values(ms, sendto, recvfrom, state_send->svir_prev, state_recv->svir_prev, DIM);
++    send_recv_values(ms, sendto, recvfrom, state_send->fvir_prev, state_recv->fvir_prev, DIM);
++    send_recv_values(ms, sendto, recvfrom, state_send->pres_prev, state_recv->pres_prev, DIM);
++    send_recv_values(ms, sendto, recvfrom, state_send->nosehoover_xi.data(), state_recv->nosehoover_xi.data(), ngtc);
++    send_recv_values(ms, sendto, recvfrom, state_send->nosehoover_vxi.data(), state_recv->nosehoover_vxi.data(), ngtc);
++    send_recv_values(ms, sendto, recvfrom, state_send->nhpres_xi.data(), state_recv->nhpres_xi.data(), nnhpres);
++    send_recv_values(ms, sendto, recvfrom, state_send->nhpres_vxi.data(), state_recv->nhpres_vxi.data(), nnhpres);
++    send_recv_values(ms, sendto, recvfrom, state_send->therm_integral.data(), state_recv->therm_integral.data(), state_send->ngtc);
++    send_recv_values(ms, sendto, recvfrom, &state_send->baros_integral, &state_recv->baros_integral, 1);
++    send_recv_values(ms, sendto, recvfrom, state_send->x.rvec_array(), state_recv->x.rvec_array(), state_send->natoms);
++    send_recv_values(ms, sendto, recvfrom, state_send->v.rvec_array(), state_recv->v.rvec_array(), state_send->natoms);
++}
++
++void copy_state_serial(const t_state* src, t_state* dest)
+ {
+     if (dest != src)
+     {
+@@ -633,12 +963,76 @@ static void scale_velocities(gmx::ArrayRef<gmx::RVec> velocities, real fac)
+     }
+ }
+ 
+-static void print_transition_matrix(FILE* fplog, int n, int** nmoves, const int* nattempt)
++static void scale_thermal_baths(t_state *state, t_extmass *massQ, t_extmass *other_massQ, real tempfac)
++{
++    /* Scale by temperature and massQ.
++       other_massQ represents "old" massQ, and massQ represents "new" massQ. */
++    for(size_t i = 0; i < state->nosehoover_vxi.size(); ++i) {
++        /* The definition of vxi is a "velocity", and not a "momentum" as in the reference. Also note the inverseness of Q. */
++        real scale = sqrt(massQ->Qinv[i] / other_massQ->Qinv[i]);
++        state->nosehoover_vxi[i] *= scale * tempfac;
++    }
++    for(size_t i = 0; i < state->nhpres_vxi.size(); ++i) {
++        real scale = sqrt(massQ->QPinv[i] / other_massQ->QPinv[i]);
++        state->nhpres_vxi[i] *= scale * tempfac;
++    }
++    if(other_massQ->Winv > 0.0) { /* can be 0 if not initialized */
++        state->veta *= sqrt(massQ->Winv / other_massQ->Winv) * tempfac;
++    }
++    if(massQ->Winv > 0.0) {
++        for(int i = 0; i < DIM; i++) {
++            for(int j = 0; j < DIM; j++) {
++                /* boxv is kinda "velocity" */
++                state->boxv[i][j] *= sqrt(massQ->Winv / other_massQ->Winv) * tempfac;
++            }
++        }
++    }
++}
++
++static void get_other_massq(const gmx_multisim_t *ms, int b, t_state *state,
++                            t_extmass *massQ, t_extmass *massQ_other)
++{
++    if (massQ)
++    {
++        int ngtc = state->ngtc * state->nhchainlength;
++        int nnhpres = state->nnhpres * state->nhchainlength;
++
++        *massQ_other = *massQ;
++
++        if (ngtc > 0) {
++            massQ_other->Qinv = massQ->Qinv;
++            exchange_doubles(ms, b, massQ_other->Qinv.data(), ngtc);
++        }else{
++            massQ_other->Qinv.clear();
++        }
++
++        if (nnhpres > 0) {
++            massQ_other->QPinv = massQ->QPinv;
++            exchange_doubles(ms, b, massQ_other->QPinv.data(), nnhpres);
++        }else{
++            massQ_other->QPinv.clear();
++        }
++        exchange_doubles(ms, b, &massQ_other->Winv, 1);
++        /* only this is real, others are double */
++        exchange_reals(ms, b, &massQ_other->Winvm[0][0], DIM * DIM);
++    }
++    else
++    {
++        massQ_other->Qinv.clear();
++        massQ_other->QPinv.clear();
++    }
++}
++
++static void print_transition_matrix(FILE* fplog, int n, int** nmoves, const int* nattempt, int exchange_cycle)
+ {
+     int   i, j, ntot;
+     float Tprint;
+ 
+-    ntot = nattempt[0] + nattempt[1];
++    ntot = 0;
++    for (i = 0; i < exchange_cycle; i++)
++    {
++        ntot += nattempt[i];
++    }
+     fprintf(fplog, "\n");
+     fprintf(fplog, "Repl");
+     for (i = 0; i < n; i++)
+@@ -804,6 +1198,7 @@ static real calc_delta(FILE* fplog, gmx_bool bPrint, struct gmx_repl_ex* re, int
+             delta = ediff * beta[a]; /* assume all same temperature in this case */
+             break;
+         case ereTL:
++        case ereHREX:
+             /* not permuted:  */
+             /* delta =  reduced E_new - reduced E_old
+                      =  [beta_b H_b(x_a) + beta_a H_a(x_b)] - [beta_b H_b(x_b) + beta_a H_a(x_a)]
+@@ -884,7 +1279,7 @@ static void test_for_replica_exchange(FILE*                 fplog,
+         bVol              = TRUE;
+         re->Vol[re->repl] = vol;
+     }
+-    if ((re->type == ereTEMP || re->type == ereTL))
++    if ((re->type == ereTEMP || re->type == ereTL || re->type == ereHREX))
+     {
+         for (i = 0; i < re->nrepl; i++)
+         {
+@@ -924,6 +1319,11 @@ static void test_for_replica_exchange(FILE*                 fplog,
+                                    - enerd->enerpart_lambda[0]);
+         }
+     }
++    else if(re->type == ereHREX)
++    {
++        // de[][] is already initialized. Only enable summation.
++        bDLambda = TRUE;
++    }
+ 
+     /* now actually do the communication */
+     if (bVol)
+@@ -1029,15 +1429,22 @@ static void test_for_replica_exchange(FILE*                 fplog,
+     {
+         /* standard nearest neighbor replica exchange */
+ 
+-        m = (step / re->nst) % 2;
+-        for (i = 1; i < re->nrepl; i++)
++        m = (step / re->nst) % re->exchange_cycle;
++        for (i = 0; i < re->nrepl; i++)
+         {
+-            a = re->ind[i - 1];
+-            b = re->ind[i];
+-
+-            bPrint = (re->repl == a || re->repl == b);
+-            if (i % 2 == m)
++            int opponent = re->exchange_schedule[m][i];
++            if (opponent == -1)
+             {
++                prob[i] = -1;
++                bEx[i]  = FALSE;
++            }
++            else if (i > opponent)
++            {
++                a = re->ind[i];
++                b = re->ind[opponent];
++
++                bPrint = (re->repl == a || re->repl == b);
++
+                 delta = calc_delta(fplog, bPrint, re, a, b, a, b);
+                 if (delta <= 0)
+                 {
+@@ -1066,16 +1473,15 @@ static void test_for_replica_exchange(FILE*                 fplog,
+                 if (bEx[i])
+                 {
+                     /* swap these two */
+-                    tmp         = pind[i - 1];
+-                    pind[i - 1] = pind[i];
+-                    pind[i]     = tmp;
++                    std::swap(pind[opponent], pind[i]);
+                     re->nexchange[i]++; /* statistics for back compatibility */
+                 }
+             }
+-            else
++            else // i.e. i < opponent
+             {
+                 prob[i] = -1;
+                 bEx[i]  = FALSE;
++                // do nothing here to prevent double counting
+             }
+         }
+         /* print some statistics */
+@@ -1254,6 +1660,7 @@ gmx_bool replica_exchange(FILE*                 fplog,
+                           t_state*              state,
+                           const gmx_enerdata_t* enerd,
+                           t_state*              state_local,
++                          t_extmass*            massQ,
+                           int64_t               step,
+                           real                  time)
+ {
+@@ -1299,6 +1706,7 @@ gmx_bool replica_exchange(FILE*                 fplog,
+ 
+         if (MASTER(cr))
+         {
++            t_extmass other_massQ = {};
+             /* There will be only one swap cycle with standard replica
+              * exchange, but there may be multiple swap cycles if we
+              * allow multiple swaps. */
+@@ -1309,6 +1717,9 @@ gmx_bool replica_exchange(FILE*                 fplog,
+ 
+                 if (exchange_partner != replica_id)
+                 {
++                    /* For thermostat scaling, see Mori & Okamoto J. Phys. Soc. Japan, 79, 074001 (2010). */
++                    get_other_massq(ms, exchange_partner, state, massQ, &other_massQ);
++
+                     /* Exchange the global states between the master nodes */
+                     if (debug)
+                     {
+@@ -1321,8 +1732,11 @@ gmx_bool replica_exchange(FILE*                 fplog,
+              * the velocities. */
+             if (re->type == ereTEMP || re->type == ereTL)
+             {
+-                scale_velocities(state->v, std::sqrt(re->q[ereTEMP][replica_id]
+-                                                     / re->q[ereTEMP][re->destinations[replica_id]]));
++                real scale = std::sqrt(re->q[ereTEMP][replica_id]
++                                       / re->q[ereTEMP][re->destinations[replica_id]]);
++                scale_velocities(state->v, scale);
++                /* Also scales thermostats */
++                scale_thermal_baths(state, massQ, &other_massQ, scale);
+             }
+         }
+ 
+@@ -1343,7 +1757,7 @@ void print_replica_exchange_statistics(FILE* fplog, struct gmx_repl_ex* re)
+ 
+     fprintf(fplog, "\nReplica exchange statistics\n");
+ 
+-    if (re->nex == 0)
++    if (re->nex == 0 && re->is_default_exchange)
+     {
+         fprintf(fplog, "Repl  %d attempts, %d odd, %d even\n", re->nattempt[0] + re->nattempt[1],
+                 re->nattempt[1], re->nattempt[0]);
+@@ -1385,7 +1799,15 @@ void print_replica_exchange_statistics(FILE* fplog, struct gmx_repl_ex* re)
+         fprintf(fplog, "\n");
+     }
+     /* print the transition matrix */
+-    print_transition_matrix(fplog, re->nrepl, re->nmoves, re->nattempt);
++    print_transition_matrix(fplog, re->nrepl, re->nmoves, re->nattempt, re->exchange_cycle);
++}
++
++
++
++bool is_hrex_enabled(gmx_repl_ex_t repl)
++{
++    return repl->is_Hrex;
+ }
++  
+ 
+ //! \endcond
+diff --git a/src/gromacs/mdrun/replicaexchange.h b/src/gromacs/mdrun/replicaexchange.h
+index f6bead1071..154452978b 100644
+--- a/src/gromacs/mdrun/replicaexchange.h
++++ b/src/gromacs/mdrun/replicaexchange.h
+@@ -55,6 +55,7 @@ struct gmx_enerdata_t;
+ struct gmx_multisim_t;
+ struct t_commrec;
+ struct t_inputrec;
++struct t_extmass;
+ class t_state;
+ 
+ /*! \libinternal
+@@ -67,6 +68,10 @@ struct ReplicaExchangeParameters
+     int numExchanges = 0;
+     //! The random seed, -1 means generate a seed.
+     int randomSeed = -1;
++    //! Whether to do Hamiltonian replica exchange
++    bool doHrex = false;
++    //! File name for graph-based exchange
++    const char* exchangeGraphFile = nullptr;
+ };
+ 
+ //! Abstract type for replica exchange
+@@ -98,6 +103,7 @@ gmx_bool replica_exchange(FILE*                 fplog,
+                           t_state*              state,
+                           const gmx_enerdata_t* enerd,
+                           t_state*              state_local,
++                          t_extmass*            massQ,
+                           int64_t               step,
+                           real                  time);
+ 
+@@ -106,4 +112,38 @@ gmx_bool replica_exchange(FILE*                 fplog,
+  * Should only be called on the master ranks */
+ void print_replica_exchange_statistics(FILE* fplog, gmx_repl_ex_t re);
+ 
++/*! \brief Get exchange opponent 
++ *
++ * \returns the (multisim) rank of the exchange opponent */
++int get_replica_exchange_opponent(const gmx_repl_ex_t repl_ex,
++				  int64_t current_step);
++
++/*! \brief Tell whether hrex is enabled
++ *
++ *\returns true if the hrex is enabled
++ */
++bool is_hrex_enabled(const gmx_repl_ex_t repl_ex);
++
++/*! \brief Utility function to copy local state in serial run
++ *
++ * Note that this does nothing in current (2020) implementation
++ */
++void copy_state_serial(const t_state *src, t_state *dest);
++
++void exchange_state(const gmx_multisim_t *ms, int neighbor, t_state *state);
++
++void send_recv_state(const gmx_multisim_t* ms, int sendto, int recvfrom, const t_state *state_send, t_state *state_recv);
++
++void hrex_init_deltae(gmx_repl_ex_t repl_ex);
++
++void hrex_set_deltae(gmx_repl_ex_t re,
++                     int opponent,
++                     const gmx_enerdata_t *unexchanged,
++                     const gmx_enerdata_t *exchanged);
++
++/*
++  pot_opponent_minus_me should be H_opponent(x_me) - H_me(x_me)
++*/
++void hrex_set_deltae_direct(gmx_repl_ex_t re, int opponent, real pot_opponent_minus_me);
++
+ #endif
+diff --git a/src/gromacs/mdrun/runner.cpp b/src/gromacs/mdrun/runner.cpp
+index c2b3c088d7..6bcc2faa7f 100644
+--- a/src/gromacs/mdrun/runner.cpp
++++ b/src/gromacs/mdrun/runner.cpp
+@@ -481,18 +481,6 @@ static bool gpuAccelerationOfNonbondedIsUseful(const MDLogger& mdlog, const t_in
+     bool        gpuIsUseful = true;
+     std::string warning;
+ 
+-    if (ir.opts.ngener - ir.nwall > 1)
+-    {
+-        /* The GPU code does not support more than one energy group.
+-         * If the user requested GPUs explicitly, a fatal error is given later.
+-         */
+-        gpuIsUseful = false;
+-        warning =
+-                "Multiple energy groups is not implemented for GPUs, falling back to the CPU. "
+-                "For better performance, run on the GPU without energy groups and then do "
+-                "gmx mdrun -rerun option on the trajectory with an energy group .tpr file.";
+-    }
+-
+     if (EI_TPI(ir.eI))
+     {
+         gpuIsUseful = false;
+@@ -1520,6 +1508,13 @@ int Mdrunner::mdrunner()
+         /* Energy terms and groups */
+         gmx_enerdata_t enerd(mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size(),
+                              inputrec->fepvals->n_lambda);
++        // An additional energy terms storage used in replica exchange with "Hrex" mode
++        std::unique_ptr<gmx_enerdata_t> enerd_hrex;
++        if (replExParams.doHrex)
++        {
++            enerd_hrex.reset(new gmx_enerdata_t(mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size(),
++                                                inputrec->fepvals->n_lambda));
++        }
+ 
+         // cos acceleration is only supported by md, but older tpr
+         // files might still combine it with other integrators
+@@ -1592,7 +1587,7 @@ int Mdrunner::mdrunner()
+                 enforcedRotation ? enforcedRotation->getLegacyEnfrot() : nullptr, deform.get(),
+                 mdModules_->outputProvider(), mdModules_->notifier(), inputrec, imdSession.get(),
+                 pull_work, swap, &mtop, fcd, globalState.get(), &observablesHistory, mdAtoms.get(),
+-                &nrnb, wcycle, fr, &enerd, &ekind, &runScheduleWork, replExParams, membed,
++                &nrnb, wcycle, fr, &enerd, enerd_hrex.get(), &ekind, &runScheduleWork, replExParams, membed,
+                 walltime_accounting, std::move(stopHandlerBuilder_), doRerun);
+         simulator->run();
+ 
+diff --git a/src/gromacs/mdtypes/mdrunoptions.h b/src/gromacs/mdtypes/mdrunoptions.h
+index a36c9f41e4..8b8be46a96 100644
+--- a/src/gromacs/mdtypes/mdrunoptions.h
++++ b/src/gromacs/mdtypes/mdrunoptions.h
+@@ -128,6 +128,8 @@ struct MdrunOptions
+     gmx_bool verbose = FALSE;
+     //! If verbose=true, print remaining runtime at this step interval
+     int verboseStepPrintInterval = 100;
++    //! Interval to evaluate neighboring states in multisimulation. -1 disables the functionality.
++    int evaluateOtherSimInterval = -1;
+ };
+ 
+ } // end namespace gmx
+diff --git a/src/gromacs/mdtypes/state.h b/src/gromacs/mdtypes/state.h
+index a54bff29bb..62c123bf31 100644
+--- a/src/gromacs/mdtypes/state.h
++++ b/src/gromacs/mdtypes/state.h
+@@ -120,6 +120,7 @@ enum
+     estMC_RNGI_NOTSUPPORTED,
+     estBAROS_INT,
+     estPULLCOMPREVSTEP,
++    estWINVM,
+     estNR
+ };
+ 
+@@ -230,6 +231,7 @@ public:
+     matrix                   box;            //!< Matrix of box vectors
+     matrix                   box_rel;        //!< Relative box vectors to preserve box shape
+     matrix                   boxv;           //!< Box velocities for Parrinello-Rahman P-coupling
++    tensor                   winvm;          //!< Inverse mass of Parrinello-Rahman P-couping
+     matrix                   pres_prev;      //!< Pressure of the previous step for pcoupl
+     matrix                   svir_prev;      //!< Shake virial for previous step for pcoupl
+     matrix                   fvir_prev;      //!< Force virial of the previous step for pcoupl
+diff --git a/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp b/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp
+index 7c4e259d81..1ba1373c97 100644
+--- a/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp
++++ b/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp
+@@ -88,6 +88,7 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                   nstpcou
+     clear_mat(mu_);
+     clear_mat(boxRel_);
+     clear_mat(boxVelocity_);
++    clear_mat(winvm_);
+ 
+     // TODO: This is only needed to restore the thermostatIntegral_ from cpt. Remove this when
+     //       switching to purely client-based checkpointing.
+@@ -97,13 +98,20 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                   nstpcou
+         {
+             copy_mat(globalState->boxv, boxVelocity_);
+             copy_mat(globalState->box_rel, boxRel_);
++            copy_mat(globalState->winvm, winvm_);
+         }
+         if (DOMAINDECOMP(cr))
+         {
+             dd_bcast(cr->dd, sizeof(boxVelocity_), boxVelocity_);
+             dd_bcast(cr->dd, sizeof(boxRel_), boxRel_);
++            dd_bcast(cr->dd, sizeof(winvm_), winvm_);
+         }
+     }
++    else
++    {
++        calcParrinelloRahmanInvMass(inputrec, statePropagatorData->box(), winvm_);
++    }
++
+ }
+ 
+ void ParrinelloRahmanBarostat::scheduleTask(gmx::Step step,
+@@ -131,7 +139,7 @@ void ParrinelloRahmanBarostat::integrateBoxVelocityEquations(Step step)
+ {
+     auto box = statePropagatorData_->constBox();
+     parrinellorahman_pcoupl(fplog_, step, inputrec_, couplingTimeStep_, energyElement_->pressure(step),
+-                            box, boxRel_, boxVelocity_, scalingTensor_.data(), mu_, false);
++                            box, boxRel_, boxVelocity_, scalingTensor_.data(), mu_, winvm_, false);
+     // multiply matrix by the coupling time step to avoid having the propagator needing to know about that
+     msmul(scalingTensor_.data(), couplingTimeStep_, scalingTensor_.data());
+ }
+@@ -181,7 +189,7 @@ void ParrinelloRahmanBarostat::elementSetup()
+         // output here) and for the pressure (since it might not be calculated yet, and we don't need it).
+         auto box = statePropagatorData_->constBox();
+         parrinellorahman_pcoupl(nullptr, initStep_, inputrec_, couplingTimeStep_, nullptr, box,
+-                                boxRel_, boxVelocity_, scalingTensor_.data(), mu_, true);
++                                boxRel_, boxVelocity_, scalingTensor_.data(), mu_, winvm_, true);
+         // multiply matrix by the coupling time step to avoid having the propagator needing to know about that
+         msmul(scalingTensor_.data(), couplingTimeStep_, scalingTensor_.data());
+ 
+@@ -198,7 +206,8 @@ void ParrinelloRahmanBarostat::writeCheckpoint(t_state* localState, t_state gmx_
+ {
+     copy_mat(boxVelocity_, localState->boxv);
+     copy_mat(boxRel_, localState->box_rel);
+-    localState->flags |= (1U << estBOXV) | (1U << estBOX_REL);
++    copy_mat(winvm_, localState->winvm);
++    localState->flags |= (1U << estBOXV) | (1U << estBOX_REL) | (1U << estWINVM);
+ }
+ 
+ 
+diff --git a/src/gromacs/modularsimulator/parrinellorahmanbarostat.h b/src/gromacs/modularsimulator/parrinellorahmanbarostat.h
+index 25b40d546b..c5360f5391 100644
+--- a/src/gromacs/modularsimulator/parrinellorahmanbarostat.h
++++ b/src/gromacs/modularsimulator/parrinellorahmanbarostat.h
+@@ -122,6 +122,8 @@ private:
+     tensor boxRel_;
+     //! Box velocity
+     tensor boxVelocity_;
++    //! Used to store fictious mass of box
++    tensor winvm_;
+ 
+     //! Pointer to the micro state
+     StatePropagatorData* statePropagatorData_;
+diff --git a/src/gromacs/nbnxm/atomdata.cpp b/src/gromacs/nbnxm/atomdata.cpp
+index c4a15ba974..c1c544fd17 100644
+--- a/src/gromacs/nbnxm/atomdata.cpp
++++ b/src/gromacs/nbnxm/atomdata.cpp
+@@ -602,11 +602,6 @@ static void nbnxn_atomdata_params_init(const gmx::MDLogger&      mdlog,
+     set_lj_parameter_data(params, bSIMD);
+ 
+     params->nenergrp = n_energygroups;
+-    if (!simple)
+-    {
+-        // We now check for energy groups already when starting mdrun
+-        GMX_RELEASE_ASSERT(n_energygroups == 1, "GPU kernels do not support energy groups");
+-    }
+     /* Temporary storage goes as #grp^3*simd_width^2/2, so limit to 64 */
+     if (params->nenergrp > 64)
+     {
+@@ -925,7 +920,8 @@ copy_egp_to_nbat_egps(const int* a, int na, int na_round, int na_c, int bit_shif
+ /* Set the energy group indices for atoms in nbnxn_atomdata_t */
+ static void nbnxn_atomdata_set_energygroups(nbnxn_atomdata_t::Params* params,
+                                             const Nbnxm::GridSet&     gridSet,
+-                                            const int*                atinfo)
++                                            const int*                atinfo,
++                                            bool useGPU)
+ {
+     if (params->nenergrp == 1)
+     {
+@@ -943,7 +939,7 @@ static void nbnxn_atomdata_set_energygroups(nbnxn_atomdata_t::Params* params,
+             const int atomOffset = grid.firstAtomInColumn(i);
+ 
+             copy_egp_to_nbat_egps(gridSet.atomIndices().data() + atomOffset, grid.numAtomsInColumn(i),
+-                                  numAtoms, c_nbnxnCpuIClusterSize, params->neg_2log, atinfo,
++                                  numAtoms, useGPU ? c_nbnxnGpuClusterSize : c_nbnxnCpuIClusterSize, params->neg_2log, atinfo,
+                                   params->energrp.data() + grid.atomToCluster(atomOffset));
+         }
+     }
+@@ -953,7 +949,8 @@ static void nbnxn_atomdata_set_energygroups(nbnxn_atomdata_t::Params* params,
+ void nbnxn_atomdata_set(nbnxn_atomdata_t*     nbat,
+                         const Nbnxm::GridSet& gridSet,
+                         const t_mdatoms*      mdatoms,
+-                        const int*            atinfo)
++                        const int*            atinfo,
++                        bool useGPU)
+ {
+     nbnxn_atomdata_t::Params& params = nbat->paramsDeprecated();
+ 
+@@ -969,7 +966,7 @@ void nbnxn_atomdata_set(nbnxn_atomdata_t*     nbat,
+     /* This must be done after masking types for FEP */
+     nbnxn_atomdata_set_ljcombparams(&params, nbat->XFormat, gridSet);
+ 
+-    nbnxn_atomdata_set_energygroups(&params, gridSet, atinfo);
++    nbnxn_atomdata_set_energygroups(&params, gridSet, atinfo, useGPU);
+ }
+ 
+ /* Copies the shift vector array to nbnxn_atomdata_t */
+diff --git a/src/gromacs/nbnxm/atomdata.h b/src/gromacs/nbnxm/atomdata.h
+index 1b1e3b763a..c51d0cf16d 100644
+--- a/src/gromacs/nbnxm/atomdata.h
++++ b/src/gromacs/nbnxm/atomdata.h
+@@ -300,7 +300,8 @@ void nbnxn_atomdata_init(const gmx::MDLogger& mdlog,
+ void nbnxn_atomdata_set(nbnxn_atomdata_t*     nbat,
+                         const Nbnxm::GridSet& gridSet,
+                         const t_mdatoms*      mdatoms,
+-                        const int*            atinfo);
++                        const int*            atinfo,
++                        bool useGPU);
+ 
+ /* Copy the shift vectors to nbat */
+ void nbnxn_atomdata_copy_shiftvec(gmx_bool dynamic_box, rvec* shift_vec, nbnxn_atomdata_t* nbat);
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda.cu b/src/gromacs/nbnxm/cuda/nbnxm_cuda.cu
+index acf3717d8e..c5ab314aa0 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda.cu
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda.cu
+@@ -86,6 +86,10 @@
+ /** Force & energy **/
+ #define CALC_ENERGIES
+ #include "nbnxm_cuda_kernels.cuh"
++/** Force & energy (energy groups) **/
++#define ENERGY_GROUPS
++#include "nbnxm_cuda_kernels.cuh"
++#undef ENERGY_GROUPS
+ #undef CALC_ENERGIES
+ 
+ /*** Pair-list pruning kernels ***/
+@@ -95,6 +99,10 @@
+ /** Force & energy **/
+ #define CALC_ENERGIES
+ #include "nbnxm_cuda_kernels.cuh"
++/** Force & energy (energy groups) **/
++#define ENERGY_GROUPS
++#include "nbnxm_cuda_kernels.cuh"
++#undef ENERGY_GROUPS
+ #undef CALC_ENERGIES
+ #undef PRUNE_NBL
+ 
+@@ -148,6 +156,11 @@ static inline int calc_nb_kernel_nblock(int nwork_units, const gmx_device_info_t
+     return nwork_units;
+ }
+ 
++int get_nb_kernel_nblock_local(const gmx_nbnxn_cuda_t *nb)
++{
++    return calc_nb_kernel_nblock(nb->plist[InteractionLocality::Local]->nsci, nb->dev_info);
++}
++
+ 
+ /* Constant arrays listing all kernel function pointers and enabling selection
+    of a kernel in an elegant manner. */
+@@ -216,6 +229,33 @@ static const nbnxn_cu_kfunc_ptr_t nb_kfunc_ener_noprune_ptr[eelCuNR][evdwCuNR] =
+       nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombLB_VF_cuda }
+ };
+ 
++/*! Force + energy (energy groups enabled) kernel function pointers. */
++static const nbnxn_cu_kfunc_ptr_t nb_kfunc_energrp_noprune_ptr[eelCuNR][evdwCuNR] = {
++    { nbnxn_kernel_ElecCut_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecCut_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecCut_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecCut_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecCut_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecCut_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecCut_VdwLJEwCombLB_VGrF_cuda },
++    { nbnxn_kernel_ElecRF_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecRF_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecRF_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecRF_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecRF_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecRF_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecRF_VdwLJEwCombLB_VGrF_cuda },
++    { nbnxn_kernel_ElecEwQSTab_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJEwCombLB_VGrF_cuda },
++    { nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJEwCombLB_VGrF_cuda },
++    { nbnxn_kernel_ElecEw_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecEw_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEw_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecEw_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecEw_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecEw_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEw_VdwLJEwCombLB_VGrF_cuda },
++    { nbnxn_kernel_ElecEwTwinCut_VdwLJ_VGrF_cuda, nbnxn_kernel_ElecEwTwinCut_VdwLJCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJCombLB_VGrF_cuda, nbnxn_kernel_ElecEwTwinCut_VdwLJFsw_VGrF_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJPsw_VGrF_cuda, nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombGeom_VGrF_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombLB_VGrF_cuda }
++};
+ /*! Force + pruning kernel function pointers. */
+ static const nbnxn_cu_kfunc_ptr_t nb_kfunc_noener_prune_ptr[eelCuNR][evdwCuNR] = {
+     { nbnxn_kernel_ElecCut_VdwLJ_F_prune_cuda, nbnxn_kernel_ElecCut_VdwLJCombGeom_F_prune_cuda,
+@@ -278,10 +318,44 @@ static const nbnxn_cu_kfunc_ptr_t nb_kfunc_ener_prune_ptr[eelCuNR][evdwCuNR] = {
+       nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombLB_VF_prune_cuda }
+ };
+ 
++/*! Force + energy (with energy groups enabled) + pruning kernel function pointers. */
++static const nbnxn_cu_kfunc_ptr_t nb_kfunc_energrp_prune_ptr[eelCuNR][evdwCuNR] = {
++    { nbnxn_kernel_ElecCut_VdwLJ_VGrF_prune_cuda, nbnxn_kernel_ElecCut_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecCut_VdwLJCombLB_VGrF_prune_cuda, nbnxn_kernel_ElecCut_VdwLJFsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecCut_VdwLJPsw_VGrF_prune_cuda, nbnxn_kernel_ElecCut_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecCut_VdwLJEwCombLB_VGrF_prune_cuda },
++    { nbnxn_kernel_ElecRF_VdwLJ_VGrF_prune_cuda, nbnxn_kernel_ElecRF_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecRF_VdwLJCombLB_VGrF_prune_cuda, nbnxn_kernel_ElecRF_VdwLJFsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecRF_VdwLJPsw_VGrF_prune_cuda, nbnxn_kernel_ElecRF_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecRF_VdwLJEwCombLB_VGrF_prune_cuda },
++    { nbnxn_kernel_ElecEwQSTab_VdwLJ_VGrF_prune_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJCombLB_VGrF_prune_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJFsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJPsw_VGrF_prune_cuda, nbnxn_kernel_ElecEwQSTab_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTab_VdwLJEwCombLB_VGrF_prune_cuda },
++    { nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJ_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJCombLB_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJFsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJPsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwQSTabTwinCut_VdwLJEwCombLB_VGrF_prune_cuda },
++    { nbnxn_kernel_ElecEw_VdwLJ_VGrF_prune_cuda, nbnxn_kernel_ElecEw_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEw_VdwLJCombLB_VGrF_prune_cuda, nbnxn_kernel_ElecEw_VdwLJFsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEw_VdwLJPsw_VGrF_prune_cuda, nbnxn_kernel_ElecEw_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEw_VdwLJEwCombLB_VGrF_prune_cuda },
++    { nbnxn_kernel_ElecEwTwinCut_VdwLJ_VGrF_prune_cuda, nbnxn_kernel_ElecEwTwinCut_VdwLJCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJCombLB_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJFsw_VGrF_prune_cuda, nbnxn_kernel_ElecEwTwinCut_VdwLJPsw_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombGeom_VGrF_prune_cuda,
++      nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombLB_VGrF_prune_cuda }
++};
++
++
+ /*! Return a pointer to the kernel version to be executed at the current step. */
+ static inline nbnxn_cu_kfunc_ptr_t select_nbnxn_kernel(int                     eeltype,
+                                                        int                     evdwtype,
+                                                        bool                    bDoEne,
++                                                       bool                    bDoEnergygrp,
+                                                        bool                    bDoPrune,
+                                                        const gmx_device_info_t gmx_unused* devInfo)
+ {
+@@ -298,8 +372,18 @@ static inline nbnxn_cu_kfunc_ptr_t select_nbnxn_kernel(int                     e
+                "The CUDA kernels require the "
+                "cluster_size_i*cluster_size_j/nbnxn_gpu_clusterpair_split to match the warp size "
+                "of the architecture targeted.");
+-
+-    if (bDoEne)
++    if (bDoEne && bDoEnergygrp)
++    {
++        if (bDoPrune)
++        {
++            res = nb_kfunc_energrp_prune_ptr[eeltype][evdwtype];
++        }
++        else
++        {
++            res = nb_kfunc_energrp_noprune_ptr[eeltype][evdwtype];
++        }
++    }
++    else if (bDoEne)
+     {
+         if (bDoPrune)
+         {
+@@ -387,6 +471,25 @@ void nbnxnInsertNonlocalGpuDependency(const gmx_nbnxn_cuda_t* nb, const Interact
+     }
+ }
+ 
++static void gpu_alloc_energrp(gmx_nbnxn_cuda_t *nb, int nblock, int threads_per_block)
++{
++    int npackedgrp = nb->atdat->nenergrp * (nb->atdat->nenergrp + 1) / 2;
++    cudaError_t stat;
++
++    int newsize = npackedgrp * nblock * threads_per_block;
++    int cursize = nb->atdat->nalloc_e_grp;
++
++    if(cursize < newsize)
++    {
++        stat = cudaMalloc((void**)&nb->atdat->e_lj_grp_work, newsize * sizeof(*nb->atdat->e_lj_grp_work));
++        CU_RET_ERR(stat, "cudaMalloc failed on nb->atdat->e_lj_grp_work");
++        stat = cudaMalloc((void**)&nb->atdat->e_el_grp_work, newsize * sizeof(*nb->atdat->e_el_grp_work));
++        CU_RET_ERR(stat, "cudaMalloc failed on nb->atdat->e_el_grp_work");
++
++        nb->atdat->nalloc_e_grp = newsize;
++    }
++}
++
+ /*! \brief Launch asynchronously the xq buffer host to device copy. */
+ void gpu_copy_xq_to_gpu(gmx_nbnxn_cuda_t* nb, const nbnxn_atomdata_t* nbatom, const AtomLocality atomLocality)
+ {
+@@ -444,6 +547,17 @@ void gpu_copy_xq_to_gpu(gmx_nbnxn_cuda_t* nb, const nbnxn_atomdata_t* nbatom, co
+     cu_copy_H2D_async(adat->xq + adat_begin,
+                       static_cast<const void*>(nbatom->x().data() + adat_begin * 4),
+                       adat_len * sizeof(*adat->xq), stream);
++    if (adat->nenergrp > 1)
++    {
++        /* also copy energrp if needed
++           TODO: rename function? */
++        int adat_begin_clustered = adat_begin / c_clSize;
++        int adat_end_clustered = (adat_begin + adat_len + (c_clSize - 1)) / c_clSize;
++        int adat_len_clustered = adat_end_clustered - adat_begin_clustered;
++        cu_copy_H2D_async(adat->energrp + adat_begin_clustered,
++                static_cast<const void*>(nbatom->params().energrp.data() + adat_begin_clustered),
++                adat_len_clustered * sizeof(*nbatom->params().energrp.data()), stream);
++    }
+ 
+     if (bDoTime)
+     {
+@@ -535,6 +649,11 @@ void gpu_launch_kernel(gmx_nbnxn_cuda_t* nb, const gmx::StepWorkload& stepWork,
+     }
+     int nblock = calc_nb_kernel_nblock(plist->nsci, nb->dev_info);
+ 
++    if(nb->atdat->nenergrp > 1 && stepWork.computeEnergy)
++    {
++        // TODO: move to appropriate place
++        gpu_alloc_energrp(nb, nblock, c_clSize * c_clSize * num_threads_z);
++    }
+ 
+     KernelLaunchConfig config;
+     config.blockSize[0]     = c_clSize;
+@@ -558,6 +677,7 @@ void gpu_launch_kernel(gmx_nbnxn_cuda_t* nb, const gmx::StepWorkload& stepWork,
+     auto*      timingEvent = bDoTime ? t->interaction[iloc].nb_k.fetchNextEvent() : nullptr;
+     const auto kernel      = select_nbnxn_kernel(
+             nbp->eeltype, nbp->vdwtype, stepWork.computeEnergy,
++            nb->atdat->nenergrp > 1,
+             (plist->haveFreshList && !nb->timers->interaction[iloc].didPrune), nb->dev_info);
+     const auto kernelArgs =
+             prepareGpuKernelArguments(kernel, config, adat, nbp, plist, &stepWork.computeVirial);
+@@ -784,8 +904,10 @@ void gpu_launch_cpyback(gmx_nbnxn_cuda_t*        nb,
+         /* DtoH energies */
+         if (stepWork.computeEnergy)
+         {
+-            cu_copy_D2H_async(nb->nbst.e_lj, adat->e_lj, sizeof(*nb->nbst.e_lj), stream);
+-            cu_copy_D2H_async(nb->nbst.e_el, adat->e_el, sizeof(*nb->nbst.e_el), stream);
++            int nenergrp = nb->atdat->nenergrp;
++            int ngrppair = nenergrp * (nenergrp + 1) / 2;
++            cu_copy_D2H_async(nb->nbst.e_lj, adat->e_lj, ngrppair * sizeof(*nb->nbst.e_lj), stream);
++            cu_copy_D2H_async(nb->nbst.e_el, adat->e_el, ngrppair * sizeof(*nb->nbst.e_el), stream);
+         }
+     }
+ 
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda.h b/src/gromacs/nbnxm/cuda/nbnxm_cuda.h
+index f222cddaf0..3e489d9601 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda.h
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda.h
+@@ -41,11 +41,14 @@
+ #ifndef GMX_NBNXN_CUDA_NBNXN_CUDA_H
+ #define GMX_NBNXN_CUDA_NBNXN_CUDA_H
+ 
++struct gmx_nbnxn_cuda_t;
++
+ namespace Nbnxm
+ {
+ 
+ //! Set up the cache configuration for the non-bonded kernels.
+ void cuda_set_cacheconfig();
++int get_nb_kernel_nblock_local(const gmx_nbnxn_cuda_t *nb);
+ 
+ } // namespace Nbnxm
+ 
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda_data_mgmt.cu b/src/gromacs/nbnxm/cuda/nbnxm_cuda_data_mgmt.cu
+index d5d0474bbe..da7d07326e 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda_data_mgmt.cu
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda_data_mgmt.cu
+@@ -124,10 +124,12 @@ static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
+ 
+ /*! Initializes the atomdata structure first time, it only gets filled at
+     pair-search. */
+-static void init_atomdata_first(cu_atomdata_t* ad, int ntypes)
++static void init_atomdata_first(cu_atomdata_t* ad, int ntypes, int nenergrp)
+ {
+     cudaError_t stat;
+ 
++    int nenergrp_outputsize = nenergrp * (nenergrp + 1) / 2;
++
+     ad->ntypes = ntypes;
+     stat       = cudaMalloc((void**)&ad->shift_vec, SHIFTS * sizeof(*ad->shift_vec));
+     CU_RET_ERR(stat, "cudaMalloc failed on ad->shift_vec");
+@@ -136,19 +138,32 @@ static void init_atomdata_first(cu_atomdata_t* ad, int ntypes)
+     stat = cudaMalloc((void**)&ad->fshift, SHIFTS * sizeof(*ad->fshift));
+     CU_RET_ERR(stat, "cudaMalloc failed on ad->fshift");
+ 
+-    stat = cudaMalloc((void**)&ad->e_lj, sizeof(*ad->e_lj));
++    stat = cudaMalloc((void**)&ad->e_lj, sizeof(*ad->e_lj) * nenergrp_outputsize);
+     CU_RET_ERR(stat, "cudaMalloc failed on ad->e_lj");
+-    stat = cudaMalloc((void**)&ad->e_el, sizeof(*ad->e_el));
++    stat = cudaMalloc((void**)&ad->e_el, sizeof(*ad->e_el) * nenergrp_outputsize);
+     CU_RET_ERR(stat, "cudaMalloc failed on ad->e_el");
+ 
++    ad->nenergrp = nenergrp;
++    ad->nenergrp_log2 = 1;
++    while(nenergrp > (1 << ad->nenergrp_log2))
++    {
++        ad->nenergrp_log2++;
++    }
++
+     /* initialize to nullptr poiters to data that is not allocated here and will
+        need reallocation in nbnxn_cuda_init_atomdata */
+     ad->xq = nullptr;
+     ad->f  = nullptr;
++    /* energrp and e_{lj,el}_grp_work are reallocated upon executing kernel */
++    ad->energrp = nullptr;
++    ad->e_lj_grp_work = nullptr;
++    ad->e_el_grp_work = nullptr;
+ 
+     /* size -1 indicates that the respective array hasn't been initialized yet */
+     ad->natoms = -1;
+     ad->nalloc = -1;
++    ad->nalloc_energrp = -1;
++    ad->nalloc_e_grp = -1;
+ }
+ 
+ /*! Selects the Ewald kernel type, analytical on SM 3.0 and later, tabulated on
+@@ -404,7 +419,7 @@ static void cuda_init_const(gmx_nbnxn_cuda_t*               nb,
+                             const PairlistParams&           listParams,
+                             const nbnxn_atomdata_t::Params& nbatParams)
+ {
+-    init_atomdata_first(nb->atdat, nbatParams.numTypes);
++    init_atomdata_first(nb->atdat, nbatParams.numTypes, nbatParams.nenergrp);
+     init_nbparam(nb->nbparam, ic, listParams, nbatParams);
+ 
+     /* clear energy and shift force outputs */
+@@ -436,8 +451,10 @@ gmx_nbnxn_cuda_t* gpu_init(const gmx_device_info_t*   deviceInfo,
+     snew(nb->timings, 1);
+ 
+     /* init nbst */
+-    pmalloc((void**)&nb->nbst.e_lj, sizeof(*nb->nbst.e_lj));
+-    pmalloc((void**)&nb->nbst.e_el, sizeof(*nb->nbst.e_el));
++    int ngrp = nbat->params().nenergrp;
++    int ngrppair = ngrp * (ngrp + 1) / 2;
++    pmalloc((void**)&nb->nbst.e_lj, ngrppair * sizeof(*nb->nbst.e_lj));
++    pmalloc((void**)&nb->nbst.e_el, ngrppair * sizeof(*nb->nbst.e_el));
+     pmalloc((void**)&nb->nbst.fshift, SHIFTS * sizeof(*nb->nbst.fshift));
+ 
+     init_plist(nb->plist[InteractionLocality::Local]);
+@@ -594,12 +611,14 @@ static void nbnxn_cuda_clear_e_fshift(gmx_nbnxn_cuda_t* nb)
+     cudaError_t    stat;
+     cu_atomdata_t* adat = nb->atdat;
+     cudaStream_t   ls   = nb->stream[InteractionLocality::Local];
++    int ngrp = adat->nenergrp;
++    int ngrppair = ngrp * (ngrp + 1) / 2;
+ 
+     stat = cudaMemsetAsync(adat->fshift, 0, SHIFTS * sizeof(*adat->fshift), ls);
+     CU_RET_ERR(stat, "cudaMemsetAsync on fshift falied");
+-    stat = cudaMemsetAsync(adat->e_lj, 0, sizeof(*adat->e_lj), ls);
++    stat = cudaMemsetAsync(adat->e_lj, 0, ngrppair * sizeof(*adat->e_lj), ls);
+     CU_RET_ERR(stat, "cudaMemsetAsync on e_lj falied");
+-    stat = cudaMemsetAsync(adat->e_el, 0, sizeof(*adat->e_el), ls);
++    stat = cudaMemsetAsync(adat->e_el, 0, ngrppair * sizeof(*adat->e_el), ls);
+     CU_RET_ERR(stat, "cudaMemsetAsync on e_el falied");
+ }
+ 
+@@ -638,6 +657,7 @@ void gpu_init_atomdata(gmx_nbnxn_cuda_t* nb, const nbnxn_atomdata_t* nbat)
+     if (natoms > d_atdat->nalloc)
+     {
+         nalloc = over_alloc_small(natoms);
++        int nalloc_energrp = (nalloc + c_clSize - 1) / c_clSize;
+ 
+         /* free up first if the arrays have already been initialized */
+         if (d_atdat->nalloc != -1)
+@@ -664,6 +684,16 @@ void gpu_init_atomdata(gmx_nbnxn_cuda_t* nb, const nbnxn_atomdata_t* nbat)
+         }
+ 
+         d_atdat->nalloc = nalloc;
++
++        if (d_atdat->nenergrp > 1)
++        {
++            if (d_atdat->nalloc_energrp != -1) {
++                freeDeviceBuffer(&d_atdat->energrp);
++            }
++            stat = cudaMalloc((void**)&d_atdat->energrp, nalloc_energrp * sizeof(*d_atdat->energrp));
++            CU_RET_ERR(stat, "cudaMalloc failed on d_atdat->energrp");
++            d_atdat->nalloc_energrp = nalloc_energrp;
++        }
+         realloced       = true;
+     }
+ 
+@@ -758,6 +788,10 @@ void gpu_free(gmx_nbnxn_cuda_t* nb)
+     freeDeviceBuffer(&atdat->atom_types);
+     freeDeviceBuffer(&atdat->lj_comb);
+ 
++    freeDeviceBuffer(&atdat->energrp);
++    freeDeviceBuffer(&atdat->e_lj_grp_work);
++    freeDeviceBuffer(&atdat->e_el_grp_work);
++
+     /* Free plist */
+     auto* plist = nb->plist[InteractionLocality::Local];
+     freeDeviceBuffer(&plist->sci);
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel.cuh b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel.cuh
+index 2201009170..917fedf1eb 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel.cuh
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel.cuh
+@@ -146,13 +146,21 @@ __launch_bounds__(THREADS_PER_BLOCK)
+ #endif /* GMX_PTX_ARCH >= 350 */
+ #ifdef PRUNE_NBL
+ #    ifdef CALC_ENERGIES
++#        ifdef ENERGY_GROUPS
++        __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VGrF_prune_cuda)
++#        else
+         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VF_prune_cuda)
++#        endif /* ENERGY_GROUPS */
+ #    else
+         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _F_prune_cuda)
+ #    endif /* CALC_ENERGIES */
+ #else
+ #    ifdef CALC_ENERGIES
++#        ifdef ENERGY_GROUPS
++        __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VGrF_cuda)
++#        else
+         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VF_cuda)
++#        endif /* ENERGY_GROUPS */
+ #    else
+         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _F_cuda)
+ #    endif /* CALC_ENERGIES */
+@@ -234,11 +242,15 @@ __launch_bounds__(THREADS_PER_BLOCK)
+     float        sigma, epsilon;
+ #    endif
+     float        int_bit, F_invr;
+-#    ifdef CALC_ENERGIES
++#    if defined CALC_ENERGIES && (! defined ENERGY_GROUPS)
+     float        E_lj, E_el;
+ #    endif
+ #    if defined CALC_ENERGIES || defined LJ_POT_SWITCH
+     float        E_lj_p;
++#    endif
++#    ifdef ENERGY_GROUPS
++    int          igrp, jgrp;
++    int          egrp_mask;
+ #    endif
+     unsigned int wexcl, imask, mask_ji;
+     float4       xqbuf;
+@@ -319,45 +331,95 @@ __launch_bounds__(THREADS_PER_BLOCK)
+ 
+ 
+ #    ifdef CALC_ENERGIES
++#    ifdef ENERGY_GROUPS
++    int egrp_log2 = atdat.nenergrp_log2;
++    egrp_mask = (1 << egrp_log2) - 1;
++    int ngrppair = atdat.nenergrp * (atdat.nenergrp + 1) / 2;
++    // accessed by el_grp_out[packedgroupid * THREADS_PER_BLOCK + tidx_full] to allow coalesced access for typical cases
++    unsigned int tidx_full = tidxz * blockDim.x * blockDim.y + tidx;
++    float* el_grp_out = &(atdat.e_el_grp_work[bidx * THREADS_PER_BLOCK * ngrppair + tidx_full]);
++    float* lj_grp_out = &(atdat.e_lj_grp_work[bidx * THREADS_PER_BLOCK * ngrppair + tidx_full]);
++    for(i = 0; i < ngrppair; i++)
++    {
++        el_grp_out[i * THREADS_PER_BLOCK] = 0.0f;
++        lj_grp_out[i * THREADS_PER_BLOCK] = 0.0f;
++    }
++    int* energrp = atdat.energrp;
++#    else
+     E_lj         = 0.0f;
+     E_el         = 0.0f;
++#    endif
+ 
+ #        ifdef EXCLUSION_FORCES /* Ewald or RF */
+     if (nb_sci.shift == CENTRAL && pl_cj4[cij4_start].cj[0] == sci * c_numClPerSupercl)
+     {
++#            ifdef LJ_EWALD
++        float ljp;
++#            endif
+         /* we have the diagonal: add the charge and LJ self interaction energy term */
+         for (i = 0; i < c_numClPerSupercl; i++)
+         {
+ #            if defined EL_EWALD_ANY || defined EL_RF || defined EL_CUTOFF
+             qi = xqib[i * c_clSize + tidxi].w;
++#                ifdef ENERGY_GROUPS
++            ci = sci * c_numClPerSupercl + i;
++            igrp = (energrp[ci] >> (egrp_log2 * tidxi)) & egrp_mask;
++            el_grp_out[groupid_packed(igrp, igrp) * THREADS_PER_BLOCK] += qi * qi;
++#                else
+             E_el += qi * qi;
++#                endif
+ #            endif
+ 
+ #            ifdef LJ_EWALD
+ #                if DISABLE_CUDA_TEXTURES
+-            E_lj += LDG(
++            ljp = LDG(
+                     &nbparam.nbfp[atom_types[(sci * c_numClPerSupercl + i) * c_clSize + tidxi] * (ntypes + 1) * 2]);
+ #                else
+-            E_lj += tex1Dfetch<float>(
++            ljp = tex1Dfetch<float>(
+                     nbparam.nbfp_texobj,
+                     atom_types[(sci * c_numClPerSupercl + i) * c_clSize + tidxi] * (ntypes + 1) * 2);
+ #                endif
++#                ifdef ENERGY_GROUPS
++            lj_grp_out[groupid_packed(igrp, igrp) * THREADS_PER_BLOCK] += ljp;
++#                else
++            E_lj += ljp;
++#                endif
+ #            endif
+         }
+ 
+         /* divide the self term(s) equally over the j-threads, then multiply with the coefficients. */
+ #            ifdef LJ_EWALD
++#                ifdef ENERGY_GROUPS
++        for(i = 0; i < ngrppair; i++)
++        {
++            lj_grp_out[i * THREADS_PER_BLOCK] /= c_clSize * NTHREAD_Z;
++            lj_grp_out[i * THREADS_PER_BLOCK] *= 0.5f * c_oneSixth * lje_coeff6_6;
++        }
++#                else
+         E_lj /= c_clSize * NTHREAD_Z;
+         E_lj *= 0.5f * c_oneSixth * lje_coeff6_6;
++#                endif
+ #            endif
+ 
+ #            if defined EL_EWALD_ANY || defined EL_RF || defined EL_CUTOFF
+         /* Correct for epsfac^2 due to adding qi^2 */
++#                ifdef ENERGY_GROUPS
++        for(i = 0; i < ngrppair; i++)
++        {
++            el_grp_out[i * THREADS_PER_BLOCK] /= nbparam.epsfac * c_clSize * NTHREAD_Z;
++#                    if defined EL_RF || defined EL_CUTOFF
++            el_grp_out[i * THREADS_PER_BLOCK] *= 0.5f * c_rf;
++#                    else
++            el_grp_out[i * THREADS_PER_BLOCK] *= -beta * M_FLOAT_1_SQRTPI; /* last factor 1/sqrt(pi) */
++#                    endif
++        }
++#                else
+         E_el /= nbparam.epsfac * c_clSize * NTHREAD_Z;
+-#                if defined EL_RF || defined EL_CUTOFF
++#                    if defined EL_RF || defined EL_CUTOFF
+         E_el *= -0.5f * c_rf;
+-#                else
++#                    else
+         E_el *= -beta * M_FLOAT_1_SQRTPI; /* last factor 1/sqrt(pi) */
++#                    endif
+ #                endif
+ #            endif /* EL_EWALD_ANY || defined EL_RF || defined EL_CUTOFF */
+     }
+@@ -402,6 +464,9 @@ __launch_bounds__(THREADS_PER_BLOCK)
+ 
+                     cj = cjs[jm + (tidxj & 4) * c_nbnxnGpuJgroupSize / c_splitClSize];
+                     aj = cj * c_clSize + tidxj;
++#    ifdef ENERGY_GROUPS
++                    jgrp = (energrp[cj] >> (egrp_log2 * tidxj)) & egrp_mask;
++#    endif
+ 
+                     /* load j atom data */
+                     xqbuf = xq[aj];
+@@ -423,6 +488,9 @@ __launch_bounds__(THREADS_PER_BLOCK)
+                         if (imask & mask_ji)
+                         {
+                             ci = sci * c_numClPerSupercl + i; /* i cluster index */
++#    ifdef ENERGY_GROUPS
++                            igrp = (energrp[ci] >> (egrp_log2 * tidxi)) & egrp_mask;
++#    endif
+ 
+                             /* all threads load an atom from i cluster ci into shmem! */
+                             xqbuf = xqib[i * c_clSize + tidxi];
+@@ -554,7 +622,11 @@ __launch_bounds__(THREADS_PER_BLOCK)
+ #    endif /* VDW_CUTOFF_CHECK */
+ 
+ #    ifdef CALC_ENERGIES
++#        ifdef ENERGY_GROUPS
++                                lj_grp_out[groupid_packed(igrp, jgrp) * THREADS_PER_BLOCK] += E_lj_p;
++#        else
+                                 E_lj += E_lj_p;
++#        endif
+ #    endif
+ 
+ 
+@@ -579,17 +651,23 @@ __launch_bounds__(THREADS_PER_BLOCK)
+ #    endif /* EL_EWALD_ANA/TAB */
+ 
+ #    ifdef CALC_ENERGIES
++#        ifdef ENERGY_GROUPS
++#            define E_el_out el_grp_out[groupid_packed(igrp, jgrp) * THREADS_PER_BLOCK]
++#        else
++#            define E_el_out E_el
++#        endif
+ #        ifdef EL_CUTOFF
+-                                E_el += qi * qj_f * (int_bit * inv_r - c_rf);
++                                E_el_out += qi * qj_f * (int_bit * inv_r - c_rf);
+ #        endif
+ #        ifdef EL_RF
+-                                E_el += qi * qj_f * (int_bit * inv_r + 0.5f * two_k_rf * r2 - c_rf);
++                                E_el_out += qi * qj_f * (int_bit * inv_r + 0.5f * two_k_rf * r2 - c_rf);
+ #        endif
+ #        ifdef EL_EWALD_ANY
+                                 /* 1.0f - erff is faster than erfcf */
+-                                E_el += qi * qj_f
++                                E_el_out += qi * qj_f
+                                         * (inv_r * (int_bit - erff(r2 * inv_r * beta)) - int_bit * ewald_shift);
+ #        endif /* EL_EWALD_ANY */
++#        undef E_el_out
+ #    endif
+                                 f_ij = rv * F_invr;
+ 
+@@ -641,8 +719,17 @@ __launch_bounds__(THREADS_PER_BLOCK)
+     }
+ 
+ #    ifdef CALC_ENERGIES
++#        ifndef ENERGY_GROUPS
+     /* reduce the energies over warps and store into global memory */
+     reduce_energy_warp_shfl(E_lj, E_el, e_lj, e_el, tidx, c_fullWarpMask);
++#        else
++    for (i = 0; i < ngrppair; i++)
++    {
++        float E_lj_grp = lj_grp_out[i * THREADS_PER_BLOCK];
++        float E_el_grp = el_grp_out[i * THREADS_PER_BLOCK];
++        reduce_energy_warp_shfl(E_lj_grp, E_el_grp, &e_lj[i], &e_el[i], tidx, c_fullWarpMask);
++    }
++#        endif
+ #    endif
+ }
+ #endif /* FUNCTION_DECLARATION_ONLY */
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_noprune.cu b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_noprune.cu
+index 919cae365f..03c6a01973 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_noprune.cu
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_noprune.cu
+@@ -48,4 +48,10 @@
+ #include "nbnxm_cuda_kernels.cuh"
+ #undef FUNCTION_DECLARATION_ONLY
+ #include "nbnxm_cuda_kernels.cuh"
++#define ENERGY_GROUPS
++#define FUNCTION_DECLARATION_ONLY
++#include "nbnxm_cuda_kernels.cuh"
++#undef FUNCTION_DECLARATION_ONLY
++#include "nbnxm_cuda_kernels.cuh"
++#undef ENERGY_GROUPS
+ #undef CALC_ENERGIES
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_prune.cu b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_prune.cu
+index fda040046d..e0907c4781 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_prune.cu
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda_kernel_VF_prune.cu
+@@ -49,5 +49,11 @@
+ #include "nbnxm_cuda_kernels.cuh"
+ #undef FUNCTION_DECLARATION_ONLY
+ #include "nbnxm_cuda_kernels.cuh"
++#define ENERGY_GROUPS
++#define FUNCTION_DECLARATION_ONLY
++#include "nbnxm_cuda_kernels.cuh"
++#undef FUNCTION_DECLARATION_ONLY
++#include "nbnxm_cuda_kernels.cuh"
++#undef ENERGY_GROUPS
+ #undef CALC_ENERGIES
+ #undef PRUNE_NBL
+diff --git a/src/gromacs/nbnxm/cuda/nbnxm_cuda_types.h b/src/gromacs/nbnxm/cuda/nbnxm_cuda_types.h
+index d65d308c48..417df22c72 100644
+--- a/src/gromacs/nbnxm/cuda/nbnxm_cuda_types.h
++++ b/src/gromacs/nbnxm/cuda/nbnxm_cuda_types.h
+@@ -168,6 +168,15 @@ struct cu_atomdata
+ 
+     float3* shift_vec;         /**< shifts                                       */
+     bool    bShiftVecUploaded; /**< true if the shift vector has been uploaded   */
++
++    int nenergrp;       /**< number of energy groups */
++    int nenergrp_log2;  /**< log_2(nenergrp) for group shift calculations */
++    int nalloc_energrp; /**< energrp allocation size */
++    int *energrp;       /** Group info, bit-packed (nenergrp_log2 bits each), size n(cluster) */
++
++    int nalloc_e_grp;   /**< group alloc current size */
++    float* e_lj_grp_work; /* Group LJ energy work buffer, size nenergrp * (nenergrp + 1) / 2 * blocks * threads */
++    float* e_el_grp_work; /* Group EL energy work buffer, size nenergrp * (nenergrp + 1) / 2 * blocks * threads */
+ };
+ 
+ /** \internal
+diff --git a/src/gromacs/nbnxm/gpu_common.h b/src/gromacs/nbnxm/gpu_common.h
+index d209f0319a..30442bf1e5 100644
+--- a/src/gromacs/nbnxm/gpu_common.h
++++ b/src/gromacs/nbnxm/gpu_common.h
+@@ -59,6 +59,8 @@
+ #include "gromacs/listed_forces/gpubonded.h"
+ #include "gromacs/math/vec.h"
+ #include "gromacs/mdtypes/simulation_workload.h"
++#include "gromacs/mdtypes/enerdata.h"
++#include "gromacs/mdtypes/group.h"
+ #include "gromacs/nbnxm/nbnxm.h"
+ #include "gromacs/pbcutil/ishift.h"
+ #include "gromacs/timing/gpu_timing.h"
+@@ -229,6 +231,17 @@ static void countPruneKernelTime(GpuTimers*                 timers,
+     }
+ }
+ 
++/* TODO: merge with src/gromacs/gpu_utils/cuda_kernel_utils.cuh? */
++static int groupid_packed_nongpu(int igrp, int jgrp)
++{
++    int xgrp = std::min(igrp, jgrp);
++    int ygrp = std::max(igrp, jgrp);
++    return xgrp + (ygrp * (ygrp + 1) >> 1);
++}
++// cannot include group.h due to <vector>
++#define GID(igid, jgid, gnr) \
++        (((igid) < (jgid)) ? ((igid) * (gnr) + (jgid)) : ((jgid) * (gnr) + (igid)))
++
+ /*! \brief Reduce data staged internally in the nbnxn module.
+  *
+  * Shift forces and electrostatic/LJ energies copied from the GPU into
+@@ -252,8 +265,7 @@ static inline void gpu_reduce_staged_outputs(const StagingData&        nbst,
+                                              const InteractionLocality iLocality,
+                                              const bool                reduceEnergies,
+                                              const bool                reduceFshift,
+-                                             real*                     e_lj,
+-                                             real*                     e_el,
++                                             gmx_enerdata_t            *ener,
+                                              rvec*                     fshift)
+ {
+     /* add up energies and shift forces (only once at local F wait) */
+@@ -261,8 +273,20 @@ static inline void gpu_reduce_staged_outputs(const StagingData&        nbst,
+     {
+         if (reduceEnergies)
+         {
+-            *e_lj += *nbst.e_lj;
+-            *e_el += *nbst.e_el;
++            int nenergrp = (int)round(sqrt((double)ener->grpp.nener));
++            for(int i = 0; i < nenergrp; i++)
++            {
++                for(int j = 0; j < nenergrp; j++)
++                {
++                    if (j > i)
++                    {
++                        continue;
++                    }
++                    int grpid_packed = groupid_packed_nongpu(i, j);
++                    ener->grpp.ener[egLJSR][GID(i, j, nenergrp)] += nbst.e_lj[grpid_packed];
++                    ener->grpp.ener[egCOULSR][GID(i, j, nenergrp)] += nbst.e_el[grpid_packed];
++                }
++            }
+         }
+ 
+         if (reduceFshift)
+@@ -365,8 +389,7 @@ static inline void gpu_accumulate_timings(gmx_wallclock_gpu_nbnxn_t* timings,
+ bool gpu_try_finish_task(gmx_nbnxn_gpu_t*         nb,
+                          const gmx::StepWorkload& stepWork,
+                          const AtomLocality       aloc,
+-                         real*                    e_lj,
+-                         real*                    e_el,
++                         gmx_enerdata_t           *ener,
+                          gmx::ArrayRef<gmx::RVec> shiftForces,
+                          GpuTaskCompletion        completionKind,
+                          gmx_wallcycle*           wcycle)
+@@ -426,7 +449,7 @@ bool gpu_try_finish_task(gmx_nbnxn_gpu_t*         nb,
+         if (stepWork.computeEnergy || stepWork.computeVirial)
+         {
+             gpu_reduce_staged_outputs(nb->nbst, iLocality, stepWork.computeEnergy, stepWork.computeVirial,
+-                                      e_lj, e_el, as_rvec_array(shiftForces.data()));
++                                      ener, as_rvec_array(shiftForces.data()));
+         }
+     }
+ 
+@@ -461,8 +484,7 @@ bool gpu_try_finish_task(gmx_nbnxn_gpu_t*         nb,
+ float gpu_wait_finish_task(gmx_nbnxn_gpu_t*         nb,
+                            const gmx::StepWorkload& stepWork,
+                            AtomLocality             aloc,
+-                           real*                    e_lj,
+-                           real*                    e_el,
++                           gmx_enerdata_t           *ener,
+                            gmx::ArrayRef<gmx::RVec> shiftForces,
+                            gmx_wallcycle*           wcycle)
+ {
+@@ -471,7 +493,7 @@ float gpu_wait_finish_task(gmx_nbnxn_gpu_t*         nb,
+                                 : ewcWAIT_GPU_NB_NL;
+ 
+     wallcycle_start(wcycle, cycleCounter);
+-    gpu_try_finish_task(nb, stepWork, aloc, e_lj, e_el, shiftForces, GpuTaskCompletion::Wait, wcycle);
++    gpu_try_finish_task(nb, stepWork, aloc, ener, shiftForces, GpuTaskCompletion::Wait, wcycle);
+     float waitTime = wallcycle_stop(wcycle, cycleCounter);
+ 
+     return waitTime;
+diff --git a/src/gromacs/nbnxm/nbnxm.cpp b/src/gromacs/nbnxm/nbnxm.cpp
+index 1531f02816..753c5c35dc 100644
+--- a/src/gromacs/nbnxm/nbnxm.cpp
++++ b/src/gromacs/nbnxm/nbnxm.cpp
+@@ -120,7 +120,7 @@ void nonbonded_verlet_t::setLocalAtomOrder()
+ 
+ void nonbonded_verlet_t::setAtomProperties(const t_mdatoms& mdatoms, gmx::ArrayRef<const int> atomInfo)
+ {
+-    nbnxn_atomdata_set(nbat.get(), pairSearch_->gridSet(), &mdatoms, atomInfo.data());
++    nbnxn_atomdata_set(nbat.get(), pairSearch_->gridSet(), &mdatoms, atomInfo.data(), useGpu());
+ }
+ 
+ void nonbonded_verlet_t::convertCoordinates(const gmx::AtomLocality        locality,
+diff --git a/src/gromacs/nbnxm/nbnxm_gpu.h b/src/gromacs/nbnxm/nbnxm_gpu.h
+index 7a4a94b6a5..56ae09385c 100644
+--- a/src/gromacs/nbnxm/nbnxm_gpu.h
++++ b/src/gromacs/nbnxm/nbnxm_gpu.h
+@@ -55,6 +55,7 @@
+ struct interaction_const_t;
+ struct nbnxn_atomdata_t;
+ struct gmx_wallcycle;
++struct gmx_enerdata_t;
+ enum class GpuTaskCompletion;
+ 
+ namespace gmx
+@@ -189,8 +190,7 @@ GPU_FUNC_QUALIFIER
+ bool gpu_try_finish_task(gmx_nbnxn_gpu_t gmx_unused* nb,
+                          const gmx::StepWorkload gmx_unused& stepWork,
+                          gmx::AtomLocality gmx_unused aloc,
+-                         real gmx_unused* e_lj,
+-                         real gmx_unused*         e_el,
++                         gmx_enerdata_t gmx_unused *enerd,
+                          gmx::ArrayRef<gmx::RVec> gmx_unused shiftForces,
+                          GpuTaskCompletion gmx_unused completionKind,
+                          gmx_wallcycle gmx_unused* wcycle) GPU_FUNC_TERM_WITH_RETURN(false);
+@@ -213,8 +213,7 @@ GPU_FUNC_QUALIFIER
+ float gpu_wait_finish_task(gmx_nbnxn_gpu_t gmx_unused* nb,
+                            const gmx::StepWorkload gmx_unused& stepWork,
+                            gmx::AtomLocality gmx_unused aloc,
+-                           real gmx_unused* e_lj,
+-                           real gmx_unused*         e_el,
++                           gmx_enerdata_t gmx_unused *enedr,
+                            gmx::ArrayRef<gmx::RVec> gmx_unused shiftForces,
+                            gmx_wallcycle gmx_unused* wcycle) GPU_FUNC_TERM_WITH_RETURN(0.0);
+ 
+diff --git a/src/gromacs/nbnxm/pairlist.cpp b/src/gromacs/nbnxm/pairlist.cpp
+index 6174905d57..3fd90e7235 100644
+--- a/src/gromacs/nbnxm/pairlist.cpp
++++ b/src/gromacs/nbnxm/pairlist.cpp
+@@ -1714,11 +1714,16 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+     int                nri_max;
+     int                c_abs;
+     int                ind_i, ind_j, ai, aj;
++    int                gid_i = 0, gid_j, gid, gid_cj;
+     int                nri;
+     gmx_bool           bFEP_i;
+     real               xi, yi, zi;
+     const nbnxn_cj4_t* cj4;
+ 
++    const int ngid = nbat->params().nenergrp;
++    int egp_shift = nbat->params().neg_2log;
++    int egp_mask = (1 << egp_shift) - 1;
++
+     const int numJClusterGroups = nbl_sci->numJClusterGroups();
+     if (numJClusterGroups == 0)
+     {
+@@ -1734,11 +1739,9 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+     /* Here we process one super-cell, max #atoms na_sc, versus a list
+      * cj4 entries, each with max c_nbnxnGpuJgroupSize cj's, each
+      * of size na_cj atoms.
+-     * On the GPU we don't support energy groups (yet).
+-     * So for each of the na_sc i-atoms, we need max one FEP list
+-     * for each max_nrj_fep j-atoms.
++     * In the worst case we have alternating energy groups, each creating a new list.
+      */
+-    nri_max = nbl->na_sc * nbl->na_cj * (1 + (numJClusterGroups * c_nbnxnGpuJgroupSize) / max_nrj_fep);
++    nri_max = nbl->na_sc * nbl->na_cj * (1 + (numJClusterGroups * c_nbnxnGpuJgroupSize));
+     if (nlist->nri + nri_max > nlist->maxnri)
+     {
+         nlist->maxnri = over_alloc_large(nlist->nri + nri_max);
+@@ -1759,7 +1762,7 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+                 nri                    = nlist->nri;
+                 nlist->jindex[nri + 1] = nlist->jindex[nri];
+                 nlist->iinr[nri]       = ai;
+-                /* With GPUs, energy groups are not supported */
++                /* The actual energy group pair index is set later */
+                 nlist->gid[nri]   = 0;
+                 nlist->shift[nri] = nbl_sci->shift & NBNXN_CI_SHIFT;
+ 
+@@ -1777,6 +1780,11 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+                     srenew(nlist->excl_fep, nlist->maxnrj);
+                 }
+ 
++                if (ngid > 1)
++                {
++                    gid_i = (nbat->params().energrp[c_abs] >> (egp_shift * i)) & egp_mask;
++                }
++
+                 for (int cj4_ind = cj4_ind_start; cj4_ind < cj4_ind_end; cj4_ind++)
+                 {
+                     cj4 = &nbl->cj4[cj4_ind];
+@@ -1793,6 +1801,10 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+ 
+                         if (bFEP_i || jGrid.clusterIsPerturbed(cjr))
+                         {
++                            if (ngid > 1)
++                            {
++                                gid_cj = nbat->params().energrp[cj4->cj[gcj]];
++                            }
+                             for (int j = 0; j < nbl->na_cj; j++)
+                             {
+                                 /* Is this interaction perturbed and not excluded? */
+@@ -1825,6 +1837,18 @@ static void make_fep_list(gmx::ArrayRef<const int> atomIndices,
+                                      */
+                                     if (dx * dx + dy * dy + dz * dz < rlist_fep2)
+                                     {
++                                        if (ngid > 1)
++                                        {
++                                            gid_j = (gid_cj >> (j * egp_shift)) & egp_mask;
++                                            gid = GID(gid_i, gid_j, ngid);
++
++                                            if (nlist->nrj > nlist->jindex[nri] && nlist->gid[nri] != gid)
++                                            {
++                                                fep_list_new_nri_copy(nlist);
++                                                nri = nlist->nri;
++                                            }
++                                            nlist->gid[nri] = gid;
++                                        }
+                                         if (nlist->nrj - nlist->jindex[nri] >= max_nrj_fep)
+                                         {
+                                             fep_list_new_nri_copy(nlist);
+diff --git a/src/gromacs/topology/topsort.cpp b/src/gromacs/topology/topsort.cpp
+index cf7ed9d356..1eb6e60b96 100644
+--- a/src/gromacs/topology/topsort.cpp
++++ b/src/gromacs/topology/topsort.cpp
+@@ -116,7 +116,9 @@ static gmx_bool ip_pert(int ftype, const t_iparams* ip)
+         case F_LJ14:
+             bPert = (ip->lj14.c6A != ip->lj14.c6B || ip->lj14.c12A != ip->lj14.c12B);
+             break;
+-        case F_CMAP: bPert = FALSE; break;
++        case F_CMAP:
++            bPert = (ip->cmap.cmapA != ip->cmap.cmapB);
++            break;
+         case F_RESTRANGLES:
+         case F_RESTRDIHS:
+         case F_CBTDIHS:

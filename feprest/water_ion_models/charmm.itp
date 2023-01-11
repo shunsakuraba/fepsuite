@@ -1,0 +1,71 @@
+; SOLINFO 3 SOD CLA
+; SOLCOORD  0.0000 0.0000 0.0000   0.0957 0.0000 0.0000   -0.0240 0.0927 0.0000
+;           \------------------/   \------------------/   \------------------/
+;             Relative OW pos            HW1 pos                HW2
+
+[ moleculetype ]
+;  molname       nrexcl
+; TIPs3P -> Na
+SOL2pos          2
+
+[ atoms ]
+;nr   type  resnr residue atom   cgnr     charge       mass    atomB
+1     OT      1     SOL     OW      1     -0.834    8.00000    SOD     1.000  8.00000
+2     HT      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
+3     HT      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
+
+[ constraints ]
+;  i j   funct   length
+1 2 1 0.09572
+1 3 1 0.09572
+2 3 1 0.15139
+
+[ exclusions ]
+1   2   3
+2   1   3
+3   1   2
+
+[ moleculetype ]
+;  molname       nrexcl
+; TIPs3P -> Cl
+SOL2neg          2
+
+[ atoms ]
+;nr   type  resnr residue atom   cgnr     charge       mass    atomB
+1     OT      1     SOL     OW      1     -0.834    8.00000    CLA    -1.000  8.00000
+2     HT      1     SOL    HW1      1      0.417    4.00000    PHA     0.000  4.00000
+3     HT      1     SOL    HW2      1      0.417    4.00000    PHA     0.000  4.00000
+
+[ constraints ]
+;  i j   funct   length
+1 2 1 0.09572
+1 3 1 0.09572
+2 3 1 0.15139
+
+[ exclusions ]
+1   2   3
+2   1   3
+3   1   2
+
+[ moleculetype ]
+;  molname       nrexcl
+; Na -> TIPs3P
+pos2SOL          2
+
+[ atoms ]
+;nr   type  resnr residue atom   cgnr     charge       mass    atomB
+1     SOD     1     SOL     OW      1      1.000    8.00000    OT     -0.834  8.00000
+2     PHA     1     SOL    HW1      1      0.000    4.00000    HT      0.417  4.00000
+3     PHA     1     SOL    HW2      1      0.000    4.00000    HT      0.417  4.00000
+
+[ constraints ]
+;  i j   funct   length
+1 2 1 0.09572
+1 3 1 0.09572
+2 3 1 0.15139
+
+[ exclusions ]
+1   2   3
+2   1   3
+3   1   2
+

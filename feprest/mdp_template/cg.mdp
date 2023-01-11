@@ -1,0 +1,36 @@
+integrator = cg
+nsteps = 5000
+
+; prevent SHAKE problem
+define = -DFLEXIBLE
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME-Switch
+vdwtype = Switch
+
+rcoulomb = 1.3
+rvdw = 1.3
+rcoulomb-switch = 1.25
+rvdw-switch = 1.25
+
+lincs-order = 8  ; GROMACS suggests higher order for CG
+
+free-energy = yes
+init-lambda-state = 0
+fep-lambdas = %LAMBDA%
+vdw-lambdas = %VDWLAMBDA%
+coul-lambdas = 0. ; use rest2py
+
+;sc-alpha = 0.001
+;sc-sigma = 0.2
+;sc-coul = no
+;sc-r-power = 48
+sc-alpha = 0.5
+sc-sigma = 0.3
+sc-coul = no
+sc-r-power = 6
+sc-power = 1
+dhdl-derivatives = no
+dhdl-print-energy = yes
+

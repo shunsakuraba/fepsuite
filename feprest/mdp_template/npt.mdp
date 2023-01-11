@@ -1,0 +1,46 @@
+integrator = sd
+nsteps = 50000
+
+dt = 0.002
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+dispcorr = EnerPres
+
+tcoupl = no
+ref_t = 300
+tau_t = 1
+tc_grps = System
+
+pcoupl = Berendsen
+ref_p = 1.013
+tau_p = 1.00
+nstpcouple = 10
+compressibility = 4.5e-5
+
+free-energy = yes
+init-lambda-state = 0
+fep-lambdas = %LAMBDA%
+vdw-lambdas = %VDWLAMBDA%
+coul-lambdas = 0. ; use rest2py
+
+refcoord-scaling = com
+
+;sc-alpha = 0.001
+;sc-sigma = 0.2
+;sc-coul = no
+;sc-r-power = 48
+sc-alpha = 0.5
+sc-sigma = 0.3
+sc-coul = no
+sc-r-power = 6
+sc-power = 1
+
+dhdl-derivatives = no
+dhdl-print-energy = no
+
