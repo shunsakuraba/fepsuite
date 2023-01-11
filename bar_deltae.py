@@ -137,28 +137,49 @@ def main():
         print("Finished loading %s with %d points %d frames" % (", ".join(files), len(data), len(time_all[se]))) # time_all[se] shall exist
         sys.stdout.flush()
 
-    # is this legit?
-    #for k in energies:
+    # Since I am rewriting energies[k], just for the safety I don't use "for k in energies"
     for k in list(energies.keys()):
         energies[k] = numpy.array(energies[k]) * beta
         time_all[k] = numpy.array(time_all[k])
 
     # Do simple bar with 2x2 matrix
-    print("Performing sectioned BAR")
+    print("Performing sliding-window (time x to 2x) sectioned BAR [kcal/mol]")
+    kcal_of_kJ = 1. / 4.184
 
-    results = []
+    tmin = time_all[SimEval(0,0)][0]
+    tmax = time_all[SimEval(0,0)][-1]
+    results_sliding = []
     for i in range(opts.split):
-        tmin = time_all[SimEval(0,0)][0]
-        tmax = time_all[SimEval(0,0)][-1]
         twidth = (tmax - tmin) / opts.split
         tspan = (i + 1) * twidth
         t0 = tmin + 0.5 * tspan
         t1 = tmin + tspan
         barres = bar(energies, time_all, opts.nsim, t0, t1, opts.show_intermediate) 
-        print("BAR %f-%f:" % (t0, t1), barres * gasconstant * opts.temp)
-        results.append((t0, t1, barres))
+        print("BAR SLIDE %f-%f:" % (t0, t1), barres * gasconstant * opts.temp * kcal_of_kJ)
+        results_sliding.append((t0, t1, barres))
 
-    pickle.dump(results, open("%s/results.pickle" % opts.save_dir, "wb"))
+    pickle.dump(results_sliding, open("%s/results-sliding.pickle" % opts.save_dir, "wb"))
+
+    print("Performing time-split BAR (equipartition of the latter half) [kcal/mol]")
+    tstart = (tmin + tmax) / 2
+    twidth = (tmax - tstart) / opts.split
+    results_normalsplit = []
+    for i in range(opts.split):
+        t0 = tstart + twidth * i
+        t1 = tstart + twidth * (i + 1)
+        barres = bar(energies, time_all, opts.nsim, t0, t1, opts.show_intermediate) 
+        print("BAR SPLIT %f-%f:" % (t0, t1), barres * gasconstant * opts.temp * kcal_of_kJ)
+        results_normalsplit.append((t0, t1, barres))
+
+    pickle.dump(results_normalsplit, open("%s/results-normalsplit.pickle" % opts.save_dir, "wb"))
+
+    print("Final estimate [kcal/mol]")
+    vals = [x * gasconstant * opts.temp * kcal_of_kJ for (_, _, x) in results_normalsplit]
+    femean = numpy.mean(vals)
+    festderr = 0.
+    if opts.split > 2:
+        festderr = numpy.std(vals, ddof=1) / numpy.sqrt(opts.split - 1)
+    print("BAR %.2f %.2f" % (femean, festderr))
 
 main()
 
