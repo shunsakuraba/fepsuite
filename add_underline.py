@@ -1,6 +1,5 @@
 
 import mdtraj
-import sys
 import argparse
 
 
@@ -77,7 +76,7 @@ def parse_args():
                         help="Input topology file (must be preprocessed)")
     parser.add_argument('--output', '-o', action='store', type=str, required=True,
                         help="Output topology file")
-    parser.add_argument('--target-moleucle', action='store', type=str, default="not (resname HOH SOL NA CL Na Cl K SOD CLA)",
+    parser.add_argument('--target-molecule', action='store', type=str, default="not (resname HOH SOL NA CL Na Cl K SOD CLA)",
                         help="Target molecules (in mdtraj syntax)")
     parser.add_argument('--distance', action='store', type=float,  default=0.4,
                         help='Residues having atoms within (this value) nm from perturbed atoms are "hot" region in REST2')

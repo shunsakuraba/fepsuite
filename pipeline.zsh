@@ -173,20 +173,20 @@ main() {
             ;;
         run,4)
             # initialize for state A to B
-            python3 $FEPREST_ROOT/add_underline.py -c $ID/$BASECONF -t $ID/fep_pp.top -o $ID/fep_underlined.top --distance $REST_REGION_DISTANCE
+            python3 $FEPREST_ROOT/add_underline.py -c $ID/$BASECONF -t $ID/fep_pp.top -o $ID/fep_underlined.top --distance $REST2_REGION_DISTANCE
             prev=$ID/nptA
             top=$ID/fep_underlined.top
-            if [[ $CHARGED = yes ]]; then
-                python3 $FEPREST_ROOT/neutralize.py $ID/fep_underlined.top $ID/nptA.gro $ID/fep_underlined_neut.top $ID/nptA_neut.gro $AT_POSITIVE $AT_NEGATIVE
+            if [[ $CHARGE != no ]]; then
+                python3 $FEPREST_ROOT/neutralize.py --topology $ID/fep_underlined.top --gro $ID/nptA.gro --output-topology $ID/fep_underlined_neut.top --output-gro $ID/nptA_neut.gro --mode $CHARGE --ff $FF
                 prev=$ID/nptA_neut
                 top=$ID/fep_underlined_neut.top
             fi
             python3 $FEPREST_ROOT/underlined_group.py -t $top -o $ID/for_rest.ndx
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py init $NREP feprest --basedir $ID
+            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py init $NREP feprest --basedir $ID --temp $REST2_TEMP
             mkdir $ID/genmdps || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/cg.mdp $ID/genmdps/cg%d.mdp --basedir $ID
+            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/cg.mdp $ID/genmdps/cg%d.mdp --basedir $ID --temp $REST2_TEMP
             mkdir $ID/gentops || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $ID/gentops/fep_%d.top --basedir $ID
+            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $ID/gentops/fep_%d.top --basedir $ID --temp $REST2_TEMP
             ln -s $FEPREST/itp_addenda/*.itp $ID || true
             # this is a hack to enable #include "foo.itp" or "../foo.itp" in the top file. FIXME: how to deal with this?
             ln -s $PWD/$ID/*.itp gentops || true 
@@ -211,7 +211,7 @@ main() {
         run,5)
             # tune replex
             top=$ID/fep_underlined.top
-            if [[ $CHARGED = yes ]]; then
+            if [[ $CHARGE != no ]]; then
                 top=$ID/fep_underlined_neut.top
             fi
             prevgro=()
@@ -222,8 +222,8 @@ main() {
             for p in {1..$NTUNE}; do
                 work=$ID/nvt$p
                 mkdir $work || true
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/nvt.mdp $work/nvt${p}_%d.mdp --basedir $ID
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $work/fep_%d.top --basedir $ID
+                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/nvt.mdp $work/nvt${p}_%d.mdp --basedir $ID --temp $REST2_TEMP
+                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $work/fep_%d.top --basedir $ID --temp $REST2_TEMP
                 reps=()
                 for i in {0..$((NREP - 1))}; do
                     mrundir=$work/rep$i
@@ -245,7 +245,7 @@ main() {
                 if (( STEPCOUNT < 1 )); then
                     (( STEPCOUNT = 1 ))
                 fi
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $STEPCOUNT
+                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $STEPCOUNT --temp $REST2_TEMP
                 cat $ID/replica_states
                 prev=$work
                 prevgro=()
@@ -262,7 +262,7 @@ main() {
             # NPT run
             work=$ID/npt
             mkdir $work || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/npt.mdp $work/npt%d.mdp --basedir $ID
+            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/npt.mdp $work/npt%d.mdp --basedir $ID --temp $REST2_TEMP
             reps=()
             for i in {0..$((NREP - 1))}; do
                 mrundir=$work/rep$i
@@ -280,7 +280,7 @@ main() {
             # 50 ps initialization
             mkdir $ID/run.mdout || true
             mkdir $ID/runmdps || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/run.mdp $ID/runmdps/run%d.mdp --basedir $ID
+            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/run.mdp $ID/runmdps/run%d.mdp --basedir $ID --temp $REST2_TEMP
             work=$ID/prodrun
             mkdir $work || true
             reps=()

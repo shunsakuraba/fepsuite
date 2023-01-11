@@ -1,15 +1,19 @@
-
-
-
-# Put this file on the parent directory.
-# The file on the parent directory is sourced by the pipeline, then the file on the child directory is also sourced.
+# Put this file at either the parent directory or its child.
+# The file on the parent directory is sourced by the pipeline, then the file on the child directory is sourced, so the child one will overwrite the variables in the parent.
 
 # initial structure and topology
 BASECONF=conf_ionized.gro
 BASETOP=topol_ionized.top
 
-# change to yes if this mutation changes the charge
-CHARGED=no
+# Allowed values are "auto", "no", "posonly"
+# "auto" randomly pick water (which is not close to non-solvent molecules) and convert to ions
+# "no" uses unneutralized perturbation which typically causes artifacts (currently research purpose only)
+# "posonly" randomly pick either water or positive ion, then convert it to vice versa. This is useful if you want to use more than one refernce states. 
+CHARGE=auto
+
+# Force field types to use. Supported force field types are listed under water_ion_models.
+# to support new ff types see water_ion_models/readme.txt
+FF=amber
 
 # Number of replicas to use. Recommended: 32-36 except the cases below
 # 48-64 for mutations involving charge change and/or large residue such as F/Y/W
@@ -43,10 +47,9 @@ REFCRD=
 # which results in relatively long interaction between the two. Option -rdd on mdrun is thus required with this number
 DOMAIN_SHRINK=0.6
 
-# Atom types for positive / negative monovalent ions
-# AMBER ff series: Na / Cl, CHARMM: SOD/CLA, OPLS: opls_407 / opls_401
-AT_POSITIVE=Na
-AT_NEGATIVE=Cl
-
+# REST2 configurations
 # Atoms within ($REST_REGION_DISTANCE) nm, and same residues as these atoms, are considered "hot" region
-REST_REGION_DISTANCE=0.4
+REST2_REGION_DISTANCE=0.4
+
+# REST2 hot-region temperature.
+REST2_TEMP=1200

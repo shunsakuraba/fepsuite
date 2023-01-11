@@ -3,7 +3,7 @@ import argparse
 
 def main(args):
     topname = args.topology
-    ndxname = args.index
+    ndxname = args.output
 
     moltable = {}
     scaled_indices = []

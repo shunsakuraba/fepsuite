@@ -171,11 +171,11 @@ def do_optimize_step(logfile, basedir, nstep):
     state = state._replace(coordinates = new_coords)
     save_state(state, basedir)
 
-def get_parameter_lists(state):
+def get_parameter_lists(state, temp0, temp):
     paramlist = []
     if state.mode == "feprest":
-        basetemp = 300 # real temperature does not matter
-        maxtemp = 1200
+        basetemp = temp0
+        maxtemp = temp
         rest_nmax = (state.n - 1) // 2 # [0 .. rest_nmax]
         for i in range(state.n):
             rest_state = i
@@ -246,16 +246,16 @@ def replace_mdp_template(mdp_template, mdp_generate, param):
             l = l.replace("%VDWLAMBDA%", vdw_lambda)
             ofh.write(l)
 
-def do_update_topology(top_pp, top_generate, basedir):
+def do_update_topology(top_pp, top_generate, basedir, temp0, temp):
     state = load_state(basedir)
-    params = get_parameter_lists(state)
+    params = get_parameter_lists(state, temp0, temp)
     if state.mode == "feprest":
         for i in range(state.n):
             call_rest2py(top_pp, top_generate % i, params[i])
     
-def do_update_mdp(mdp_template, mdp_generate, basedir):
+def do_update_mdp(mdp_template, mdp_generate, basedir, temp0, temp):
     state = load_state(basedir)
-    params = get_parameter_lists(state)
+    params = get_parameter_lists(state, temp0, temp)
     if state.mode == "feprest":
         for i in range(state.n):
             replace_mdp_template(mdp_template, mdp_generate % i, params[i])
@@ -277,6 +277,10 @@ Typical usage:
                         help="Base directory to save state (default: current dir)")
     parser.add_argument('--step', action='store', type=int, default=1,
                         help="Current cycle of optimization (higher step = smaller coefficient)")
+    parser.add_argument('--temp0', action='store', type=float, default=300.0,
+                        help="Base temperature (K), only used to calculate REST2 scaling factor")
+    parser.add_argument('--temp', action='store', type=float, default=1200.0,
+                        help="REST2 hot part temperature (K), only used to calculate REST2 scaling factor")
     args = parser.parse_args()
     return args
 
@@ -291,10 +295,10 @@ if __name__ == "__main__":
         do_optimize_step(logfile, args.basedir, args.step)
     elif args.command == 'update-topology':
         [top_pp, top_generate] = args.arguments
-        do_update_topology(top_pp, top_generate, args.basedir)
+        do_update_topology(top_pp, top_generate, args.basedir, args.temp0, args.temp)
     elif args.command == 'update-mdp':
         [mdp_template, mdp_generate] = args.arguments
-        do_update_mdp(mdp_template, mdp_generate, args.basedir)
+        do_update_mdp(mdp_template, mdp_generate, args.basedir, args.temp0, args.temp)
     else:
         print("Error: unknown command", file=sys.stderr)
         sys.exit(1)
