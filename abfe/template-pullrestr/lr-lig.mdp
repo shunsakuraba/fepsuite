@@ -1,0 +1,6 @@
+; long-range correction calculation
+
+vdwtype = PME
+nstenergy = 1000
+
+

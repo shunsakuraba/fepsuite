@@ -1,0 +1,10 @@
+; free energy for restraining
+free_energy = yes
+
+fep_lambdas = {lambdas_formatted}
+calc_lambda_neighbors = 1
+init_lambda_state = {lambda_state}
+
+nstdhdl = 100
+dhdl_derivatives = no
+

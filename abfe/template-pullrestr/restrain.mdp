@@ -1,0 +1,17 @@
+; free energy for restraining
+free_energy = yes
+
+fep_lambdas = {lambdas_formatted}
+calc_lambda_neighbors = 1
+init_lambda_state = {lambda_state}
+
+nstdhdl = 100
+dhdl_derivatives = no
+
+; output x coordinates to calculate the long-range correction
+; keep following tag for script
+;LRCONLY_BEGIN
+nstxout_compressed = 1000
+compressed_x_precision = 10000
+nstenergy = 1000
+;LRCONLY_END

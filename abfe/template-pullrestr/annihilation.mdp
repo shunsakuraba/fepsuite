@@ -1,0 +1,28 @@
+; free energy for charging/discharing
+free_energy = yes
+
+fep_lambdas = {lambdas_formatted}
+calc_lambda_neighbors = 1
+init_lambda_state = {lambda_state}
+
+nstdhdl = 100
+dhdl_derivatives = no
+
+couple_moltype = {group_mol}
+couple_lambda0 = vdw
+couple_lambda1 = none
+couple_intramol = no
+
+sc-r-power = 6
+sc-power = 1
+sc-sigma = 0.3
+sc-alpha = 0.2
+
+; output x coordinates to calculate the long-range correction
+; keep the following tags for scripts
+;LRCONLY_BEGIN
+nstxout_compressed = 1000
+compressed_x_precision = 10000
+nstenergy = 1000
+;LRCONLY_END
+
