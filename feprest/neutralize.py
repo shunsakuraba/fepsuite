@@ -73,7 +73,7 @@ def sign(x):
         return 0
 
 def main(args):
-    watermodel = WaterModel(os.path.join(args.feprest_dir, args.ff + ".itp"))
+    watermodel = WaterModel(os.path.join(args.feprest_dir, args.ff + ".ion.itp"))
 
     with open(args.topology) as fh, \
          open(args.output_topology, 'w') as ofh:

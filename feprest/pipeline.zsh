@@ -3,7 +3,7 @@
 reqstate=$1
 stateno=$2
 if [[ -z $stateno ]]; then
-    echo "This file should be called from template.zsh" 2>&1
+    echo "This file should be called via controller.zsh" 2>&1
     exit 1
 fi
 shift

@@ -13,7 +13,7 @@ public:
 
   /*
     Read pdb file. When altLoc is specified,
-    it reads the line without altLoc and specified altLoc.
+    it reads the line without altLoc (space), and the line with specified altLoc (default none).
    */
   pdb(const std::string& fname, char altloc = '\0');
 
