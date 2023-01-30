@@ -49,7 +49,7 @@ mdrun_find_possible_np() {
     while true; do
         echo "Trying with NP=$NP"
         unsetopt ERR_EXIT
-        mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD
+        job_mpirun $NP $GMX_MPI mdrun $args $NSTLIST_CMD
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
             if [[ ! -e $log_basename.log ]]; then
@@ -195,7 +195,7 @@ do_run() {
             exit $ERRORCODE
             ;;
     esac
-    $SINGLERUN $GMX grompp $mdp $index -p $ID/$topol.top -c $ID/$conf.pdb $contcmd -o $ID/$outprefix.$phase.tpr -po $ID/$outprefix.$phase.out.mdp $restrcmd -maxwarn $maxwarn
+    job_singlerun $GMX grompp $mdp $index -p $ID/$topol.top -c $ID/$conf.pdb $contcmd -o $ID/$outprefix.$phase.tpr -po $ID/$outprefix.$phase.out.mdp $restrcmd -maxwarn $maxwarn
     stdout=$ID/$outprefix.$phase.stdout
     stderr=$ID/$outprefix.$phase.stderr
     mdrun_find_possible_np 1 -deffnm $ID/$outprefix.$phase -c $ID/$outprefix.$phase.pdb $nstlist_cmd > >(tee $stdout) 2> >(tee $stderr >&2)
@@ -290,7 +290,7 @@ do_product_runs() {
             if [[ -n $ndx ]]; then
                 ndx_grompp=(-n $ID/$ndx)
             fi
-            $SINGLERUN $GMX grompp -f $MDP -p $ID/$topol -c $prevcrd.pdb -t $prevcrd.cpt -o $RUNDIR/$phase$infix.tpr -po $ID/$output.$phase$infix.$i.mdp $ndx_grompp -maxwarn $maxwarn
+            job_singlerun $GMX grompp -f $MDP -p $ID/$topol -c $prevcrd.pdb -t $prevcrd.cpt -o $RUNDIR/$phase$infix.tpr -po $ID/$output.$phase$infix.$i.mdp $ndx_grompp -maxwarn $maxwarn
             DIRS+=$RUNDIR
         done
         nstlist_cmd=()
@@ -320,14 +320,14 @@ do_eval_run() {
         ndx_grompp=(-n $ID/$ndx)
     fi
     set_and_add_rlist $ID/$phase.mdp
-    $SINGLERUN $GMX grompp -f $ID/$phase.mdp -p $ID/$topol -c $ID/$prev.pdb -t $ID/$prev.cpt -o $ID/$phase.tpr -po $ID/$output.$phase.mdp $ndx_grompp -maxwarn $maxwarn
+    job_singlerun $GMX grompp -f $ID/$phase.mdp -p $ID/$topol -c $ID/$prev.pdb -t $ID/$prev.cpt -o $ID/$phase.tpr -po $ID/$output.$phase.mdp $ndx_grompp -maxwarn $maxwarn
     mdrun_find_possible_np 1 -deffnm $ID/$phase -rerun $ID/$prev.xtc $nstlist_cmd
 }
 
 do_bar() {
     mode=$1
     nrepl=$2
-    $SINGLERUN $GMX bar -b $RUN_PROD -f $ID/$mode.{0..$((nrepl-1))}/$mode.xvg -o $ID/$mode.bar_diff.xvg > $ID/$mode.bar.log
+    job_singlerun $GMX bar -b $RUN_PROD -f $ID/$mode.{0..$((nrepl-1))}/$mode.xvg -o $ID/$mode.bar_diff.xvg > $ID/$mode.bar.log
 }
 
 do_exp() {
@@ -346,12 +346,12 @@ do_solvate() {
     solute_sol=${solute%.*}-sol.pdb
 
     cp $topol $topol_sol
-    $SINGLERUN $GMX solvate -cp $solute -p $topol_sol -cs $WATER_STRUCTURE -o $solute_sol
+    job_singlerun $GMX solvate -cp $solute -p $topol_sol -cs $WATER_STRUCTURE -o $solute_sol
     touch ${output_trunk}-dummy.mdp
-    $SINGLERUN $GMX grompp -f ${output_trunk}-dummy.mdp -p $topol_sol -c $solute_sol -po ${output_trunk}-dummy-out.mdp -o ${output_trunk}-sol.tpr
+    job_singlerun $GMX grompp -f ${output_trunk}-dummy.mdp -p $topol_sol -c $solute_sol -po ${output_trunk}-dummy-out.mdp -o ${output_trunk}-sol.tpr
     topol_ion=${output_trunk}-ion.top
     cp $topol_sol $topol_ion
-    echo SOL | $SINGLERUN $GMX genion -s ${output_trunk}-sol.tpr -o ${output_trunk}-ion.pdb -p $topol_ion -pname $ION_POSITIVE -nname $ION_NEGATIVE -conc $IONIC_STRENGTH -neutral
+    echo SOL | job_singlerun $GMX genion -s ${output_trunk}-sol.tpr -o ${output_trunk}-ion.pdb -p $topol_ion -pname $ION_POSITIVE -nname $ION_NEGATIVE -conc $IONIC_STRENGTH -neutral
 }
 
 generate_ndx() {
@@ -408,33 +408,33 @@ main() {
             echo {1..12}
             ;;
         query,1)
-            echo "DEPENDS=(); (( PROCS = COMPLEX_PARA ))"
+            echo "DEPENDS=(); PPM=\$COMPLEX_PARA ; MULTI=1"
             ;;
         run,1)
             touch mdp/dummy.mdp
             # TODO: check whether maxwarn 0 is sufficient
-            $SINGLERUN $GMX grompp -f mdp/dummy.mdp -p $ID/topol_ionized.top -c $ID/conf_ionized -o $ID/pp.tpr -po $ID/pp.mdp -maxwarn 0 -pp $ID/pp.top
+            job_singlerun $GMX grompp -f mdp/dummy.mdp -p $ID/topol_ionized.top -c $ID/conf_ionized -o $ID/pp.tpr -po $ID/pp.mdp -maxwarn 0 -pp $ID/pp.top
             if [[ ! -e mdp/dummy_flex.mdp ]]; then
                 echo "define = -DFLEXIBLE" > mdp/dummy_flex.mdp
             fi
-            $SINGLERUN $GMX grompp -f mdp/dummy_flex.mdp -p $ID/topol_ionized.top -c $ID/conf_ionized -o $ID/pp_flex.tpr -po $ID/pp_flex.mdp -maxwarn 0 -pp $ID/pp_flex.top
+            job_singlerun $GMX grompp -f mdp/dummy_flex.mdp -p $ID/topol_ionized.top -c $ID/conf_ionized -o $ID/pp_flex.tpr -po $ID/pp_flex.mdp -maxwarn 0 -pp $ID/pp_flex.top
             generate_ndx $ID/conf_ionized $ID/pp.top $ID/complex.ndx complex
             do_prep_runs topol_ionized conf_ionized prep conf_ionized "" ""
             ;;
         query,2)
-            echo "DEPENDS=(1); (( PROCS = COMPLEX_PARA ))"
+            echo "DEPENDS=(1); PPM=\$COMPLEX_PARA ; MULTI=1"
             ;;
         run,2)
             do_run topol_ionized prep.npt prerun run "" "" "" cont prep 0
             ;;
         query,3)
-            echo "DEPENDS=(2);PROCS=1;NOGPU_STAGE=yes"
+            echo "DEPENDS=(2); PPM=1; MULTI=1; CPU_ONLY_STAGE=yes"
             ;;
         run,3)
             # Compute RMSD of ligands for thresholding
-            echo "Receptor\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -center -pbc mol -n $ID/complex.ndx -ur compact
-            echo "Receptor\nSystem" | $SINGLERUN $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.pdb -o $ID/prerun.run.final.pdb -center -pbc mol -n $ID/complex.ndx -ur compact
-            echo "Receptor\nLigand" | $SINGLERUN $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
+            echo "Receptor\nSystem" | job_singlerun $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -center -pbc mol -n $ID/complex.ndx -ur compact
+            echo "Receptor\nSystem" | job_singlerun $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.pdb -o $ID/prerun.run.final.pdb -center -pbc mol -n $ID/complex.ndx -ur compact
+            echo "Receptor\nLigand" | job_singlerun $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
             $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
             $PYTHON3 $ABFE_ROOT/ligand_diameter.py --traj=$ID/prerun.run.xtc --structure=$ID/prerun.run.pdb --index=$ID/complex.ndx > $ID/diameter.txt
             $PYTHON3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
@@ -454,11 +454,11 @@ main() {
             # stage 11: LRC                              /
             
             # prepare pp because we calculate ligand's total charge here
-            $SINGLERUN $GMX grompp -f mdp/run.mdp -p $ID/topol_ionized.top -c $ID/prerun.run.pdb -t $ID/prerun.run.cpt -o $ID/pp.tpr -po $ID/pp.mdp $restrcmd -maxwarn 0 -pp $ID/pp_run.top
+            job_singlerun $GMX grompp -f mdp/run.mdp -p $ID/topol_ionized.top -c $ID/prerun.run.pdb -t $ID/prerun.run.cpt -o $ID/pp.tpr -po $ID/pp.mdp $restrcmd -maxwarn 0 -pp $ID/pp_run.top
             $PYTHON3 $ABFE_ROOT/generate_ligand_topology.py --mol $LIG_GMX --topology $ID/pp_run.top --structure $ID/prerun.run.final.pdb --index $ID/complex.ndx --output-ligand-structure $ID/ligand.pdb --output-ligand-topology $ID/ligand.top --total-charge $ID/totalcharge.txt
 
             # solvate ligand-only confs
-            $SINGLERUN $GMX editconf -f $ID/ligand.pdb -d $WATER_THICKNESS -bt dodecahedron -o $ID/ligand-box.pdb
+            job_singlerun $GMX editconf -f $ID/ligand.pdb -d $WATER_THICKNESS -bt dodecahedron -o $ID/ligand-box.pdb
             do_solvate $ID/ligand-box.pdb $ID/ligand.top $ID/ligand
             generate_ndx $ID/ligand-ion $ID/ligand-ion.top $ID/ligand.ndx ligand
 
@@ -475,20 +475,20 @@ main() {
             cat $ID/complex.ndx $ID/restr_pull.ndx > $ID/complex_with_pull.ndx
             ;;
         query,4)
-            echo "DEPENDS=(3); (( PROCS = LIG_PARA ))"
+            echo "DEPENDS=(3); (( PROCS = LIG_PARA )); (( MULTI = 1 ))"
             ;;
         run,4)
             do_prep_runs ligand-ion-flex ligand-ion charging-lig ligand-ion ligand ""
             ;;
         query,5)
-            echo "DEPENDS=(4); (( PROCS = NCHARGE * LIG_PARA ))"
+            echo "DEPENDS=(4); (( PROCS = LIG_PARA )); (( MULTI = NCHARGE ))"
             ;;
         run,5)
             # product run for charge-discharge ligand
             do_product_runs ligand-ion charging-lig charging-lig.npt charging-lig "" "" $NCHARGE 0 0
             ;;
         query,6)
-            echo "DEPENDS=(5); (( PROCS = NANNIH * LIG_PARA ))"
+            echo "DEPENDS=(5); (( PROCS = LIG_PARA )); (( MULTI = NANNIH ))"
             ;;
         run,6)
             # product run for ligand annihilation, starting from totally discharged conformation
@@ -518,14 +518,14 @@ main() {
             do_product_runs topol_ionized annihilation-complex charging-complex.$((NCHARGE-1))/charging-complex annihilation-complex complex_with_pull restr_pull.mdp $NANNIH 0 $((NANNIH - 1))
             ;;
         query,10)
-            echo "DEPENDS=(3); (( PROCS = NRESTR * COMPLEX_PARA ))"
+            echo "DEPENDS=(3); (( PROCS = NRESTR * COMPLEX_PARA )); MULTI=\$NRESTR"
             ;;
         run,10)
             # product run for restraint decopuling (100% restraint -> 0% restraint) FEP
             do_product_runs topol_ionized restrain prerun.run restrain complex_with_pull restr_pull_decouple.mdp $NRESTR 1 $((NRESTR - 1))
             ;;
         query,11)
-            echo "DEPENDS=(9 10); (( PROCS = COMPLEX_PARA ))"
+            echo "DEPENDS=(9 10); PPM=\$COMPLEX_PARA; MULTI=1"
             ;;
         run,11)
             # eval run (LRC) for restraint final (unrestrained)
@@ -534,7 +534,7 @@ main() {
             do_eval_run topol_ionized lr-annihilation-complex annihilation-complex.$((NANNIH - 1))/annihilation-complex lr-annihilation-complex complex $((NANNIH - 1))
             ;;
         query,12)
-            echo "DEPENDS=(3 4 5 6 7 8 9 10 11); NOGPU_STAGE=yes"
+            echo "DEPENDS=(3 4 5 6 7 8 9 10 11); CPU_ONLY_STAGE=yes"
             ;;
         run,12)
             TEMP=$(grep ref_t mdp/run.mdp | cut -d '=' -f2)

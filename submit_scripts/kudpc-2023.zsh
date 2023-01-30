@@ -9,9 +9,15 @@ if [[ -z $SUBSYSTEM ]]; then
 fi
 
 job_prelude() {
-    module purge
-    module load Sys$SUBSYSTEM/2022 PrgEnvGCC/2022
-    PYTHON3=python3
+    # if module is not set, probably /etc/profile is not read (happens because zsh is non-default shell on KUDPC)
+    whence module > /dev/null || source /etc/profile
+    module unload PrgEnvIntel/2022
+    module load PrgEnvGCC/2022
+    # Tentative fix for already reported bug
+    #export SLURM_CONF=/etc/slurm/sysD/slurm.conf
+    #export SLURM_CONF_modshare=/etc/slurm/sysD/slurm.conf:1
+    # In KUDPC, pip3 = pip3.8, and thus default python should by 3.8
+    PYTHON3=python3.8
 }
 
 job_prelude_after_gmx() {
@@ -48,7 +54,7 @@ job_submit() {
     local exports=(PROCS PPN ID STEPNO)
     local key_vars=()
     for e in $exports; do
-        key_vars+="$e=${$e}"
+        key_vars+="$e=${(P)e}"
     done
 
     # Default time
@@ -82,17 +88,18 @@ job_submit() {
 
     # Run actual code and get jobid
     local mem
-    (( mem = 4750 * CPP ))
-    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr --rsc p=$JOB_RANK:t=$CPP:c=$CPP:m=${mem}M -t $timelimit $BASEFILE)
+    (( mem = 4750 * TPP ))
+    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr --rsc p=${JOB_RANK}:t=${TPP}:c=${TPP}:m=${mem}M -t $timelimit $BASEFILE)
     echo $cmd
     local jobidinfo=$($cmd)
     if [[ $? != 0 ]]; then
         echo "Submission failed" 2>&1
         exit 1
     fi
-    # Output is like: "sbatch: Submitted batch job 34987".
+    # Output is like: "Submitted batch job 34987".
     local jobid=(${(@s: :)jobidinfo})
-    echo ${jobid[5]} # output is sent back to controller
+    JOBID=${jobid[4]} # output is sent back to controller
+    return 0
 }
 
 job_mpirun() {
@@ -108,7 +115,7 @@ job_singlerun() {
 }
 
 job_get_mode() {
-    if [[ -n $SBATCH_JOB_NAME ]]; then
+    if [[ -n $SLURM_JOB_NAME ]]; then
         echo "run"
     else
         echo "submit"

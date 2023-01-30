@@ -34,7 +34,7 @@ fi
 
 JOB_SCRIPT=$FEPSUITE_ROOT/submit_scripts/$JOBSYSTEM.zsh
 if [[ ! -e $JOB_SCRIPT ]]; then
-    echo "You specified JOBSYSTEM as \"$JOB_SCRIPT\" but no such job system exists under $FEPSUITE_ROOT/submit_scripts" 2>&1
+    echo "You specified JOBSYSTEM as \"$JOBSYSTEM\" but no such job system exists under $FEPSUITE_ROOT/submit_scripts" 2>&1
     exit 1
 fi
 
@@ -44,7 +44,7 @@ if [[ ! -e $PIPELINE_SCRIPT ]]; then
     exit 1
 fi
 # set ABFE_ROOT, FEPREST_ROOT etc.
-${JOBTYPE:u}_ROOT=${PIPELINE_SCRIPT:r}
+typeset ${JOBTYPE:u}_ROOT=${PIPELINE_SCRIPT:h}
 
 controller_get_jobid () {
     grep "^$1\t" $ID/jobid.txt | tail -n 1 | cut -f2
@@ -79,8 +79,13 @@ controller_submit() {
         MULTI=1
         DEPENDS=()
 
+        unset PPM
         # get necessary resource information
         eval $($PIPELINE_SCRIPT query $STEPNO)
+        if [[ -z $PPM ]]; then 
+            echo "Error: pipeline script returned \$PPM as empty"
+            exit 1
+        fi
 
         # Calculate necessary information to submit
         # Note job_set_preferred_resource "default" resource may depend on requested variables
@@ -90,6 +95,12 @@ controller_submit() {
         # PPM: MPI ranks (processes) per multidir runs (for non-replica run PPM = PROCS)
         # MULTI: number of multidir runs, i.e., number of replicas in replex calculations (otherwise 1)
         (( PROCS = MULTI * PPM ))
+
+        typeset > debug.txt
+        if (( PROCS == 0 )); then
+            echo "Aborting because \$PROCS = 0 (\$MULTI = $MULTI, \$PPM = $PPM); this is probably because the parameters in either run.zsh or para_conf.zsh is not properly set" 2>&1
+            exit 1
+        fi
 
         # thread parallelism cannot cross the node boundary, so the intention of this division is floor(CPN/TPP)
         (( CPU_PPN = CPN / TPP ))
@@ -128,7 +139,7 @@ controller_submit() {
         (( JOB_GPU = JOB_GPN * JOB_NODES ))
 
         # Set default job name
-        JOB_NAME="$ID.$s"
+        JOB_NAME="$ID.$STEPNO"
         # In almost all job systems job name starting from a number is not allowed
         case $JOB_NAME in
             [0-9]*)
@@ -138,6 +149,7 @@ controller_submit() {
 
         if [[ -n $DEBUG_JOB_SUBMIT ]]; then
             typeset > $ID/debug.submit.$STEPNO.txt
+            set -x
         fi
 
         # run job_submit() and get the job ID
@@ -186,6 +198,7 @@ case $(job_get_mode) in
 
         if [[ -n $DEBUG_JOB_SUBMIT ]]; then
             typeset > $ID/debug.run.$STEPNO.txt
+            env > $ID/debug.env.$STEPNO.txt
         fi
 
         # Run the real pipeline
@@ -194,7 +207,7 @@ case $(job_get_mode) in
     ;;
     submit)
         ID=${ARGS[1]}
-        if [[ -z $ID ]] || (( ${ARGS[#]} <= 1 )); then
+        if [[ -z $ID ]] || (( ${#ARGS} <= 1 )); then
             echo "Usage: $BASEFILE (subdirectory name) (stages)"
             echo "Example: $BASEFILE A31V all"
             echo "Example: $BASEFILE MYMOL 3 4 5 6"

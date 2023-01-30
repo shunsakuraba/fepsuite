@@ -21,7 +21,7 @@ You need to implement 7 shell functions. Open template.zsh and you can find more
 
 `job_init_queue_stat()`: Probably you should do nothing here.
 
-`job_set_preferred_resource()`: This function typically just sets `CPN` (preferred core per node), `GPN` (GPU per node), `HW_CPN` (REAL core per node, typically =`CPN`), and `HW_GPN` (REAL GPU per node). `GPN` value may be greater than `HW_GPN`; e.g., even if your machine may have only 2 GPUs, you may want to run 4 GPU-using processes for better *throughput*. You can also change the resource limitation based on requested resources - this is useful when e.g. the supercomputer have "shared node" mode.
+`job_set_preferred_resource()`: This function typically just sets `CPN` (preferred core per node), `GPN` (GPU per node), `HW_CPN` (REAL core per node, typically =`CPN`), and `HW_GPN` (REAL GPU per node). `GPN` value may be greater than `HW_GPN`; e.g., even if your machine may have only 2 GPUs, you may want to run 4 GPU-using processes for a better *throughput*. You can also change the resource limitation based on requested resources - this is useful when e.g. the supercomputer have "shared node" mode.
 job_submit(): This function submits jobs based on requested resources. You need to consider four things: (1) export necessary environment variables to the job file, (2) add dependency condition to job (or wait until the job finishes), (3) write proper resource requirement to tell job system, and (4) return job ID which will be used in the future job submission as "dependency" info.
 
 `job_mpirun()`: Run MPI with specified number of ranks.
@@ -58,6 +58,14 @@ will be *an error*. You need to use arrays:
 ````sh
 foo=(X Y)
 tr $foo <<< "Input XYZ"
+````
+
+Expanding variable from variable names can be done with ${(P)x}.
+
+````sh
+foo=var
+var=1
+echo ${(P)foo} # emits 1
 ````
 
 To join an array with a character:
