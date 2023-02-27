@@ -5,8 +5,8 @@ import math
 cycle_contribution = {
         "charging-lig": ("bar", "charging", 1.0),
         "charging-complex": ("bar", "charging", -1.0),
-        "restrain-analytical": ("restrcor", "restrain", 1.0),
-        "restrain": ("bar", "restrain", 1.0),
+        "restraint-analytical": ("restrcor", "restraint", 1.0),
+        "restraint": ("bar", "restraint", 1.0),
         "annihilation-lig": ("bar", "annihilation", 1.0),
         "annihilation-complex": ("bar", "annihilation", -1.0),
         "lr-lig": ("lrc", "long-range-correction", -1.0),
@@ -14,7 +14,7 @@ cycle_contribution = {
         "lr-complex": ("lrc", "long-range-correction", 1.0),
         "lr-annihilation-complex": ("lrc", "long-range-correction", -1.0)
         }
-kcal_of_kj = 0.2390
+kcal_of_kj = 0.23900574
 gasconstant = 0.00831446  # kJ / mol / K 
 
 def read_bar(basedir):
@@ -67,7 +67,7 @@ def read_restr(args):
         anchor_atoms = [int(x) + 1 for x in ls[0].split()] # +1 for itp being 1-origin
         avgs = [float(x) for x in ls[1].split()]
 
-    v0 = 1.66 # 1M standard state in nm^3
+    v0 = 1.6605391 # 1M standard state in nm^3
     RT = args.temp * gasconstant # kJ/mol
     mdeltaf = math.log(8 * math.pi ** 2 * v0) + 0.5 * math.log(args.distance_spring) + 1.0 * math.log(args.angle_spring) + 1.5 * math.log(args.dihedral_spring) \
         - 2. * math.log(avgs[0]) - math.log(math.sin(avgs[1])) - math.log(math.sin(avgs[2])) - 3. * math.log(2 * math.pi * RT) # avogadro const in R cancels with kJ/mols in springs consts
@@ -91,9 +91,9 @@ if __name__ == "__main__":
     (bar_res, individual_bar_res) = read_bar(args.basedir)
     read_update_lrc(args.basedir, bar_res, individual_bar_res)
     analytical_e = read_restr(args)
-    restre, var = bar_res["restrain"] 
-    bar_res["restrain"] = (restre - analytical_e, var) # ArVBA in paper corresponds to  P...L -> P+L, thus NEGATIVE contribution
-    individual_bar_res["restrain-analytical"] = (-analytical_e, 0)
+    restre, var = bar_res["restraint"] 
+    bar_res["restraint"] = (restre - analytical_e, var) # ArVBA in Boresch 2003 paper corresponds to  P...L -> P+L, thus NEGATIVE contribution
+    individual_bar_res["restraint-analytical"] = (-analytical_e, 0)
     total = 0.
     totalvar = 0.
     for mode in sorted(individual_bar_res.keys()):

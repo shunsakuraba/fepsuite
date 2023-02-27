@@ -1,5 +1,7 @@
 #!/bin/zsh
 
+local reqstate
+local stateno
 reqstate=$1
 stateno=$2
 if [[ -z $stateno ]]; then
@@ -58,7 +60,7 @@ mdrun_find_possible_np() {
     fi
     while true; do
         echo "Trying with NP=$NP"
-        mpirun_ $NP $GMX_MPI mdrun $args $NSTLIST_CMD $ntomp
+        job_mpirun $NP $GMX_MPI mdrun $args $NSTLIST_CMD $ntomp
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
             domain_error=0
@@ -89,11 +91,9 @@ mdrun_find_possible_np() {
 do_bar ()
 {
     ID=$1
-    MINPART=$2
-    MAXPART=$3
-    TEMP=$4
+    TEMP=$2
     mkdir $ID/bar || true
-    python3 $FEPREST_ROOT/bar_deltae.py --minpart $MINPART --maxpart $MAXPART --xvgs $ID/prodrun/rep%sim/deltae.part%part.xvg  --nsim $NREP --temp $TEMP --save-dir $ID/bar | tee $ID/bar1.log || echo "BAR failed due to bad convergence, please continue the run to get it fixed"
+    $PYTHON3 $FEPREST_ROOT/bar_deltae.py --xvgs $ID/prodrun/rep%sim/deltae.xvg  --nsim $NREP --temp $TEMP --save-dir $ID/bar | tee $ID/bar1.log || echo "BAR failed due to bad convergence, please continue the run to get it fixed"
 }
 
 prep_gpucpu_parameters ()
@@ -130,7 +130,7 @@ main() {
             echo {1..8}
             ;;
         query,1)
-            echo "DEPENDS=(); (( PROCS = PARA ))"
+            echo "DEPENDS=(); (( PPM = PARA )); MULTI=1"
             ;;
         run,1)
             # min for state A
@@ -141,13 +141,13 @@ main() {
                 sed -e "s/-DPOSRES/ /" -i $ID/minA.mdp
                 sed -e "s/-DPOSRES/ /" -i $ID/steepA.mdp
             fi
-            $SINGLERUN $GMX grompp -f $ID/steepA.mdp -c $ID/$BASECONF -p $ID/$BASETOP -o $ID/steepA -po $ID/steepA.mdout -maxwarn $((BASEWARN+0)) $REFCMDINIT
+            job_singlerun $GMX grompp -f $ID/steepA.mdp -c $ID/$BASECONF -p $ID/$BASETOP -o $ID/steepA -po $ID/steepA.mdout -maxwarn $((BASEWARN+0)) $REFCMDINIT
             mdrun_find_possible_np 1 -deffnm $ID/steepA
-            $SINGLERUN $GMX grompp -f $ID/minA.mdp -c $ID/steepA.gro -p $ID/$BASETOP -o $ID/minA -po $ID/minA.mdout -maxwarn $((BASEWARN+0)) $REFCMDINIT
+            job_singlerun $GMX grompp -f $ID/minA.mdp -c $ID/steepA.gro -p $ID/$BASETOP -o $ID/minA -po $ID/minA.mdout -maxwarn $((BASEWARN+0)) $REFCMDINIT
             mdrun_find_possible_np 1 -deffnm $ID/minA
             ;;
         query,2)
-            echo "DEPENDS=(1); (( PROCS = PARA ))"
+            echo "DEPENDS=(1); (( PPM = PARA )); MULTI=1"
             ;;
         run,2)
             # NVT run
@@ -155,38 +155,38 @@ main() {
             if ! grep -q POSRES $ID/$BASETOP ; then
                 sed -e "s/-DPOSRES/ /" -i $ID/nvtA.mdp
             fi
-            sed '/^\[ atoms \]/,/^\[ \.\+ \]/s/1.0080\+e+00/8.00000e+00/g' $ID/$BASETOP > $ID/heavy.top
-            $SINGLERUN $GMX grompp -f $ID/nvtA.mdp -c $ID/minA.gro -p $ID/heavy.top -o $ID/nvtA -po $ID/nvtA.mdout -maxwarn $((BASEWARN+1)) $REFCMDINIT
+            $PYTHON3 $FEPREST_ROOT/turn-heavy.py -p $ID/$BASETOP -o $ID/heavy.top
+            job_singlerun $GMX grompp -f $ID/nvtA.mdp -c $ID/minA.gro -p $ID/heavy.top -o $ID/nvtA -po $ID/nvtA.mdout -maxwarn $((BASEWARN+1)) $REFCMDINIT
             mdrun_find_possible_np 1 -deffnm $ID/nvtA
             ;;
         query,3)
-            echo "DEPENDS=(2); (( PROCS = PARA ))"
+            echo "DEPENDS=(2); (( PPM = PARA )); MULTI=1"
             ;;
         run,3)
             # NPT run (10 ns)
             cp mdp/nptinit.mdp $ID/nptA.mdp
-            $SINGLERUN $GMX grompp -f $ID/nptA.mdp -c $ID/nvtA.gro -p $ID/heavy.top -o $ID/nptA -po $ID/nptA.mdout -maxwarn $((BASEWARN+1)) -pp $ID/fep_pp.top $REFCMD
+            job_singlerun $GMX grompp -f $ID/nptA.mdp -c $ID/nvtA.gro -p $ID/heavy.top -o $ID/nptA -po $ID/nptA.mdout -maxwarn $((BASEWARN+1)) -pp $ID/fep_pp.top $REFCMD
             mdrun_find_possible_np 1 -deffnm $ID/nptA 
             ;;
         query,4)
-            echo "DEPENDS=(3); (( PROCS = PARA ))"
+            echo "DEPENDS=(3); (( PPM = PARA )); MULTI=1"
             ;;
         run,4)
             # initialize for state A to B
-            python3 $FEPREST_ROOT/add_underline.py -c $ID/$BASECONF -t $ID/fep_pp.top -o $ID/fep_underlined.top --distance $REST2_REGION_DISTANCE
+            $PYTHON3 $FEPREST_ROOT/add_underline.py -c $ID/$BASECONF -t $ID/fep_pp.top -o $ID/fep_underlined.top --distance $REST2_REGION_DISTANCE
             prev=$ID/nptA
             top=$ID/fep_underlined.top
             if [[ $CHARGE != no ]]; then
-                python3 $FEPREST_ROOT/neutralize.py --topology $ID/fep_underlined.top --gro $ID/nptA.gro --output-topology $ID/fep_underlined_neut.top --output-gro $ID/nptA_neut.gro --mode $CHARGE --ff $FF
+                $PYTHON3 $FEPREST_ROOT/neutralize.py --topology $ID/fep_underlined.top --gro $ID/nptA.gro --output-topology $ID/fep_underlined_neut.top --output-gro $ID/nptA_neut.gro --mode $CHARGE --ff $FF
                 prev=$ID/nptA_neut
                 top=$ID/fep_underlined_neut.top
             fi
-            python3 $FEPREST_ROOT/underlined_group.py -t $top -o $ID/for_rest.ndx
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py init $NREP feprest --basedir $ID --temp $REST2_TEMP
+            $PYTHON3 $FEPREST_ROOT/underlined_group.py -t $top -o $ID/for_rest.ndx
+            $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py init $NREP feprest --basedir $ID --temp $REST2_TEMP
             mkdir $ID/genmdps || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/cg.mdp $ID/genmdps/cg%d.mdp --basedir $ID --temp $REST2_TEMP
+            $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/cg.mdp $ID/genmdps/cg%d.mdp --basedir $ID --temp $REST2_TEMP
             mkdir $ID/gentops || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $ID/gentops/fep_%d.top --basedir $ID --temp $REST2_TEMP
+            $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $ID/gentops/fep_%d.top --basedir $ID --temp $REST2_TEMP
             ln -s $FEPREST/itp_addenda/*.itp $ID || true
             # this is a hack to enable #include "foo.itp" or "../foo.itp" in the top file. FIXME: how to deal with this?
             ln -s $PWD/$ID/*.itp gentops || true 
@@ -195,18 +195,17 @@ main() {
                 work=$ID/min$i
                 mkdir $work || true
                 sed -e "s/cg/steep/;/nsteps/s/5000/500/;" $ID/genmdps/cg$i.mdp > $work/steep$i.mdp
-                python3 $FEPREST_ROOT/re-tip3p.py $ID/gentops/fep_$i.top $ID/gentops/fep_tip3p_$i.top
-                # turn atoms heavy. This is a bit hacky and may break with custom force fields
-                sed -i '/^\[ atoms \]/,/^\[ bonds \]/s/1.0080\+e+00/8.00000e+00/g' $ID/gentops/fep_tip3p_$i.top
-                $SINGLERUN $GMX grompp -f $work/steep$i.mdp -c $prev -p $ID/gentops/fep_tip3p_$i.top -o $work/steep$i -po $work/steep.mdout.$i -maxwarn $((BASEWARN+1)) $REFCMD
+                $PYTHON3 $FEPREST_ROOT/recover-water.py -p $ID/gentops/fep_$i.top -o $ID/gentops/fep_tip3p_${i}_light.top --ff $FF
+                $PYTHON3 $FEPREST_ROOT/turn-heavy.py -p $ID/gentops/fep_tip3p_${i}_light.top -o $ID/gentops/fep_tip3p_$i.top
+                job_singlerun $GMX grompp -f $work/steep$i.mdp -c $prev -p $ID/gentops/fep_tip3p_$i.top -o $work/steep$i -po $work/steep.mdout.$i -maxwarn $((BASEWARN+1)) $REFCMD
                 mdrun_find_possible_np 1 -deffnm $work/steep$i -rdd $DOMAIN_SHRINK
-                $SINGLERUN $GMX grompp -f $ID/genmdps/cg$i.mdp -c $work/steep$i.gro -p $ID/gentops/fep_tip3p_$i.top -o $work/min$i -po $work/min.mdout.$i -maxwarn $((BASEWARN+1)) $REFCMD
+                job_singlerun $GMX grompp -f $ID/genmdps/cg$i.mdp -c $work/steep$i.gro -p $ID/gentops/fep_tip3p_$i.top -o $work/min$i -po $work/min.mdout.$i -maxwarn $((BASEWARN+1)) $REFCMD
                 mdrun_find_possible_np 1 -deffnm $work/min$i -rdd $DOMAIN_SHRINK
                 prev=$work/min$i
             done
             ;;
         query,5)
-            echo "DEPENDS=(4); (( PROCS = PARA * NREP ))"
+            echo "DEPENDS=(4); (( PPM = PARA )); (( MULTI = NREP ))"
             ;;
         run,5)
             # tune replex
@@ -222,22 +221,22 @@ main() {
             for p in {1..$NTUNE}; do
                 work=$ID/nvt$p
                 mkdir $work || true
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/nvt.mdp $work/nvt${p}_%d.mdp --basedir $ID --temp $REST2_TEMP
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $work/fep_%d.top --basedir $ID --temp $REST2_TEMP
+                $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/nvt.mdp $work/nvt${p}_%d.mdp --basedir $ID --temp $REST2_TEMP
+                $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-topology $top $work/fep_%d.top --basedir $ID --temp $REST2_TEMP
                 reps=()
                 for i in {0..$((NREP - 1))}; do
                     mrundir=$work/rep$i
                     mkdir $mrundir || true
                     reps+=$mrundir
-                    python3 $FEPREST_ROOT/re-tip3p.py $work/fep_$i.top $work/fep_tip3p_$i.top
-                    sed -i '/^\[ atoms \]/,/^\[ bonds \]/s/1.0080\+e+00/8.00000e+00/g' $work/fep_tip3p_$i.top
+                    $PYTHON3 $FEPREST_ROOT/recover-water.py -p $work/fep_$i.top -o $work/fep_tip3p_${i}_light.top --ff $FF
+                    $PYTHON3 $FEPREST_ROOT/turn-heavy.py -p $work/fep_tip3p_${i}_light.top -o $work/fep_tip3p_$i.top
                     { echo "energygrps = hot"; echo "userint1 = 1" } >> $work/nvt${p}_$i.mdp 
-                    $SINGLERUN $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                    job_singlerun $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
                 done
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -rdd $DOMAIN_SHRINK # extend to 100 ps
                 for i in {0..$((NREP - 1))}; do
                     mrundir=$work/rep$i
-                    $SINGLERUN $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
+                    job_singlerun $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
                 done
                 prep_gpucpu_parameters # sets NB_WHICH
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu # extend 50 ps
@@ -245,7 +244,7 @@ main() {
                 if (( STEPCOUNT < 1 )); then
                     (( STEPCOUNT = 1 ))
                 fi
-                python3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $STEPCOUNT --temp $REST2_TEMP
+                $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py optimize $work/rep0/nvt.log --basedir $ID --step $STEPCOUNT --temp $REST2_TEMP
                 cat $ID/replica_states
                 prev=$work
                 prevgro=()
@@ -256,31 +255,30 @@ main() {
             cp $prev/fep_tip3p_{0..$((NREP-1))}.top $ID/gentops/
             ;;
         query,6)
-            echo "DEPENDS=(5); (( PROCS = PARA * NREP ))"
+            echo "DEPENDS=(5); (( PPM = PARA )); (( MULTI = NREP ))"
             ;;
         run,6)
             # NPT run
             work=$ID/npt
             mkdir $work || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/npt.mdp $work/npt%d.mdp --basedir $ID --temp $REST2_TEMP
+            $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/npt.mdp $work/npt%d.mdp --basedir $ID --temp $REST2_TEMP
             reps=()
             for i in {0..$((NREP - 1))}; do
                 mrundir=$work/rep$i
                 mkdir $mrundir || true
                 reps+=$mrundir
-                #echo "energygrps = hot" >> $work/npt$i.mdp
-                $SINGLERUN $GMX grompp -f $work/npt$i.mdp -c $ID/nvt${NTUNE}/rep$i/nvt.gro -t $ID/nvt${NTUNE}/rep$i/nvt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/npt -po $mrundir/npt.mdout -maxwarn $((BASEWARN+1)) $REFCMD
+                job_singlerun $GMX grompp -f $work/npt$i.mdp -c $ID/nvt${NTUNE}/rep$i/nvt.gro -t $ID/nvt${NTUNE}/rep$i/nvt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/npt -po $mrundir/npt.mdout -maxwarn $((BASEWARN+1)) $REFCMD
             done
             mdrun_find_possible_np $NREP -deffnm npt -multidir $reps -rdd $DOMAIN_SHRINK
             ;;
         query,7)
-            echo "DEPENDS=(6); (( PROCS = PARA * NREP ))"
+            echo "DEPENDS=(6); (( PPM = PARA )); (( MULTI = NREP ))"
             ;;
         run,7)
             # 50 ps initialization
             mkdir $ID/run.mdout || true
             mkdir $ID/runmdps || true
-            python3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/run.mdp $ID/runmdps/run%d.mdp --basedir $ID --temp $REST2_TEMP
+            $PYTHON3 $FEPREST_ROOT/rest2py/replica_optimizer.py update-mdp mdp/run.mdp $ID/runmdps/run%d.mdp --basedir $ID --temp $REST2_TEMP
             work=$ID/prodrun
             mkdir $work || true
             reps=()
@@ -289,28 +287,26 @@ main() {
                 mkdir $mrundir || true
                 reps+=$mrundir
                 { echo "energygrps = hot"; echo "userint1 = 1" } >> $ID/runmdps/run$i.mdp
-                $SINGLERUN $GMX grompp -f $ID/runmdps/run$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/run -po $mrundir/run.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                job_singlerun $GMX grompp -f $ID/runmdps/run$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/prodrun -po $mrundir/run.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
                 {
                     sed -e "/nstxout/d" $ID/runmdps/run$i.mdp
                     echo "nstxout=0\nnstxtcout=0\nnstvout=0\nnstdhdl=0"
                 } > $ID/runmdps/eval$i.mdp
-                $SINGLERUN $GMX grompp -f $ID/runmdps/eval$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/eval -po $mrundir/eval.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                job_singlerun $GMX grompp -f $ID/runmdps/eval$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/eval -po $mrundir/eval.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
             done
-            mdrun_find_possible_np $NREP -deffnm run -multidir $reps -rdd $DOMAIN_SHRINK
+            mdrun_find_possible_np $NREP -deffnm prodrun -multidir $reps -rdd $DOMAIN_SHRINK
             mkdir $ID/checkpoint_7 || true
             for d in $reps; do
                 mkdir -p $ID/checkpoint_7/$d || true
-                cp $d/run.cpt $ID/checkpoint_7/$d
-                
-                cp $d/run.cpt $d/prodrun.cpt
-                cp $d/run.tpr $d/run_ph0.tpr
+                cp $d/prodrun.cpt $ID/checkpoint_7/$d
+                cp $d/prodrun.tpr $d/prodrun_ph0.tpr
             done 
             ;;
-        # step 99: for analysis
-        query,99)
-            echo "DEPENDS=(); (( PROCS = 1 ))"
+        # step 999: for analysis
+        query,999)
+            echo "DEPENDS=(); PPM=1; MULTI=1"
             ;;
-        run,99)
+        run,999)
             for state in A B; do
                 case $state in
                 A)
@@ -323,7 +319,7 @@ main() {
                 ipart=1
                 ndxfile=$ID/prodrun/fepbase_$state.ndx
                 if [[ ! -e $ndxfile ]]; then
-                    python3 $FEPREST_ROOT/make_ndx_trjconv_analysis.py -i $ID/fepbase_$state.pdb -o $ndxfile
+                    $PYTHON3 $FEPREST_ROOT/make_ndx_trjconv_analysis.py -i $ID/fepbase_$state.pdb -o $ndxfile
                 fi
                 while true; do
                     (( ipart += 1 ))
@@ -336,36 +332,34 @@ main() {
                     if [[ -e $destfile ]] && [[ $destfile -nt $sourcefile ]]; then
                         continue
                     fi
-                    echo "centering\noutput" | $SINGLERUN $GMX trjconv -s $ID/prodrun/rep$REPNO/run.tpr -f $sourcefile -o $destfile -pbc atom -ur compact -center -n $ndxfile
+                    echo "centering\noutput" | job_singlerun $GMX trjconv -s $ID/prodrun/rep$REPNO/run.tpr -f $sourcefile -o $destfile -pbc atom -ur compact -center -n $ndxfile
                 done
             done
             ;;
         query,*)
             (( PREV = stateno - 1 ))
-            echo "DEPENDS=($PREV); (( PROCS = PARA * NREP ))"
+            echo "DEPENDS=($PREV); (( PPM = PARA )); (( MULTI = NREP ))"
             ;;
         run,*)
             # extend run
             (( PHASE = stateno - 7 )) || true
-            TEMP=$(grep 'ref[_|-]t' mdp/run.mdp | cut -d '=' -f2)
+            TEMP=$(grep '^\s*ref[_|-]t' mdp/run.mdp | cut -d '=' -f2 | cut -d ';' -f1)
             work=$ID/prodrun
             reps=()
             for i in {0..$((NREP - 1))}; do
                 mrundir=$work/rep$i
                 mkdir $mrundir || true
                 reps+=$mrundir
-                $SINGLERUN $GMX convert-tpr -s $mrundir/run_ph$((PHASE-1)) -o $mrundir/run_ph$PHASE -extend $SIMLENGTH
+                job_singlerun $GMX convert-tpr -s $mrundir/prodrun_ph$((PHASE-1)) -o $mrundir/prodrun_ph$PHASE -extend $SIMLENGTH
             done
-            mdrun_find_possible_np $NREP -deffnm prodrun -s run_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -noappend -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu
+            mdrun_find_possible_np $NREP -deffnm prodrun -s prodrun_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu
 
             mkdir $ID/checkpoint_$stateno || true
             for d in $reps; do
                 mkdir -p $ID/checkpoint_$stateno/$d || true
                 cp $d/prodrun.cpt $ID/checkpoint_$stateno/$d
             done
-            MINPART=2
-            (( MAXPART = PHASE + 1 ))
-            do_bar $ID $MINPART $MAXPART $TEMP
+            do_bar $ID $TEMP
         ;;
     esac
     if [[ $reqstate == run ]]; then

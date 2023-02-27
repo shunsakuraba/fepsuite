@@ -23,12 +23,12 @@ job_set_preferred_resource() {
 job_submit() {
     # Export variables
     OMP_NUM_THREADS=$TPP
-    local exports=(PROCS OMP_NUM_THREADS PPN ID STEPNO)
+    local exports=(PROCS OMP_NUM_THREADS PPN GPN ID STEPNO)
     for e in $exports; do
         export $e
     done
 
-    # Run actual code and get jobid
+    # Run actual code
     local cmd=(RUN=yes $BASEFILE)
     echo $cmd
     local jobidinfo=$($cmd)
@@ -36,7 +36,7 @@ job_submit() {
         echo "Submission failed" 1>&2
         exit 1
     fi
-    # Output is like: "sbatch: Submitted batch job 34987".
+    # jobid does not exist
     JOBID="(not_used)"
 }
 

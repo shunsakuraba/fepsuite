@@ -2,7 +2,7 @@
 # The file on the parent directory is sourced by the pipeline, then the file on the child directory is sourced, so the child one will overwrite the variables in the parent.
 
 # initial structure and topology
-BASECONF=conf_ionized.gro
+BASECONF=conf_ionized.pdb
 BASETOP=topol_ionized.top
 
 # Allowed values are "auto", "no", "posonly"
@@ -20,8 +20,10 @@ FF=amber
 NREP=32
 
 # Number of MPI processes per replica. For GPU, recommended = 1.
-PARA=1
-#PARA=32
+PARA=8
+
+# Number of threads per process. Recommended: for CPU: 1, for GPU: 2-6.
+TPP=1
 
 # Number of tuning cycles for fep parameters
 NTUNE=5
@@ -48,7 +50,7 @@ REFCRD=
 DOMAIN_SHRINK=0.6
 
 # REST2 configurations
-# Atoms within ($REST_REGION_DISTANCE) nm, and same residues as these atoms, are considered "hot" region
+# Atoms within ($REST2_REGION_DISTANCE) nm, and same residues as these atoms, are considered "hot" region
 REST2_REGION_DISTANCE=0.4
 
 # REST2 hot-region temperature.

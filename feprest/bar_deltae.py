@@ -25,9 +25,9 @@ def parse_args():
     #                    help = 'pV value files. "%sim" and "%part" will be replaced by appropriate numbers')
     parser.add_argument('--nsim', metavar="N", type = int, required=True,
                         help = 'number of simulations')
-    parser.add_argument('--minpart', metavar="N", type = int, required=True,
+    parser.add_argument('--minpart', metavar="N", type = int, default=None,
                         help = 'part number begin')
-    parser.add_argument('--maxpart', metavar="N", type = int, required=True,
+    parser.add_argument('--maxpart', metavar="N", type = int, default=None,
                         help = 'part number end')
     parser.add_argument('--temp', help="Temperature (K)", type = float, default=300.0)
     parser.add_argument('--save-dir', help="save result to this directory", type = str, default = os.getcwd())
@@ -117,8 +117,12 @@ def main():
 
     for isim in range(opts.nsim):
         files = []
-        for part in range(opts.minpart, opts.maxpart + 1):
-            f = opts.xvgs.replace("%sim", str(isim)).replace("%part", "%04d"%part)
+        if opts.minpart is not None:
+            for part in range(opts.minpart, opts.maxpart + 1):
+                f = opts.xvgs.replace("%sim", str(isim)).replace("%part", "%04d"%part)
+                files.append(f)
+        else:
+            f = opts.xvgs.replace("%sim", str(isim))
             files.append(f)
         data = parse_deltae(files, opts.subsample, isim)
         

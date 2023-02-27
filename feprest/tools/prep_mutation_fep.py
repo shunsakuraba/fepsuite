@@ -27,6 +27,21 @@ def check_call_verbose(cmdline: List[str]):
     log_with_color(message)
     subprocess.check_call(cmdline)
 
+def seq1(aa):
+    a = Bio.SeqUtils.seq1(aa)
+    if a != "X":
+        return a
+    nonstandard_map = {
+        'HID': 'H', 'HIE': 'H', 'HIP': 'H',
+        'HSD': 'H', 'HSE': 'H', 'HSP': 'H',
+        'GLH': 'E', 'ASH': 'D', # FIXME: charmm uses ASPP and GLUP but what should I do here?
+        'LYN': 'K', 'LSN': 'K',
+        'CYX': 'C', 'CYM': 'C'
+    }
+    if aa in nonstandard_map:
+        return nonstandard_map[aa]
+    raise RuntimeError("Unknown residue name " + aa)
+
 def parse_pdb(pdb):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", Bio.PDB.PDBExceptions.PDBConstructionWarning)
@@ -40,7 +55,7 @@ def parse_pdb(pdb):
             chain_id = chain.get_id()
             for residue in chain:
                 aaa = residue.get_resname()
-                a = Bio.SeqUtils.seq1(aaa)
+                a = seq1(aaa)
                 seq += str(a)
                 resid = residue.get_id()[1] # get_id returns triplet, but only 2nd (resseq) is used
                 if resid not in reschainmap:
@@ -293,10 +308,12 @@ def argparse_options():
     if "GMXBIN" in os.environ:
         gmxbin = os.environ["GMXBIN"] + "/gmx"
 
+    fepgenpath = os.path.realpath(os.path.split(os.path.realpath(__file__))[0] + "/../fepgen/fepgen")
+
     parser.add_argument("--gmx", default=gmxbin, required=(gmxbin is None or not os.path.exists(gmxbin)), help="path to GROMACS gmx")
     parser.add_argument("--faspr", required=True, help="Location of FASPR binary")
     parser.add_argument("--feprest", required=True, help="Path to feprest pipeline directory")
-    parser.add_argument("--nucfepgen", required=True, help="Path to nucfepgen directory")
+    parser.add_argument("--fepgen", default=(fepgenpath if os.path.exists(fepgenpath) else None), help="Path to fepgen directory")
     parser.add_argument("--python3", default=sys.executable, help="Path to python3")
     
     parser.add_argument("--wtdir", default="wt", help="Where we store wild-type residue informations")

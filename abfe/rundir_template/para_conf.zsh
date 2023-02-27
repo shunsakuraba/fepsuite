@@ -1,4 +1,6 @@
-# GROMACS parallelization settings. 
+#*************************
+# GROMACS parallelization settings 
+#*************************
 # N* parameters are the number of replicas in Hamiltonian replica exchange.
 # *_PARA parameters are the number of MPI processes for each replica.
 # Thus, number of total MPI processes is e.g. NRESTR * COMPLEX_PARA for the restraint replica run.
@@ -7,7 +9,7 @@
 # Prot-lig restraint relaxation. Recommended: 4
 NRESTR=4
 
-# Charge-discharge. Recommended: 12. For large molecules & strongly charged molecules we recommend greater values.
+# Charge-discharge. Recommended: 8-12. For large molecules & strongly charged molecules we recommend greater values.
 NCHARGE=12
 
 # Annihilation. Recommended:12. For large molecules we recommend greater values, e.g. for ligand with 60 heavy atoms NANNIH=20 will be a good starting point.
@@ -68,7 +70,7 @@ WATER_THICKNESS=1.0
 # ionic strength in M
 IONIC_STRENGTH=0.150
 
-# positive ion
+# positive ion name (CHARMM uses SOD)
 ION_POSITIVE=NA
-# negative ion
+# negative ion name (CHARMM USES CLA)
 ION_NEGATIVE=CL

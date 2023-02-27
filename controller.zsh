@@ -96,7 +96,6 @@ controller_submit() {
         # MULTI: number of multidir runs, i.e., number of replicas in replex calculations (otherwise 1)
         (( PROCS = MULTI * PPM ))
 
-        typeset > debug.txt
         if (( PROCS == 0 )); then
             echo "Aborting because \$PROCS = 0 (\$MULTI = $MULTI, \$PPM = $PPM); this is probably because the parameters in either run.zsh or para_conf.zsh is not properly set" 2>&1
             exit 1
@@ -123,12 +122,12 @@ controller_submit() {
         # This is because oversubscribing / undersubscribing GPU resource is not "typical" operation in many job queueing systems.
         # While oversubscribing is unwelcomed on CPU, running 2-4 mdruns per 1 GPU is beneficial.
 
-        # Total requested ranks (not CPN * NODES); REAL ranks are determined in the "job_mpirun" part.
+        # Total REQUESTED ranks (not CPN * NODES); REAL ranks are determined in the "job_mpirun" part.
         JOB_PPN=${JOB_PPN:-$PPN}
         JOB_NODES=${JOB_NODES:-$NODES}
-        (( JOB_RANK = JOB_NODES * JOB_PPN ))
+        (( JOB_PROCS = JOB_NODES * JOB_PPN ))
         # Total CPU cores to be used
-        (( JOB_CPU = JOB_RANK * TPP ))
+        (( JOB_CPU = JOB_PROCS * TPP ))
 
         # Total GPU used in the job; JOB_GPN is per node and JOB_GPU is total GPUs
         (( JOB_GPN = GPP * CPN / TPP ))
@@ -151,6 +150,16 @@ controller_submit() {
             typeset > $ID/debug.submit.$STEPNO.txt
             set -x
         fi
+
+        echo "Submitting job with following settings:"
+        echo " PROCS=$PROCS  # Number of requested processes (ranks)"
+        echo " JOB_PPN=$JOB_PPN  # Process / node"
+        echo " JOB_NODES=$JOB_NODES  # Number of requested nodes (rounding up)"
+        echo " JOB_PROCS=$JOB_PROCS  # Number of requested processes in the job system (rounding up)"
+        echo " TPP=$TPP  # Number of CPU threads / process"
+        echo " JOB_CPU=$JOB_CPU  # Total CPU cores to be used"
+        echo " GPU=$((GPP*CPN/TPP*JOB_NODES))  # Total logical GPUs used in the job"
+        echo " JOB_GPU=$JOB_GPU  # Total physical GPUs used in the job"
 
         # run job_submit() and get the job ID
         unset JOBID
@@ -176,12 +185,13 @@ source $JOB_SCRIPT
 
 case $(job_get_mode) in
     run)
+        # Execute job prelude (load modules, env vars etc)
+        job_prelude $BASEFILE
+
         if [[ -z $ID ]] || [[ -z $STEPNO ]]; then
-            echo "\$ID(=\"$ID\") or \$STEPNO(=\"$STEPNO\") is not set (likely an error in $JOBSYSTEM )" 2>&1
+            echo "\$ID(=\"$ID\") or \$STEPNO(=\"$STEPNO\") is not set (likely an error in submit_scripts/$JOBSYSTEM.zsh)" 2>&1
             exit 1
         fi
-        # Execute job prelude (load modules etc)
-        job_prelude $BASEFILE
 
         # Read para_conf after the prelude because $PWD may not be the same directory as that when submitted
         source para_conf.zsh
@@ -190,8 +200,9 @@ case $(job_get_mode) in
         # Note GROMACS_DIR is set inside GMXRC. If GMXRC is already sourced, this should overwrite GROMACS_DIR with the same variable again.
         source $GROMACS_DIR/bin/GMXRC.zsh
 
-        GMX=$(which gmx_mpi)
-        GMX_MPI=$(which gmx_mpi)
+        # Currently all pipeline uses replica exchange (single precision), so we assume gmx_mpi exists.
+        GMX=${GMX:-$(which gmx_mpi)}
+        GMX_MPI=${GMX_MPI:-$(which gmx_mpi)}
 
         # typically you need nothing to do in this part
         job_prelude_after_gmx $BASEFILE

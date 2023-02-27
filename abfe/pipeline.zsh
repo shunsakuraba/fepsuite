@@ -411,6 +411,20 @@ main() {
             echo "DEPENDS=(); PPM=\$COMPLEX_PARA ; MULTI=1"
             ;;
         run,1)
+            # Check version. There are too many issues...
+            version=$(job_singlerun $GMX --version | grep 'GROMACS version:' | tr -s ' ' | cut -f3 -d' ')
+            case $version in
+                202[01]*|201[6789]*|2022|2022.[1-4])
+                    echo "GROMACS version $version is not supported because it cannot detect error cases with excluded interactions properly"
+                    exit 1
+                ;;
+                2022.[56789]*)
+                    echo "GROMACS version $version (supported version)"
+                ;;
+                *)
+                    echo "GROMACS version $version. We are not sure the program works on this version; we will continue anyway."
+                ;;
+            esac
             touch mdp/dummy.mdp
             # TODO: check whether maxwarn 0 is sufficient
             job_singlerun $GMX grompp -f mdp/dummy.mdp -p $ID/topol_ionized.top -c $ID/conf_ionized -o $ID/pp.tpr -po $ID/pp.mdp -maxwarn 0 -pp $ID/pp.top
@@ -475,27 +489,27 @@ main() {
             cat $ID/complex.ndx $ID/restr_pull.ndx > $ID/complex_with_pull.ndx
             ;;
         query,4)
-            echo "DEPENDS=(3); (( PROCS = LIG_PARA )); (( MULTI = 1 ))"
+            echo "DEPENDS=(3); PPM=\$LIG_PARA; MULTI=1"
             ;;
         run,4)
             do_prep_runs ligand-ion-flex ligand-ion charging-lig ligand-ion ligand ""
             ;;
         query,5)
-            echo "DEPENDS=(4); (( PROCS = LIG_PARA )); (( MULTI = NCHARGE ))"
+            echo "DEPENDS=(4); PPM=\$LIG_PARA; MULTI=\$NCHARGE"
             ;;
         run,5)
             # product run for charge-discharge ligand
             do_product_runs ligand-ion charging-lig charging-lig.npt charging-lig "" "" $NCHARGE 0 0
             ;;
         query,6)
-            echo "DEPENDS=(5); (( PROCS = LIG_PARA )); (( MULTI = NANNIH ))"
+            echo "DEPENDS=(5); PPM=\$LIG_PARA; MULTI=\$NANNIH"
             ;;
         run,6)
             # product run for ligand annihilation, starting from totally discharged conformation
             do_product_runs ligand-ion annihilation-lig charging-lig.$((NCHARGE - 1))/charging-lig annihilation-lig "" "" $NANNIH 0 $(( NANNIH - 1 ))
             ;;
         query,7)
-            echo "DEPENDS=(5 6); (( PROCS = LIG_PARA ))"
+            echo "DEPENDS=(5 6); PPM=\$LIG_PARA; MULTI=1"
             ;;
         run,7)
             # re-eval for LRC for charging #0
@@ -504,37 +518,37 @@ main() {
             do_eval_run ligand-ion lr-annihilation-lig annihilation-lig.$((NANNIH-1))/annihilation-lig lr-annihilation-lig ligand $((NANNIH-1))
             ;;
         query,8)
-            echo "DEPENDS=(3); (( PROCS = NCHARGE * COMPLEX_PARA ))"
+            echo "DEPENDS=(3); PPM=\$COMPLEX_PARA; MULTI=\$NCHARGE"
             ;;
         run,8)
             # product run for complex system (discharging)
             do_product_runs topol_ionized charging-complex prerun.run charging-complex complex_with_pull restr_pull.mdp $NCHARGE 0
             ;;
         query,9)
-            echo "DEPENDS=(6 8); (( PROCS = NANNIH * COMPLEX_PARA ))"
+            echo "DEPENDS=(6 8); PPM=\$COMPLEX_PARA; MULTI=\$NANNIH"
             ;;
         run,9)
             # product run for complex system (annihilation)
             do_product_runs topol_ionized annihilation-complex charging-complex.$((NCHARGE-1))/charging-complex annihilation-complex complex_with_pull restr_pull.mdp $NANNIH 0 $((NANNIH - 1))
             ;;
         query,10)
-            echo "DEPENDS=(3); (( PROCS = NRESTR * COMPLEX_PARA )); MULTI=\$NRESTR"
+            echo "DEPENDS=(3); PPM=\$COMPLEX_PARA; MULTI=$\NRESTR"
             ;;
         run,10)
             # product run for restraint decopuling (100% restraint -> 0% restraint) FEP
-            do_product_runs topol_ionized restrain prerun.run restrain complex_with_pull restr_pull_decouple.mdp $NRESTR 1 $((NRESTR - 1))
+            do_product_runs topol_ionized restraint prerun.run restraint complex_with_pull restr_pull_decouple.mdp $NRESTR 1 $((NRESTR - 1))
             ;;
         query,11)
             echo "DEPENDS=(9 10); PPM=\$COMPLEX_PARA; MULTI=1"
             ;;
         run,11)
             # eval run (LRC) for restraint final (unrestrained)
-            do_eval_run topol_ionized lr-complex restrain.$((NRESTR - 1))/restrain lr-complex complex 0
+            do_eval_run topol_ionized lr-complex restraint.$((NRESTR - 1))/restraint lr-complex complex 0
             # re-eval for LRC annihilation final
             do_eval_run topol_ionized lr-annihilation-complex annihilation-complex.$((NANNIH - 1))/annihilation-complex lr-annihilation-complex complex $((NANNIH - 1))
             ;;
         query,12)
-            echo "DEPENDS=(3 4 5 6 7 8 9 10 11); CPU_ONLY_STAGE=yes"
+            echo "DEPENDS=(3 4 5 6 7 8 9 10 11); PPM=1; MULTI=1; CPU_ONLY_STAGE=yes"
             ;;
         run,12)
             TEMP=$(grep ref_t mdp/run.mdp | cut -d '=' -f2)
@@ -543,14 +557,14 @@ main() {
             do_bar charging-complex $NCHARGE
             do_bar annihilation-lig $NANNIH
             do_bar annihilation-complex $NANNIH
-            do_bar restrain $NRESTR
+            do_bar restraint $NRESTR
             # LRC
             do_exp lr-lig charging-lig 0 $TEMP
             do_exp lr-annihilation-lig annihilation-lig $((NANNIH - 1)) $TEMP
-            do_exp lr-complex restrain $((NRESTR - 1)) $TEMP
+            do_exp lr-complex restraint $((NRESTR - 1)) $TEMP
             do_exp lr-annihilation-complex annihilation-complex $((NANNIH - 1)) $TEMP
-            # Charge correction
-            charge_correction $ID/totalcharge.txt restrain.$((NRESTR - 1))
+            # Charge correction (TODO)
+            charge_correction $ID/totalcharge.txt restraint.$((NRESTR - 1))
             # Sum evertyhing up
             $PYTHON3 $ABFE_ROOT/calc_bar_replex.py --basedir $ID --restrinfo $ID/restrinfo --temp $TEMP > $ID/result.txt
             ;;

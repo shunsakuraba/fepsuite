@@ -1,4 +1,5 @@
 # Kyoto University supercomputer (2023 spring-)
+# Combination of slurm (cutomized) + Intel MPI
 
 if [[ -z $GROUP ]]; then
     GROUP=$(groups | tr ' ' '\n' | grep '^gr')
@@ -51,7 +52,7 @@ job_set_preferred_resource() {
 
 job_submit() {
     # Export variables
-    local exports=(PROCS PPN ID STEPNO)
+    local exports=(PROCS PPN GPP ID STEPNO)
     local key_vars=()
     for e in $exports; do
         key_vars+="$e=${(P)e}"

@@ -73,7 +73,7 @@ def sign(x):
         return 0
 
 def main(args):
-    watermodel = WaterModel(os.path.join(args.feprest_dir, args.ff + ".ion.itp"))
+    watermodel = WaterModel(os.path.join(args.water_dir, args.ff + ".ion.itp"))
 
     with open(args.topology) as fh, \
          open(args.output_topology, 'w') as ofh:
@@ -283,7 +283,7 @@ def parse_args():
                         help="Output gro file")
     parser.add_argument('--exclude-distance', action='store', type=float, default=0.4,
                         help='Water / ions having atoms within (this value) nm from non-solvent atoms are chosen at random and mutated')
-    parser.add_argument('--feprest-dir', action='store', type=str, default=os.path.join(os.path.split(sys.argv[0])[0], "water_ion_models"),
+    parser.add_argument('--water-dir', action='store', type=str, default=os.path.join(os.path.split(sys.argv[0])[0], "water_ion_models"),
                         help=".itp files under this directory is used to generate updated topology")
     parser.add_argument('--mode', action='store', type=str, default="auto",
                         help='Processing mode. Either "auto" or "posonly"')
