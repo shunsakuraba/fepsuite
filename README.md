@@ -3,7 +3,7 @@
    / ____/ ____/ __ \      _______  __(_) /____ 
   / /_  / __/ / /_/ /_____/ ___/ / / / / __/ _ \
  / __/ / /___/ ____/_____(__  ) /_/ / / /_/  __/
-/_/   /_____/_/         /____/\__,_/_/\__/\___/ 
+/_/   /_____/_/         /____/\__,_/_/\__/\___/ (beta)
 ````
 
 # FEP-suite: scripts and pipelines for free-energy perturbation calculation works
@@ -14,6 +14,8 @@ FEP-suite is a collection of programs for calculating various free energy differ
 * FEP/REST (free energy perturbation / replica exchange solute tempering), a relative free-energy difference calculation pipeline with an enhanced sampling technique.
 
 Under both directory named `abfe` and `feprest` you can see README.md corresponding to each pipeline and how to use. Have fun!
+
+Note the program is currently "beta" version.
 
 # License
 
