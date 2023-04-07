@@ -89,6 +89,8 @@ controller_submit() {
 
         # Calculate necessary information to submit
         # Note job_set_preferred_resource "default" resource may depend on requested variables
+        unset JOB_PPN || true
+        unset JOB_NODES || true
         job_set_preferred_resource
 
         # PROCS: Total MPI ranks (processes)
