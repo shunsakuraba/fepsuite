@@ -100,7 +100,7 @@ job_submit() {
 
     # Run actual code and get jobid
     local -a cmd
-    cmd=(pjsub -L rscgrp=$queue -x ${(j:,:)key_vars} -N $JOB_NAME $dependency --mpi proc=$JOB_PPN -L elapse=$timelimit $extra $BASEFILE)
+    cmd=(pjsub -L rscgrp=$queue -x ${(j:,:)key_vars} -N $JOB_NAME $dependency --mpi proc=$JOB_PROCS -L elapse=$timelimit $extra $BASEFILE)
     echo $cmd
     local jobidinfo
     jobidinfo=$($cmd)
