@@ -115,14 +115,18 @@ wget https://fch.upol.cz/ff_ol/amber14sb_OL15.ff_corrected-Na-cation-params.tar.
 tar xf amber14sb_OL15.ff_corrected-Na-cation-params.tar.gz
 ````
 
-Then, first we [fix improper angle parameter](http://zhenglz.blogspot.com/2017/05/fixing-bugs-in-ff14sb-port-for-gromacs.html) in `[ dihedraltypes ]` section of improper angles:
+Then, we need to [fix improper angle parameters](http://zhenglz.blogspot.com/2017/05/fixing-bugs-in-ff14sb-port-for-gromacs.html) in `[ dihedraltypes ]` section of improper torsion angles:
 
 ````
-NA  CV  CC  CT       4      180.00     4.60240     2
-NA  CW  CC  CT       4      180.00     4.60240     2
+[ dihedraltypes ]
+
+...
+
+NA  CV  CC  CT       4      180.00     4.60240     2   ; <- add these two lines
+NA  CW  CC  CT       4      180.00     4.60240     2   ; <-
 ````
 
-We also need to workaround [the bond atom type issue](https://gitlab.com/gromacs/gromacs/-/issues/4120) existing in old (<2022) GROMACS, since we are using patched one over GROMACS 2020. We need to replace `2C` and `3C` atom type with `A2C` and `A3C`.
+Finally, we also need to workaround [the bond atom type issue](https://gitlab.com/gromacs/gromacs/-/issues/4120) existing in old (<2022) GROMACS, since we are using patched one over GROMACS 2020. We need to replace `2C` and `3C` atom type with `A2C` and `A3C`.
 
 ````
 cd amber14sb_OL15.ff
@@ -141,10 +145,12 @@ wget https://files.rcsb.org/download/2LZM.pdb.gz
 gunzip 2LZM.pdb.gz
 ````
 
-Fortunately, PDB [2LZM](https://www.rcsb.org/structure/2LZM) do not have any missing residues, so we can directly feed this structure into the mutant structure prepration. 
+At this moment, you may get either `2lzm.pdb` or `2LZM.pdb` depending on your OS. From now on I assume you have 2LZM.pdb.
+
+Fortunately, PDB [2LZM](https://www.rcsb.org/structure/2LZM) do not have any missing residues, so we can directly feed this structure into the mutant structure prepration. But first we need to remove water.
 
 ````sh
-python3 /path/to/fepsuite/feprest/utils/prep_mutation_fep.py --feprest /path/to/fepsuite/feprest --faspr /path/to/FASPR/FASPR --pdb 2LZM.pdb --mutation L99A --ff amber14sb_OL15
+python3 /path/to/fepsuite/feprest/tools/prep_mutation_fep.py --feprest /path/to/fepsuite/feprest --faspr /path/to/FASPR/FASPR --pdb 2LZM_nowat.pdb --mutation L99A --ff amber14sb_OL15
 ````
 
 If the program finishes without problem, you should find four directories: `wt`, `L99A`, `wt_L99A` and `wt_L99A_ref`.[^2] The first one `wt` corresponds to wild-type structure (without mutation), the second one `L99A` corresponds to Leu99Ala mutation. The third one `wt_L99A` is the "mixed" structure of wild-type and Leu99Ala mutant. If you visualize `wt_L99A/conf.pdb`, you will see at residue 99 that Leu sidechain and Ala hydrogens are overlapping. 
@@ -178,10 +184,10 @@ Update `run.zsh` and `para_conf.zsh` according to your environment. If you are u
 
 ```
 # Number of MPI processes per replica. For GPU, recommended = 1.
-PARA=8
+PARA=8  # -> 1
 
 # Number of threads per process. Recommended: for CPU: 1, for GPU: 2-6.
-TPP=1
+TPP=1   # -> e.g. 4
 ```
 
 After the update, run the pipeline with

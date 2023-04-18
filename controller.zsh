@@ -16,13 +16,15 @@ if [[ -z $JOBTYPE ]] || [[ -z $FEPSUITE_ROOT ]] || [[ -z $JOBSYSTEM ]]; then
 fi
 
 # Check GROMACS
-if [[ -z $GROMACS_DIR ]]; then
-    echo "You need to specify the location of Gromacs to GROMACS_DIR" 2>&1
-    exit 1
-fi
-if [[ ! -d $GROMACS_DIR ]]; then
-    echo "You specified GROMACS_DIR=\"$GROMACS_DIR\", but the directory does not exist or accessible" 2>&1
-    exit 1
+if [[ -z $SKIP_GROMACS_CHECK ]]; then
+    if [[ -z $GROMACS_DIR ]]; then
+        echo "You need to specify the location of Gromacs to GROMACS_DIR" 2>&1
+        exit 1
+    fi
+    if [[ ! -d $GROMACS_DIR ]]; then
+        echo "You specified GROMACS_DIR=\"$GROMACS_DIR\", but the directory does not exist or accessible" 2>&1
+        exit 1
+    fi
 fi
 
 FEPSUITE_ROOT=${FEPSUITE_ROOT%%/} # remove trailing "/" if exists
@@ -47,7 +49,7 @@ fi
 typeset ${JOBTYPE:u}_ROOT=${PIPELINE_SCRIPT:h}
 
 controller_get_jobid () {
-    grep "^$1\t" $ID/jobid.txt | tail -n 1 | cut -f2
+    grep "^$1"$'\t' $ID/jobid.txt | tail -n 1 | cut -f2
 }
 
 # Generic submission process. Most of them are handled inside $JOBSYSTEM.zsh,
@@ -200,11 +202,13 @@ case $(job_get_mode) in
         [[ -e $ID/para_conf.zsh ]] && source $ID/para_conf.zsh
 
         # Note GROMACS_DIR is set inside GMXRC. If GMXRC is already sourced, this should overwrite GROMACS_DIR with the same variable again.
-        source $GROMACS_DIR/bin/GMXRC.zsh
+        if [[ -z $SKIP_GROMACS_CHECK ]]; then
+            source $GROMACS_DIR/bin/GMXRC.zsh
 
-        # Currently all pipeline uses replica exchange (single precision), so we assume gmx_mpi exists.
-        GMX=${GMX:-$(which gmx_mpi)}
-        GMX_MPI=${GMX_MPI:-$(which gmx_mpi)}
+            # Currently all pipeline uses replica exchange (single precision), so we assume gmx_mpi exists.
+            GMX=${GMX:-$(which gmx_mpi)}
+            GMX_MPI=${GMX_MPI:-$(which gmx_mpi)}
+        fi
 
         # typically you need nothing to do in this part
         job_prelude_after_gmx $BASEFILE

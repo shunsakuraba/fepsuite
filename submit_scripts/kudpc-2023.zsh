@@ -66,7 +66,7 @@ job_submit() {
     if (( ${#DEPENDS} > 0 )); then
         local deps=()
         for d in $DEPENDS; do
-            deps+=controller_get_jobid $d
+            deps+=$(controller_get_jobid $d)
         done
         depstr=(--dependency=afterok:${(j|:|)deps})
     fi

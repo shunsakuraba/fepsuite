@@ -163,7 +163,7 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
         out = True
         for l in ifh:
             # remove #ifdef POSRES ... #include "ions.itp"
-            # TODO FIXME: this part should be fixed by updating nucfepgen
+            # TODO FIXME: this part should be fixed by updating fepgen
             if re.search("POSRES", l):
                 out = False
             if out:
@@ -266,7 +266,7 @@ def main(args):
         # use local force field file
         log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
         os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-    check_call_verbose([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA --disable-cmap-error".split())
+    check_call_verbose([f"{args.fepgen}/fepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA --disable-cmap-error".split())
     solvate_conf_topology(args.solv)
     generate_para_conf(args, mutation_list)
     log_with_color(f"cd ..")
