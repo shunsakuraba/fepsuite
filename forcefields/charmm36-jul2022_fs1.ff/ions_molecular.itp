@@ -1,0 +1,80 @@
+; CHARMM-port for GROMACS
+; created with charmm2gmx version 0.7.dev45+g7b82040.d20221208 on 2022-12-08 10:52:46.381284
+; Code: https://gitlab.com/awacha/charmm2gmx
+; Documentation: https://awacha.gitlab.com/charmm2gmx
+; Charmm2GMX written by András Wacha, based on the original port by 
+; E. Prabhu Raman, Justin A. Lemkul, Robert Best and Alexander D. MacKerell, Jr.
+; Molecule types for ions
+
+[ moleculetype ]
+;CO3, ionized carbonate, adm jr., aug 2001
+; molname  nrexcl
+CO3        3
+
+[ atoms ]
+; id    at type     res nr  res name   at name  cg nr  charge    mass
+  1     CG2O6       1      CO3        C1       1       1.420    12.01100
+  2     OG2D2       1      CO3        O1       1      -1.140    15.99940
+  3     OG2D2       1      CO3        O2       1      -1.140    15.99940
+  4     OG2D2       1      CO3        O3       1      -1.140    15.99940 ; qtot = -2.000000
+
+[ bonds ]
+;       aj     funct
+1       2      1
+1       3      1
+1       4      1
+
+[ angles ]
+;       aj      ak     funct
+2       1       3      5
+2       1       4      5
+3       1       4      5
+
+[ dihedrals ]
+;       aj      ak      al     funct
+1       2       3       4      2
+
+
+[ moleculetype ]
+;CHO2, formate, from acetate, sz & kevo
+; molname  nrexcl
+FORA       3
+
+[ atoms ]
+; id    at type     res nr  res name   at name  cg nr  charge    mass
+  1     CG2O3       1      FORA       C1       1       0.520    12.01100
+  2     OG2D2       1      FORA       O2       1      -0.760    15.99940
+  3     OG2D2       1      FORA       O3       1      -0.760    15.99940
+  4     HGR52       1      FORA       H4       1       0.000     1.00800 ; qtot = -1.000000
+
+[ bonds ]
+;       aj     funct
+1       4      1
+1       2      1
+1       3      1
+
+[ angles ]
+;       aj      ak     funct
+2       1       4      5
+2       1       3      5
+3       1       4      5
+
+[ dihedrals ]
+;       aj      ak      al     funct
+1       2       3       4      2
+
+
+[ moleculetype ]
+;hydroxide ion by adm.jr.
+; molname  nrexcl
+OH         3
+
+[ atoms ]
+; id    at type     res nr  res name   at name  cg nr  charge    mass
+  1     OX          1      OH         O1       1      -1.320    15.99940
+  2     HX          1      OH         H1       1       0.320     1.00800 ; qtot = -1.000000
+
+[ bonds ]
+;       aj     funct
+1       2      1
+
