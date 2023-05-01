@@ -170,7 +170,7 @@ def generate_gmx(args, basepdbinfo, ddir, mutations):
                 ofh.write(l)
             if re.search("ions.itp", l):
                 out = True
-    check_call_verbose([args.python3, f"{args.feprest}/utils/pp.py", "-o", "topol_pp.top", "topol_m.top"])
+    check_call_verbose([args.python3, f"{args.feprest}/tools/pp.py", "-o", "topol_pp.top", "topol_m.top"])
     check_call_verbose([args.python3, f"{args.feprest}/rest2py/canonicalize_top.py", "topol_pp.top", "topol_can.top"])
 
     os.chdir(curdir)
@@ -266,7 +266,7 @@ def main(args):
         # use local force field file
         log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
         os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-    check_call_verbose([f"{args.nucfepgen}/nucfepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA --disable-cmap-error".split())
+    check_call_verbose([f"{args.fepgen}/fepgen"] + f"-A ../wt/conf.pdb -B ../{mutdir}/conf.pdb -a ../wt/topol_can.top -b ../{mutdir}/topol_can.top -O fepbase.pdb -o fepbase.top --structureOA fepbase_A.pdb --structureOB fepbase_B.pdb --protein --honor-resnames --generate-restraint CA --disable-cmap-error".split())
     solvate_conf_topology(args.solv)
     generate_para_conf(args, mutation_list)
     log_with_color(f"cd ..")
@@ -283,7 +283,7 @@ def main(args):
             # use local force field file
             log_with_color(f"ln -s ../{args.ff}.ff {args.ff}.ff")
             os.symlink(f"../{args.ff}.ff", f"{args.ff}.ff")
-        check_call_verbose([args.python3, f"{args.feprest}/utils/selectres.py"] + f"../{fepdir}/fepbase.top ../{fepdir}/fepbase.pdb {m['resid']} fepbase.top fepbase.pdb".split())
+        check_call_verbose([args.python3, f"{args.feprest}/tools/selectres.py"] + f"../{fepdir}/fepbase.top ../{fepdir}/fepbase.pdb {m['resid']} fepbase.top fepbase.pdb".split())
         solvate_conf_topology(args.solv_ref)
         generate_para_conf(args, [m])
         log_with_color(f"cd ..")
