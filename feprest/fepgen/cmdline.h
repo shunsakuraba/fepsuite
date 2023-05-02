@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2009, Hideyuki Tanaka
+              2023, Shun Sakuraba
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -36,7 +37,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <typeinfo>
 #include <cstring>
 #include <algorithm>
-#include <cxxabi.h>
 #include <cstdlib>
 
 namespace cmdline{
@@ -102,25 +102,41 @@ Target lexical_cast(const Source &arg)
   return lexical_cast_t<Target, Source, detail::is_same<Target, Source>::value>::cast(arg);
 }
 
-static inline std::string demangle(const std::string &name)
-{
-  int status=0;
-  char *p=abi::__cxa_demangle(name.c_str(), 0, 0, &status);
-  std::string ret(p);
-  free(p);
-  return ret;
-}
 
 template <class T>
 std::string readable_typename()
 {
-  return demangle(typeid(T).name());
+  throw std::runtime_error("Unknown type name");
 }
 
 template <>
 std::string readable_typename<std::string>()
 {
   return "string";
+}
+
+template <>
+std::string readable_typename<float>()
+{
+  return "float";
+}
+
+template <>
+std::string readable_typename<double>()
+{
+  return "double";
+}
+
+template <>
+std::string readable_typename<int>()
+{
+  return "int";
+}
+
+template <>
+std::string readable_typename<unsigned int>()
+{
+  return "unsigned_int";
 }
 
 } // detail
