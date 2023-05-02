@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2018 Shun Sakuraba
+# Copyright 2018-2023 Shun Sakuraba
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 #
@@ -11,12 +11,8 @@
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# This script runs on python 2.7. Also tested on python3 but not sure whether it runs perfectly.
-# Why not python 3 on 2018? Because 3 may not be installed on some supercomputer centers. Heck.
-
 import argparse
 import sys
-import math
 import copy
 
 # I love this in C++.
@@ -166,11 +162,11 @@ if __name__ == "__main__":
                 if len(ls) < 6:
                     raise RuntimeError("Atomtype contains < 6 fields")
                 # here everything is mess but toppush.cpp is actually super mess 
-                if len(ls[5]) == 1 and ls[5][0].isalpha():
+                if len(ls[5]) == 1 and ls[5].isalpha():
                     # "If field 5 is a single char we have both."
                     have_bonded_type = True
                     have_atomic_number = True
-                elif len(ls[3]) == 1 and ls[3][0].isalpha():
+                elif len(ls[3]) == 1 and ls[3].isalpha():
                     # "If field 3 (starting from 0) is a single char, 
                     #  we have neither bonded_type or atomic numbers."
                     have_bonded_type = False
@@ -178,21 +174,23 @@ if __name__ == "__main__":
                 else:
                     # "If field 4 is a single char we check field 1. If this begins with
                     #  an alphabetical character we have bonded types, otherwise atomic numbers.""
-                    have_bonded_type = ls[1][0].isalpha()
-                    have_atomic_number = not have_bonded_type
+                    # --> After GROMACS resolved issue 4120, the logic was changed.
+                    # "Attempt parsing field 1 to integer. If conversion fails, we do not have an atomic number but a bonded type.
+                    # Unfortunately, int() in Python is more permissive (e.g. "3_10" is 310), so I change this part to be more restrictive
+                    have_atomic_number = all((c.isdigit() for c in ls[1]))
+                    have_bonded_type = not have_atomic_number
 
                 atomtype = ls[0]
                 (mass, charge, particle, sigc6, epsc12) = ls[1 + int(have_bonded_type) + int(have_atomic_number):]
 
-                # Issue an error for bonded type
-                if have_bonded_type and not all(map(isdigit, ls[1])):
-                    sys.stderr.write("""[ atomtypes ] contains bondtype %s which starts from non-alphabets.
-This is invalid atomtype in GROMACS.
-""" % atomtype)
-                    raise RuntimeError("Invalid force field")
-
                 if have_bonded_type:
                     bondtype = ls[1]
+                    if all((c.isdigit() for c in ls[1])):
+                        sys.stderr.write("""
+                        [ atomtypes ] contains bondtype "%s", but the bondtype consists of all digits.
+                        This is considered invalid atomtype in GROMACS.
+                        """ % atomtype)
+                    raise RuntimeError("Invalid force field")
                 else:
                     bondtype = atomtype
                 if have_atomic_number:
@@ -261,14 +259,12 @@ This is invalid atomtype in GROMACS.
                 bondtype_list.append(bondtype_of_atomtype[atomtype])
 
                 # charge & mass is optional parameters, oof...
+                charge, mass = atomtype_info[atomtype]
                 if len(ls) > 6:
                     charge = float(ls[6])
-                else:
-                    (charge, _) = atomtype_info[canonical_atomtype]
                 if len(ls) > 7:
                     mass = float(ls[7])
-                else:
-                    (_, mass) = atomtype_info[atomtype]
+
                 if len(ls) > 8:
                     atomtypeB = ls[8]
                     (chargeB, massB) = atomtype_info[atomtypeB]
