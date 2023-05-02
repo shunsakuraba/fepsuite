@@ -445,9 +445,17 @@ main() {
             echo "DEPENDS=(2); PPM=1; MULTI=1; CPU_ONLY_STAGE=yes"
             ;;
         run,3)
-            # Compute RMSD of ligands for thresholding
-            echo "Receptor\nSystem" | job_singlerun $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -center -pbc mol -n $ID/complex.ndx -ur compact
-            echo "Receptor\nSystem" | job_singlerun $GMX trjconv -s $ID/prerun.run.tpr -f $ID/prerun.run.pdb -o $ID/prerun.run.final.pdb -center -pbc mol -n $ID/complex.ndx -ur compact
+            # Compute RMSD of ligands for thresholding and later uses.
+            # This seeming strange procedure was set to support cases which do not work with gmx trjconv -pbc cluster.
+            # Since this is time-evolved simulation without replica exchange, we can assume -pbc nojump works (assumes no >0.5pbc jump during prep.min/prep.nvt/prep.npt).
+            echo "Ligand+Receptor\nSystem" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.xtc -o $ID/prerun.run.nojump.xtc -b $RUN_PROD -center -n $ID/complex.ndx -pbc nojump
+            # Then wrap the system around using -pbc mol and -ur compact. This and above line prevents "split-ligand" and "split-receptor" artifacts.
+            echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.nojump.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -pbc mol -n $ID/complex.ndx -ur compact
+            # Get the final simulation time. Note that prerun.run.recpbc.xtc has been chopped off initial RUN_PROD ps, so using prerun.run.xtc instead.
+            LAST=$(job_singlerun $GMX check -f $ID/prerun.run.xtc |& grep '^Time' | awk '{ print ($2-1) * $3 }')
+            # Convert the final structure into PBC-fixed one
+            echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.run.final.pdb -n $ID/complex.ndx -dump $LAST
+            # Then calculate the rms
             echo "Receptor\nLigand" | job_singlerun $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
             $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
             $PYTHON3 $ABFE_ROOT/ligand_diameter.py --traj=$ID/prerun.run.xtc --structure=$ID/prerun.run.pdb --index=$ID/complex.ndx > $ID/diameter.txt
