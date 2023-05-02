@@ -29,9 +29,10 @@ job_submit() {
     done
 
     # Run actual code
-    local cmd=(RUN=yes $BASEFILE)
-    echo $cmd
-    local jobidinfo=$($cmd)
+    local cmd=($BASEFILE)
+    echo RUN=yes $cmd
+    local jobidinfo
+    jobidinfo=$(RUN=yes $cmd)
     if [[ $? != 0 ]]; then
         echo "Submission failed" 1>&2
         exit 1
@@ -47,6 +48,9 @@ job_mpirun() {
     # OpenMPI version
     # For other MPIs, you can skip -npernode $PPN
     mpirun -npernode $PPN -n $N $@
+
+    # Hydra version (FIXME: add per-node)
+    # mpirun -n $N $@
 }
 
 job_singlerun() {
