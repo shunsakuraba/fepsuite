@@ -167,6 +167,10 @@ Likewise, if you look into `fepbase.top`, you will see residue 99 (originally Le
 ````
 
 If you are familiar with GROMACS `[ atoms ]` format, you can also see some atoms have different states between A and B. For example, atom `CB` is 
+````
+1565  A2C  99   LEU     CB 1565 -1.10200e-01  1.20100e+01  CT -1.82500e-01  1.20100e+01
+````
+, where the atom has `A2C` atomtype (AMBER `2C`) in state A while it has `CT` atomtype in state B.
 
 The fourth, `wt_L99A_ref` contains the "reference state", where proteins are cut into three-residue peptide with residues 98, 99 and 100 (residues are abruptly cut without capping). This state is used to calculate the free-energy change in the unfolded state. 
 
