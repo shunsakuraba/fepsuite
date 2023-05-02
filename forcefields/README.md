@@ -14,7 +14,7 @@ The origin and the modification are as follows:
 * We added [improper angle parameters](http://zhenglz.blogspot.com/2017/05/fixing-bugs-in-ff14sb-port-for-gromacs.html) in `[ dihedraltypes ]` section of improper torsion angles to absorb difference in AMBER Leap (alphabetical ordering) and GROMACS (verbatim ordering).
 * We also needed to workaround [the bond atom type issue](https://gitlab.com/gromacs/gromacs/-/issues/4120) existing in old (<2022) GROMACS, since the current feprest pipeline is using patched GROMACS 2020. We needed to replace `2C` and `3C` atom type with `A2C` and `A3C`.
 
-## `charmm36-jul2022fs1`
+## `charmm36-jul2022_fs1`
 
 This directory contains CHARMM36m 2022 Jul version with the following modifications.
 

@@ -15,7 +15,7 @@ FEP-suite is a collection of programs for calculating various free energy differ
 
 Under both directory named `abfe` and `feprest` you can see README.md corresponding to each pipeline and how to use. Have fun!
 
-Note the program is currently "beta" version.
+Note the program is currently in "beta" version.
 
 # License
 
