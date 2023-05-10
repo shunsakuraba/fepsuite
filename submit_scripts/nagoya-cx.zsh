@@ -35,7 +35,7 @@ job_set_preferred_resource() {
     fi
 
     if (( PPM > 1 )); then
-        echo "nagoya-cx.zsh is designed to run with GPU, and for GPU using more than one process per -multidir is not welcomed."
+        echo "nagoya-cx.zsh is designed to run with GPU, and for GPU using more than one process per -multidir is not welcomed." 1>&2
         exit 1
     fi
 
@@ -94,7 +94,7 @@ job_submit() {
         queue=cx-large
         extra=(-L node=$JOB_NODES)
     else
-        echo "Unimplemented node number (JOB_PROCS=$JOB_PROCS JOB_NODES=$JOB_NODES)" 2>&1
+        echo "Unimplemented node number (JOB_PROCS=$JOB_PROCS JOB_NODES=$JOB_NODES)" 1>&2
         exit 1
     fi
 

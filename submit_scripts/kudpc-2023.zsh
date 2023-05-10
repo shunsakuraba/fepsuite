@@ -5,7 +5,7 @@ if [[ -z $GROUP ]]; then
     GROUP=$(groups | tr ' ' '\n' | grep '^gr')
 fi
 if [[ -z $SUBSYSTEM ]]; then
-    echo "Specify SUBSYSTEM (currently allowed choices: CL/D/G)" 2>&1
+    echo "Specify SUBSYSTEM (currently allowed choices: CL/D/G)" 1>&2
     exit 1
 fi
 
@@ -44,7 +44,7 @@ job_set_preferred_resource() {
             GPN=16
         ;;
         CL)
-            echo "Hardware in cloud system is unknown" 2>&1
+            echo "Hardware in cloud system is unknown" 1>&2
             exit 1
         ;;
     esac
@@ -94,7 +94,7 @@ job_submit() {
     echo $cmd
     local jobidinfo=$($cmd)
     if [[ $? != 0 ]]; then
-        echo "Submission failed" 2>&1
+        echo "Submission failed" 1>&2
         exit 1
     fi
     # Output is like: "Submitted batch job 34987".
