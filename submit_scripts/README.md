@@ -40,8 +40,8 @@ You may want to use the script below as an alternative template.
   <dd>Nagoya University, Fujitsu's job manager (pjsub), OpenMPI</dd>
   <dt>kudpc-2023.zsh</dt>
   <dd>Kyoto University, slurm (but their resource request part is customized), Intel MPI (MPICH-like)</dd>
-  <dt>jaea-ice.zsh</dt>
-  <dd>Japan Atomic Energy Agency, PBSPro, Intel MPI (MPICH-like)</dd>
+  <dt>jaea-sgi8600.zsh</dt>
+  <dd>Japan Atomic Energy Agency, PBSPro, Intel MPI + SGI mpt</dd>
 </dl>
 
 # Tips for zsh scripting

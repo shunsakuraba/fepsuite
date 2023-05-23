@@ -162,7 +162,7 @@ controller_submit() {
         echo " JOB_PROCS=$JOB_PROCS  # Number of requested processes in the job system (rounding up)"
         echo " TPP=$TPP  # Number of CPU threads / process"
         echo " JOB_CPU=$JOB_CPU  # Total CPU cores to be used"
-        echo " GPU=$((GPP*CPN/TPP*JOB_NODES))  # Total logical GPUs used in the job"
+        echo " GPU=$((GPP*PROCS))  # Total logical GPUs used in the job"
         echo " JOB_GPU=$JOB_GPU  # Total physical GPUs used in the job"
 
         # run job_submit() and get the job ID

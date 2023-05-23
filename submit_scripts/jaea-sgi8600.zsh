@@ -15,7 +15,10 @@ job_prelude_after_gmx() {
 }
 
 job_init_queue_stat() {
-    # load job id list, because we need to know jobid in the previously submitted jobs
+    # Load "live" job id list.
+    # If we use "dead" ID number in -W depend=afterok:(ID), the simulation silently fails. 
+    typeset -a LIVE_ID_LIST
+    LIVE_ID_LIST=($(qstat | cut -d' ' -f1 | tail -n +3))
 }
 
 job_set_preferred_resource() {
@@ -65,13 +68,19 @@ job_submit() {
     local timelimit="8:00:00"
 
     # Set dependency.
+    local -a deps
+    deps=()
+    for d in $DEPENDS; do
+        local jid
+        jid=$(controller_get_jobid $d)
+        # -W depend=afterok:(ID) only accepts live ID in the jobsystem. Few days after the job completion the ID is invalidated.
+        # Note in the pathological case, the ID may turn dead while running this script, but we can't do anything (if anyone knows the way please teach me!)
+        if (( $LIVE_ID_LIST[(Ie)$jid] )); then
+            deps+=$jid
+        fi
+    done
     local -a dependency
-    if (( ${#DEPENDS} > 0 )); then
-        local -a deps
-        deps=()
-        for d in $DEPENDS; do
-            deps+=$(controller_get_jobid $d)
-        done
+    if (( ${#deps} > 0 )); then
         dependency=(-W depend=afterok:${(j|:|)deps})
     else
         dependency=()
@@ -146,6 +155,7 @@ job_submit() {
         echo "Submission failed" 1>&2
         exit 1
     fi
+    LIVE_ID_LIST+=$JOBID
 }
 
 job_mpirun() {

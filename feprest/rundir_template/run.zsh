@@ -1,6 +1,7 @@
 #!/usr/bin/zsh
 
-set -x
+# to debug the submission script uncomment the next line
+# set -x
 
 # Root directory of FEP-suite
 FEPSUITE_ROOT=$HOME/work/fepsuite
@@ -13,7 +14,7 @@ JOBTYPE=feprest
 
 # Specify jobsystem
 JOBSYSTEM=none
-# If jobsystem need additional information fill variables
+# If jobsystem need additional information fill this variable
 #SUBSYSTEM=
 
 # Run actual controller

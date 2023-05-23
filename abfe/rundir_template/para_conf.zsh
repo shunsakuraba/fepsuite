@@ -22,6 +22,9 @@ NANNIH=12
 LIG_PARA=2
 COMPLEX_PARA=12
 
+# Threads per process. Recommended to be 2-4 in GPU run.
+TPP=1
+
 # first RUN_PROD ps will be ignored as equilibration
 RUN_PROD=2000
 

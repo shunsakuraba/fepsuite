@@ -52,17 +52,20 @@ job_set_preferred_resource() {
 
 job_submit() {
     # Export variables
-    local exports=(PROCS PPN GPP ID STEPNO)
-    local key_vars=()
+    local -a exports
+    exports=(PROCS PPN GPP ID STEPNO)
+    local -a key_vars
+    key_vars=()
     for e in $exports; do
         key_vars+="$e=${(P)e}"
     done
 
     # Default time
-    local timelimit=8:00:00
+    local timelimit="8:00:00"
 
     # Set dependency
-    local depstr=()
+    local -a depstr
+    depstr=()
     if (( ${#DEPENDS} > 0 )); then
         local deps=()
         for d in $DEPENDS; do
