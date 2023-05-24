@@ -4,7 +4,7 @@ import os.path
 import argparse
 import math
 
-modes = ["charging", "restrain", "annihilation-lig", "annihilation-complex"]
+modes = ["charging", "restraint", "annihilation-lig", "annihilation-complex"]
 
 def parse_repl_ex(f):
     findpat_lam = re.compile(r"\s*fep-lambdas\s*=")
@@ -80,7 +80,7 @@ def lambda_schedule(mode, n, update, prerunphase):
     # actually for all cases we just return with equal distribution
     if mode == "charging":
         return numpy.linspace(0., 1., n, endpoint=True)
-    elif mode == "restrain":
+    elif mode == "restraint":
         return numpy.linspace(0., 1., n, endpoint=True)
     elif mode == "annihilation":
         # We tested SSC(2) with alpha=0.2 but it was *very* bad indeed, tested with replica exchange rate

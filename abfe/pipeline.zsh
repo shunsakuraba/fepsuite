@@ -540,7 +540,7 @@ main() {
             do_product_runs topol_ionized annihilation-complex charging-complex.$((NCHARGE-1))/charging-complex annihilation-complex complex_with_pull restr_pull.mdp $NANNIH 0 $((NANNIH - 1))
             ;;
         query,10)
-            echo "DEPENDS=(3); PPM=\$COMPLEX_PARA; MULTI=$\NRESTR"
+            echo "DEPENDS=(3); PPM=\$COMPLEX_PARA; MULTI=\$NRESTR"
             ;;
         run,10)
             # product run for restraint decopuling (100% restraint -> 0% restraint) FEP
