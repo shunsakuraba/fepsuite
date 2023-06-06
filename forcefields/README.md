@@ -20,3 +20,4 @@ This directory contains CHARMM36m 2022 Jul version with the following modificati
 
 * The origin of this file is [Mackerell's CHARMM36 files](http://mackerell.umaryland.edu/charmm_ff.shtml#gromacs), CHARMM36m 2022 July version.
 * "ions.itp" now contain only monoatomic ions, and polyatomic ions are moved to `"ions_molecular.itp"`. This was necessary due to feprest pipeline's restrictions.
+* [Due to the N-terminal patch naming issue](https://gromacs.bioexcel.eu/t/newest-charmm36-port-for-gromacs/868/16), "MET1" and "MET2" carbohydrate termini patch in "ethers.n.tdb" and "ethers.c.tdb" are renamed to "XMET1" and "XMET2".

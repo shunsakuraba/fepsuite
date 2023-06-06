@@ -26,7 +26,7 @@ H1B    HCA3A      1.008000   0.0900
 1   5   H1C   C1     H1A    H1B    O1    
   HCA3A      1.008000   0.0900  -1
 
-[ MET1 ]
+[ XMET1 ]
 ; Append terminal methyl group adjacent to CH2
 [ delete ]
  H1C
