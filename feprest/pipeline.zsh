@@ -96,15 +96,6 @@ do_bar ()
     $PYTHON3 $FEPREST_ROOT/bar_deltae.py --xvgs $ID/prodrun/rep%sim/deltae.xvg  --nsim $NREP --temp $TEMP --save-dir $ID/bar | tee $ID/bar1.log || echo "BAR failed due to bad convergence, please continue the run to get it fixed"
 }
 
-prep_gpucpu_parameters ()
-{
-    if (( GPP > 0 )); then
-        NB_WHICH=(-nb gpu)
-    else
-        NB_WHICH=(-nb cpu)
-    fi
-}
-
 initref() {
     REFCMDINIT=()
     if [[ -n $REFINIT ]]; then
@@ -238,8 +229,8 @@ main() {
                     mrundir=$work/rep$i
                     job_singlerun $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
                 done
-                prep_gpucpu_parameters # sets NB_WHICH
-                mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu # extend 50 ps
+                # -bonded cpu is needed because of current patch's restriction
+                mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK -bonded cpu # extend 50 ps
                 (( STEPCOUNT = p - NINITIALTUNE )) || true
                 if (( STEPCOUNT < 1 )); then
                     (( STEPCOUNT = 1 ))
@@ -352,7 +343,8 @@ main() {
                 reps+=$mrundir
                 job_singlerun $GMX convert-tpr -s $mrundir/prodrun_ph$((PHASE-1)) -o $mrundir/prodrun_ph$PHASE -extend $SIMLENGTH
             done
-            mdrun_find_possible_np $NREP -deffnm prodrun -s prodrun_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -rdd $DOMAIN_SHRINK $NB_WHICH -bonded cpu
+            # -bonded cpu is needed because of current patch's restriction
+            mdrun_find_possible_np $NREP -deffnm prodrun -s prodrun_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -rdd $DOMAIN_SHRINK -bonded cpu
 
             mkdir $ID/checkpoint_$stateno || true
             for d in $reps; do
