@@ -54,7 +54,7 @@ We are currently using [FASPR](https://github.com/tommyhuangthu/FASPR) to prepar
 ````sh
 git clone https://github.com/tommyhuangthu/FASPR.git
 cd FASPR
-g++ --ffast-math -O3 -o FASPR src/*.cpp
+g++ -ffast-math -O3 -o FASPR src/*.cpp
 ````
 
 If you successfully compiled `FASPR`, you should be able to run FASPR as a command:
@@ -96,8 +96,8 @@ python3 -c "import mdtraj"   # checks whether it works correctly
 To run `feprest` pipeline you need to compile function-enhanced version of GROMACS. Currently we are only supporting GROMACS 2020.
 
 ```sh
-tar xf gromacs-2020.x.tar.gz
-cd gromacs-2020.x
+tar xf gromacs-2020.7.tar.gz
+cd gromacs-2020.7
 patch -p1 < /path/to/fepsuite/feprest/gmx_patch/gromacs-2020-hrex.patch
 mkdir build; cd build
 cmake -DCMAKE_INSTALL_PREFIX=$HOME/opt/gromacs-2020-hrex -DGMX_MPI=on ..
