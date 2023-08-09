@@ -17,7 +17,8 @@ job_prelude_after_gmx() {
 job_init_queue_stat() {
     # Load "live" job id list.
     # If we use "dead" ID number in -W depend=afterok:(ID), the simulation silently fails. 
-    typeset -a LIVE_ID_LIST
+    # Live ID list should be global because we want to use this throughout the process
+    typeset -ag LIVE_ID_LIST
     LIVE_ID_LIST=($(qstat | cut -d' ' -f1 | tail -n +3))
 }
 
@@ -75,6 +76,8 @@ job_submit() {
         jid=$(controller_get_jobid $d)
         # -W depend=afterok:(ID) only accepts live ID in the jobsystem. Few days after the job completion the ID is invalidated.
         # Note in the pathological case, the ID may turn dead while running this script, but we can't do anything (if anyone knows the way please teach me!)
+        # Expansion I: index of last occurence (0 not found)
+        # Expansion e: exact match
         if (( $LIVE_ID_LIST[(Ie)$jid] )); then
             deps+=$jid
         fi
