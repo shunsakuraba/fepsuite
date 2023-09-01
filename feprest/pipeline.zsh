@@ -5,7 +5,7 @@ local stateno
 reqstate=$1
 stateno=$2
 if [[ -z $stateno ]]; then
-    echo "This file should be called via controller.zsh" 2>&1
+    echo "This file should be called via controller.zsh" 1>&2
     exit 1
 fi
 shift
@@ -284,6 +284,7 @@ main() {
                     echo "nstxout=0\nnstxtcout=0\nnstvout=0\nnstdhdl=0"
                 } > $ID/runmdps/eval$i.mdp
                 job_singlerun $GMX grompp -f $ID/runmdps/eval$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/eval -po $mrundir/eval.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                [[ -e $mrundir/deltae.xvg ]] && mv $mrundir/deltae.xvg $mrundir/deltae.xvg.bak
             done
             mdrun_find_possible_np $NREP -deffnm prodrun -multidir $reps -rdd $DOMAIN_SHRINK
             mkdir $ID/checkpoint_7 || true
