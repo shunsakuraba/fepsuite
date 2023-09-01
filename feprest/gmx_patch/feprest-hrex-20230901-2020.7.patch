@@ -1,3 +1,15 @@
+diff --git a/src/gromacs/awh/biasparams.cpp b/src/gromacs/awh/biasparams.cpp
+index 6f9b0d387d..165b43fb8b 100644
+--- a/src/gromacs/awh/biasparams.cpp
++++ b/src/gromacs/awh/biasparams.cpp
+@@ -49,6 +49,7 @@
+ #include <cmath>
+ 
+ #include <algorithm>
++#include <limits>
+ 
+ #include "gromacs/math/functions.h"
+ #include "gromacs/mdtypes/awh_params.h"
 diff --git a/src/gromacs/fileio/checkpoint.cpp b/src/gromacs/fileio/checkpoint.cpp
 index 9c6cfe4213..6dc9a5e35d 100644
 --- a/src/gromacs/fileio/checkpoint.cpp
@@ -165,7 +177,7 @@ index 1346c6218e..59c3b9b59d 100644
  
  #endif /* GMX_GPU_UTILS_CUDA_KERNEL_UTILS_CUH */
 diff --git a/src/gromacs/listed_forces/bonded.cpp b/src/gromacs/listed_forces/bonded.cpp
-index 6b6ad952ca..47d603f592 100644
+index 6b6ad952ca..68a0b9563b 100644
 --- a/src/gromacs/listed_forces/bonded.cpp
 +++ b/src/gromacs/listed_forces/bonded.cpp
 @@ -3071,7 +3071,7 @@ real cmap_dihs(int                   nbonds,
@@ -213,78 +225,85 @@ index 6b6ad952ca..47d603f592 100644
 -        ty12[1] = cmapd[pos2 * 4 + 3];
 -        ty12[2] = cmapd[pos3 * 4 + 3];
 -        ty12[3] = cmapd[pos4 * 4 + 3];
--
--        /* Switch to degrees */
--        dx    = 360.0 / cmap_grid->grid_spacing;
--        xphi1 = xphi1 * RAD2DEG;
--        xphi2 = xphi2 * RAD2DEG;
--
++        // store dvdl for one bond in a separate variable to prevent underflow
++        real dvdlambda_onebond = 0.;
+ 
+         /* Switch to degrees */
+         dx    = 360.0 / cmap_grid->grid_spacing;
+         xphi1 = xphi1 * RAD2DEG;
+         xphi2 = xphi2 * RAD2DEG;
++        tt = (xphi1 - iphi1 * dx) / dx;
++        tu = (xphi2 - iphi2 * dx) / dx;
+ 
 -        for (i = 0; i < 4; i++) /* 16 */
--        {
++        // for state A and B
++        for(int state = 0; state < 2; state++)
+         {
 -            tx[i]      = ty[i];
 -            tx[i + 4]  = ty1[i] * dx;
 -            tx[i + 8]  = ty2[i] * dx;
 -            tx[i + 12] = ty12[i] * dx * dx;
 -        }
--
--        real tc[16] = { 0 };
--        for (int idx = 0; idx < 16; idx++) /* 1056 */
-+        // store dvdl for one bond in a separate variable to prevent underflow
-+        real dvdlambda_onebond = 0.;
-+        // for state A and B
-+        for(int state = 0; state < 2; state++)
-         {
--            for (int k = 0; k < 16; k++)
 +            real lambda_multiplier;
 +            if(state == 0)
-             {
--                tc[idx] += cmap_coeff_matrix[k * 16 + idx] * tx[k];
++            {
 +                lambda_multiplier = 1.0 - lambda;
 +            }
 +            else
 +            {
 +                lambda_multiplier = lambda;
-             }
--        }
--
--        tt = (xphi1 - iphi1 * dx) / dx;
--        tu = (xphi2 - iphi2 * dx) / dx;
++            }
  
--        e   = 0;
--        df1 = 0;
--        df2 = 0;
+-        real tc[16] = { 0 };
+-        for (int idx = 0; idx < 16; idx++) /* 1056 */
+-        {
+-            for (int k = 0; k < 16; k++)
 +            // The latter conditions is necessary to correctly calculate dvdl
 +            if(lambda_multiplier == 0. && cmapA == cmapB)
-+            {
+             {
+-                tc[idx] += cmap_coeff_matrix[k * 16 + idx] * tx[k];
 +                continue;
-+            }
+             }
+-        }
 +            const real* cmapd = (state == 0 ? cmapdA : cmapdB);
-+
+ 
+-        tt = (xphi1 - iphi1 * dx) / dx;
+-        tu = (xphi2 - iphi2 * dx) / dx;
 +            ty[0] = cmapd[pos1 * 4];
 +            ty[1] = cmapd[pos2 * 4];
 +            ty[2] = cmapd[pos3 * 4];
 +            ty[3] = cmapd[pos4 * 4];
-+
+ 
+-        e   = 0;
+-        df1 = 0;
+-        df2 = 0;
 +            ty1[0] = cmapd[pos1 * 4 + 1];
 +            ty1[1] = cmapd[pos2 * 4 + 1];
 +            ty1[2] = cmapd[pos3 * 4 + 1];
 +            ty1[3] = cmapd[pos4 * 4 + 1];
-+
+ 
+-        for (i = 3; i >= 0; i--)
+-        {
+-            l1 = loop_index[i][3];
+-            l2 = loop_index[i][2];
+-            l3 = loop_index[i][1];
 +            ty2[0] = cmapd[pos1 * 4 + 2];
 +            ty2[1] = cmapd[pos2 * 4 + 2];
 +            ty2[2] = cmapd[pos3 * 4 + 2];
 +            ty2[3] = cmapd[pos4 * 4 + 2];
-+
+ 
+-            e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
+-            df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
+-            df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
+-        }
 +            ty12[0] = cmapd[pos1 * 4 + 3];
 +            ty12[1] = cmapd[pos2 * 4 + 3];
 +            ty12[2] = cmapd[pos3 * 4 + 3];
 +            ty12[3] = cmapd[pos4 * 4 + 3];
-+
-+            /* Switch to degrees */
-+            dx    = 360.0 / cmap_grid->grid_spacing;
-+            xphi1 = xphi1 * RAD2DEG;
-+            xphi2 = xphi2 * RAD2DEG;
-+
+ 
+-        fac = RAD2DEG / dx;
+-        df1 = df1 * fac;
+-        df2 = df2 * fac;
 +            for (i = 0; i < 4; i++) /* 16 */
 +            {
 +                tx[i]      = ty[i];
@@ -293,11 +312,8 @@ index 6b6ad952ca..47d603f592 100644
 +                tx[i + 12] = ty12[i] * dx * dx;
 +            }
  
--        for (i = 3; i >= 0; i--)
--        {
--            l1 = loop_index[i][3];
--            l2 = loop_index[i][2];
--            l3 = loop_index[i][1];
+-        /* CMAP energy */
+-        vtot += e;
 +            real tc[16] = { 0 };
 +            for (int idx = 0; idx < 16; idx++) /* 1056 */
 +            {
@@ -307,28 +323,6 @@ index 6b6ad952ca..47d603f592 100644
 +                }
 +            }
  
--            e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
--            df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
--            df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
--        }
-+            tt = (xphi1 - iphi1 * dx) / dx;
-+            tu = (xphi2 - iphi2 * dx) / dx;
- 
--        fac = RAD2DEG / dx;
--        df1 = df1 * fac;
--        df2 = df2 * fac;
-+            e   = 0;
-+            df1 = 0;
-+            df2 = 0;
- 
--        /* CMAP energy */
--        vtot += e;
-+            for (i = 3; i >= 0; i--)
-+            {
-+                l1 = loop_index[i][3];
-+                l2 = loop_index[i][2];
-+                l3 = loop_index[i][1];
- 
 -        /* Do forces - first torsion */
 -        fg1  = iprod(r1_ij, r1_kj);
 -        hg1  = iprod(r1_kl, r1_kj);
@@ -336,10 +330,9 @@ index 6b6ad952ca..47d603f592 100644
 -        hgb1 = hg1 * rb2r1 * rgr1;
 -        gaa1 = -ra2r1 * rg1;
 -        gbb1 = rb2r1 * rg1;
-+                e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
-+                df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
-+                df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
-+            }
++            e   = 0;
++            df1 = 0;
++            df2 = 0;
  
 -        for (i = 0; i < DIM; i++)
 -        {
@@ -361,9 +354,11 @@ index 6b6ad952ca..47d603f592 100644
 -            f[a1k][i] = f[a1k][i] + f1_k[i]; /* h1[i] + g1[i] */
 -            f[a1l][i] = f[a1l][i] + f1_l[i]; /* h1[i] */
 -        }
-+            fac = RAD2DEG / dx * lambda_multiplier;
-+            df1 = df1 * fac;
-+            df2 = df2 * fac;
++            for (i = 3; i >= 0; i--)
++            {
++                l1 = loop_index[i][3];
++                l2 = loop_index[i][2];
++                l3 = loop_index[i][1];
  
 -        /* Do forces - second torsion */
 -        fg2  = iprod(r2_ij, r2_kj);
@@ -372,9 +367,10 @@ index 6b6ad952ca..47d603f592 100644
 -        hgb2 = hg2 * rb2r2 * rgr2;
 -        gaa2 = -ra2r2 * rg2;
 -        gbb2 = rb2r2 * rg2;
-+            /* CMAP energy */
-+            vtot += lambda_multiplier * e;
-+            dvdlambda_onebond += (state * 2 - 1) * e;
++                e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
++                df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
++                df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
++            }
  
 -        for (i = 0; i < DIM; i++)
 -        {
@@ -396,6 +392,18 @@ index 6b6ad952ca..47d603f592 100644
 -            f[a2k][i] = f[a2k][i] + f2_k[i]; /* h2[i] + g2[i] */
 -            f[a2l][i] = f[a2l][i] + f2_l[i]; /* - h2[i] */
 -        }
++            fac = RAD2DEG / dx * lambda_multiplier;
++            df1 = df1 * fac;
++            df2 = df2 * fac;
+ 
+-        /* Shift forces */
+-        if (fshift != nullptr)
+-        {
+-            if (g)
++            /* CMAP energy */
++            vtot += lambda_multiplier * e;
++            dvdlambda_onebond += (state * 2 - 1) * e;
++
 +            /* Do forces - first torsion */
 +            fg1  = iprod(r1_ij, r1_kj);
 +            hg1  = iprod(r1_kl, r1_kj);
@@ -403,11 +411,7 @@ index 6b6ad952ca..47d603f592 100644
 +            hgb1 = hg1 * rb2r1 * rgr1;
 +            gaa1 = -ra2r1 * rg1;
 +            gbb1 = rb2r1 * rg1;
- 
--        /* Shift forces */
--        if (fshift != nullptr)
--        {
--            if (g)
++
 +            for (i = 0; i < DIM; i++)
              {
 -                copy_ivec(SHIFT_IVEC(g, a1j), jt1);
@@ -841,7 +845,7 @@ index 796e479490..86b76b7488 100644
          { "-imdwait",
            FALSE,
 diff --git a/src/gromacs/mdrun/md.cpp b/src/gromacs/mdrun/md.cpp
-index 7df4a68b21..7835e307f9 100644
+index 7df4a68b21..ce3cfe6336 100644
 --- a/src/gromacs/mdrun/md.cpp
 +++ b/src/gromacs/mdrun/md.cpp
 @@ -55,6 +55,7 @@
@@ -852,15 +856,16 @@ index 7df4a68b21..7835e307f9 100644
  #include "gromacs/domdec/domdec.h"
  #include "gromacs/domdec/domdec_network.h"
  #include "gromacs/domdec/domdec_struct.h"
-@@ -64,6 +65,7 @@
+@@ -64,6 +65,8 @@
  #include "gromacs/ewald/pme.h"
  #include "gromacs/ewald/pme_load_balancing.h"
  #include "gromacs/fileio/trxio.h"
 +#include "gromacs/fileio/xvgr.h"
++#include "gromacs/fileio/gmxfio.h"
  #include "gromacs/gmxlib/network.h"
  #include "gromacs/gmxlib/nrnb.h"
  #include "gromacs/gpu_utils/gpu_utils.h"
-@@ -147,6 +149,107 @@
+@@ -147,6 +150,107 @@
  
  using gmx::SimulationSignaller;
  
@@ -968,7 +973,7 @@ index 7df4a68b21..7835e307f9 100644
  void gmx::LegacySimulator::do_md()
  {
      // TODO Historically, the EM and MD "integrators" used different
-@@ -189,6 +292,23 @@ void gmx::LegacySimulator::do_md()
+@@ -189,6 +293,23 @@ void gmx::LegacySimulator::do_md()
      t_extmass MassQ;
      char      sbuf[STEPSTRSIZE], sbuf2[STEPSTRSIZE];
  
@@ -992,7 +997,7 @@ index 7df4a68b21..7835e307f9 100644
      /* PME load balancing data for GPU kernels */
      gmx_bool bPMETune         = FALSE;
      gmx_bool bPMETunePrinting = FALSE;
-@@ -250,11 +370,32 @@ void gmx::LegacySimulator::do_md()
+@@ -250,11 +371,52 @@ void gmx::LegacySimulator::do_md()
                    "Either specify the -ei option to mdrun, or do not use this checkpoint file.");
      }
  
@@ -1003,12 +1008,32 @@ index 7df4a68b21..7835e307f9 100644
 +            gmx_fatal(FARGS,
 +                      "If -othersim is set, -othersiminterval or -hrex must also be set.");
 +        }
-+        if(MASTER(cr)) {
-+            otherSimXvgFile = xvgropen(opt2fn_null("-othersim", nfile, fnm),
-+                "Potential energy",
-+                "Time (ps)",
-+                "List of (state no. and potential value), state no. indicates evaluation state (similar to dhdl.xvg)",
-+                oenv);
++        if(MASTER(cr))
++        {
++            t_fileio *xvgfio = nullptr;
++            if (startingBehavior == StartingBehavior::RestartWithAppending)
++            {
++                xvgfio = gmx_fio_open(opt2fn("-othersim", nfile, fnm), "a+");
++            }
++            else
++            {
++                // We can't use xvgropen here. xvgropen uses "w" mode but we need to use "w+" to enable checkpointing
++                xvgfio = gmx_fio_open(opt2fn("-othersim", nfile, fnm), "w+");
++            }
++
++            // We will only use FILE* later and fio will be kept in the global list
++            otherSimXvgFile = gmx_fio_getfp(xvgfio);
++
++            // Since -othersim may only be set when restarting, we add headers by telling the file size
++            if(gmx_fio_ftell(xvgfio) == gmx_off_t(0)) {
++                xvgr_header(otherSimXvgFile,
++                    "Potential energy",
++                    "Time (ps)",
++                    "List of (state no. and potential value), state no. indicates evaluation state (similar to dhdl.xvg)",
++                    exvggtXNY,
++                    oenv);
++            }
++
 +        }
 +    }
 +
@@ -1025,7 +1050,7 @@ index 7df4a68b21..7835e307f9 100644
      bool simulationsShareState = false;
      int  nstSignalComm         = nstglobalcomm;
      {
-@@ -309,7 +450,7 @@ void gmx::LegacySimulator::do_md()
+@@ -309,7 +471,7 @@ void gmx::LegacySimulator::do_md()
      // Local state only becomes valid now.
      std::unique_ptr<t_state> stateInstance;
      t_state*                 state;
@@ -1034,7 +1059,7 @@ index 7df4a68b21..7835e307f9 100644
  
      auto mdatoms = mdAtoms->mdatoms();
  
-@@ -445,14 +586,27 @@ void gmx::LegacySimulator::do_md()
+@@ -445,14 +607,27 @@ void gmx::LegacySimulator::do_md()
                                  startingBehavior != StartingBehavior::NewSimulation,
                                  shellfc != nullptr, opt2fn("-awh", nfile, fnm), pull_work);
  
@@ -1049,11 +1074,11 @@ index 7df4a68b21..7835e307f9 100644
 +            bHrex = is_hrex_enabled(repl_ex);
 +        }
 +
-+    }
+     }
 +    gmx_bcast(sizeof(bHrex), &bHrex, cr);
 +    if(ms) {
 +        evaluateOtherSimBuffer.resize(evaluateOtherSimBufferChunkSize * ms->nsim);
-     }
++    }
 +
      /* PME tuning is only supported in the Verlet scheme, with PME for
 -     * Coulomb. It is not supported with only LJ PME. */
@@ -1066,7 +1091,18 @@ index 7df4a68b21..7835e307f9 100644
  
      pme_load_balancing_t* pme_loadbal = nullptr;
      if (bPMETune)
-@@ -774,6 +928,7 @@ void gmx::LegacySimulator::do_md()
+@@ -513,6 +688,10 @@ void gmx::LegacySimulator::do_md()
+         {
+             nstfep = gmx_greatest_common_divisor(replExParams.exchangeInterval, nstfep);
+         }
++        if (evaluateOtherSimInterval > 0)
++        {
++            nstfep = gmx_greatest_common_divisor(evaluateOtherSimInterval, nstfep);
++        }
+     }
+ 
+     /* Be REALLY careful about what flags you set here. You CANNOT assume
+@@ -774,6 +953,7 @@ void gmx::LegacySimulator::do_md()
  
          bDoReplEx = (useReplicaExchange && (step > 0) && !bLastStep
                       && do_per_step(step, replExParams.exchangeInterval));
@@ -1074,7 +1110,7 @@ index 7df4a68b21..7835e307f9 100644
  
          if (doSimulatedAnnealing)
          {
-@@ -1221,7 +1376,7 @@ void gmx::LegacySimulator::do_md()
+@@ -1221,7 +1401,7 @@ void gmx::LegacySimulator::do_md()
          else
          {
              update_tcouple(step, ir, state, ekind, &MassQ, mdatoms);
@@ -1083,7 +1119,7 @@ index 7df4a68b21..7835e307f9 100644
          }
  
          if (EI_VV(ir->eI))
-@@ -1584,11 +1739,184 @@ void gmx::LegacySimulator::do_md()
+@@ -1584,11 +1764,184 @@ void gmx::LegacySimulator::do_md()
              }
          }
  
@@ -1269,7 +1305,7 @@ index 7df4a68b21..7835e307f9 100644
          }
  
          if ((bExchanged || bNeedRepartition) && DOMAINDECOMP(cr))
-@@ -1652,6 +1980,10 @@ void gmx::LegacySimulator::do_md()
+@@ -1652,6 +2005,10 @@ void gmx::LegacySimulator::do_md()
       * before stopping the time measurements. */
      mdoutf_tng_close(outf);
  
@@ -1281,7 +1317,7 @@ index 7df4a68b21..7835e307f9 100644
      walltime_accounting_end_time(walltime_accounting);
  
 diff --git a/src/gromacs/mdrun/replicaexchange.cpp b/src/gromacs/mdrun/replicaexchange.cpp
-index 9ff4b3817d..58c3122525 100644
+index 9ff4b3817d..9fad2093c1 100644
 --- a/src/gromacs/mdrun/replicaexchange.cpp
 +++ b/src/gromacs/mdrun/replicaexchange.cpp
 @@ -50,7 +50,8 @@
@@ -1352,7 +1388,7 @@ index 9ff4b3817d..58c3122525 100644
 +    {
 +        ret.push_back(i);
 +    }
-+    return std::move(ret);
++    return ret;
 +}
 +
 +static
@@ -2121,6 +2157,18 @@ index a54bff29bb..62c123bf31 100644
      matrix                   pres_prev;      //!< Pressure of the previous step for pcoupl
      matrix                   svir_prev;      //!< Shake virial for previous step for pcoupl
      matrix                   fvir_prev;      //!< Force virial of the previous step for pcoupl
+diff --git a/src/gromacs/modularsimulator/modularsimulator.h b/src/gromacs/modularsimulator/modularsimulator.h
+index 5c51e1cc60..3ebbe594dc 100644
+--- a/src/gromacs/modularsimulator/modularsimulator.h
++++ b/src/gromacs/modularsimulator/modularsimulator.h
+@@ -42,6 +42,7 @@
+ #define GROMACS_MODULARSIMULATOR_MODULARSIMULATOR_H
+ 
+ #include <queue>
++#include <limits>
+ 
+ #include "gromacs/mdlib/md_support.h"
+ #include "gromacs/mdlib/resethandler.h"
 diff --git a/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp b/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp
 index 7c4e259d81..1ba1373c97 100644
 --- a/src/gromacs/modularsimulator/parrinellorahmanbarostat.cpp
