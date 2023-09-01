@@ -18,12 +18,15 @@ job_set_preferred_resource() {
     HW_CPN=9999
     GPN=9999
     HW_GPN=9999
+
+    # if you use GPU.
+    # GPP=1
 }
 
 job_submit() {
     # Export variables
     OMP_NUM_THREADS=$TPP
-    local exports=(PROCS OMP_NUM_THREADS PPN GPN ID STEPNO)
+    local exports=(PROCS OMP_NUM_THREADS PPN GPP ID STEPNO)
     for e in $exports; do
         export $e
     done
