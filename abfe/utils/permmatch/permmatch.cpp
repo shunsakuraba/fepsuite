@@ -220,6 +220,7 @@ int main(int argc, char* argv[])
   p.add<string>("input", 'f', "Input PDB", true);
   p.add<string>("output", 'o', "Output PDB", true);
   p.add<string>("debug", 0, "Debug output (dot file)", false);
+  p.add("gromacs-old-name", 0, "Special handling for 4-letter atom name line so that old GROMACS can read");
   p.add("reorder-to-reference", 0, "Reorder to refernce structure (input and reference must have same number of atoms");
 
   {
@@ -266,7 +267,7 @@ int main(int argc, char* argv[])
           << setw(5) << std::right << atomcount++
           << " ";
     const string& atom = refpdb.get_atomnames()[ref];
-    if(atom.length() == 4) {
+    if(atom.length() == 4 && p.exist("gromacs-old-name")) {
       if(isdigit(atom[3])) {
         crdfs << atom.substr(3, 1) << setw(3) << std::left
               << atom.substr(0, 3);
@@ -274,9 +275,8 @@ int main(int argc, char* argv[])
         crdfs << atom;
       }
     }else{
-      crdfs << " "
-            << setw(3) << std::left
-            << atom.substr(0,3);
+      crdfs << setw(4) << std::left
+            << atom.substr(0,4);
     }
     const string& resname = refpdb.get_residuenames()[ref];
     int resid = refpdb.get_resids()[ref];
