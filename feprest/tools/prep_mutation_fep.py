@@ -101,8 +101,7 @@ def parse_pdb(pdb) -> PDBInfoSummary:
                 raise RuntimeError(f"Duplicated Chain-resid combination at {chain_id}-{resid}")
             reschainmap[resid][chain_id] = a
             order.append((chain_id, resid))
-        return PDBInfoSummary(seq=seq, order=order, res_chain_dic=reschainmap) # returns at the first model
-    raise RuntimeError("PDB ended before the first model appears")
+    return PDBInfoSummary(seq=seq, order=order, res_chain_dic=reschainmap) # returns at the first model
 
 def update_mutinfo(mutations: Sequence[Mutation], basepdbinfo: PDBInfoSummary) -> List[Mutation]:
     ret_mutations = []
@@ -276,9 +275,9 @@ class DefaultProteinMutationGenerator:
             mutto = m.after_res
             totcharge -= charge(mutfrom)
             totcharge += charge(mutto)
-            if mutto in "PFYW" or mutfrom in "PFYW":
+            if mutto in "PFYW" or mutfrom in list("PFYW"):
                 difficult = True
-                if mutto in "FY" and mutfrom in "FY":
+                if mutto in "FY" and mutfrom in list("FY"):
                     difficult = False
         return (difficult, totcharge != 0)
 
@@ -323,7 +322,7 @@ class DefaultProteinMutationGenerator:
         genion_pipe = subprocess.Popen(cmds, stdin=subprocess.PIPE)
         genion_pipe.communicate(bytes("SOL\n", "utf-8"))
 
-    def generate(self, muts:Union[str, HashableMutations], muts_name: Optional[str], base_muts: Union[str, HashableMutations] = "", base_name: Optional[str] = None, base_mut_separator: str = "_") -> str:
+    def generate(self, muts:Union[str, HashableMutations], muts_name: Optional[str], base_muts: Union[str, HashableMutations] = "", base_name: Optional[str] = None, base_mut_separator: str = "_") -> Tuple[str, List[str]]:
         #pdbseq, pdborder, reschainmap = parse_pdb(basestr)
         basepdbinfo = parse_pdb(self.pdb)
 
@@ -400,7 +399,6 @@ class DefaultProteinMutationGenerator:
 class ArgumentDefaultsHelpFormatterWithRawFormatter(argparse.ArgumentDefaultsHelpFormatter):
     def _fill_text(self, text, _width, indent):
         return ''.join(indent + line for line in text.splitlines(keepends=True))
-
 
 def argparse_options():
     parser = argparse.ArgumentParser(description="""Automatic mutation introduction and calculation preparation
