@@ -21,15 +21,30 @@ You need to implement 8 shell functions. Open template.zsh and you can find more
 
 `job_init_queue_stat()`: Probably you should do nothing here.
 
-`job_set_preferred_resource()`: This function typically just sets `CPN` (preferred core per node), `GPN` (GPU per node), `HW_CPN` (REAL core per node, typically =`CPN`), and `HW_GPN` (REAL GPU per node). `GPN` value may be greater than `HW_GPN`; e.g., even if your machine may have only 2 GPUs, you may want to run 4 GPU-using processes for a better *throughput*. You can also change the resource limitation based on requested resources - this is useful when e.g. the supercomputer have a dedicated smaller resource queue (e.g. "shared node").
+`job_set_preferred_resource()`: This function typically just sets `CPN` (preferred core per node), `GPN` (GPU per node), `HW_CPN` (REAL core per node, typically =`CPN`), and `HW_GPN` (REAL GPU per node). `GPN` value may be greater than `HW_GPN`; e.g., even if your machine may have only 2 GPUs, you may want to run 4 or 8 GPU-using processes for a better *throughput*. You can also change the resource limitation based on requested resources - this is useful when e.g. the supercomputer have a dedicated smaller resource queue (e.g. "shared node").
 
 `job_submit()`: This function submits jobs based on requested resources. You need to consider four things: (1) export necessary environment variables to the job file, (2) add dependency condition to job (or wait until the job finishes), (3) write proper resource requirement to tell job system, and (4) return job ID which will be used in the future job submission as "dependency" info.
 
 `job_mpirun()`: Run MPI with the number of ranks with the first argument (`$1`), number of threads `$OMP_NUM_THREADS`, and with commands specified in `$@` (you need to remove `$1` by `shift` command first). If your MPI caller can control thread pinning, use `$PPN` as processes per node.
 
-`job_singlerun()`: Run program specified in arguments; this is typically just running `$@`, but some supercomputers allow you to only run programs via specific command (`srun -n 1` , `aprun -n 1`, ...)
+`job_singlerun()`: Run program specified in arguments; this is typically just running `$@`, but some supercomputers allow you to only run programs via specific commands (`srun -n 1` , `aprun -n 1`, ...)
 
 `job_get_mode()`: This script is called in two ways - one when you submit the job, and the other when you run the batch job. You must return whether it's inside job or not (e.g. by checking environment variables exists)
+
+# Concepts
+
+In these submission scripts, resources are abstracted so as to follow the terminology.
+
+<dl>
+  <dt>Cores</dt>
+  <dd>Typically refers to the number of physical CPU cores. Because using the same core by two different CPU tasks significantly slows down the calculation (and hyper-threading is rarely useful in this field), number of cores in the node (also see "Nodes" below) is used as the upper limit of the number of threads.</dd>
+  <dt>Processes</dt>
+  <dd>The number of MPI processes. Processes are decided by two factors: number of processes to run each simulation (e.g. `*_PARA=` in abfe and `PARA=` in feprest), and number of simulations simultaneously run by the replica exchange. </dd>
+  <dt>Threads</dt>
+  <dd>The number of CPU threads per each process. In pure CPU run it is recommended to be 1. In GPU run it is recommended to be around 2-8.</dd>
+  <dt>Nodes</dt>
+  <dd>The "node" is a set of resource that is *not* splittable in your job system. Cores less than one node are round up so that it is the multiple of `CPN`. Based on CPN/GPN and required MPI processes, the script adjusts the *number of nodes* upon the job submission. Calculated number of nodes are represented as `JOB_NODES`. Because some supercomputer systems only allow us to set the number of processes but /not number of nodes/, the script can use `JOB_PROC` variable, which is number of process calculated from number of nodes upon submission.</dd>
+</dl>
 
 # About bundled scripts
 

@@ -1,6 +1,9 @@
-version 1.0-beta4 (TBD)
+version 1.0-beta4 (05 Oct 2023)
 * Added new rlist determination scheme for FEP-ABFE
     * Uses the high-T simulation of the ligand in vacuo at stage3
     * Determine the water thickness size based on the rlist
+* Added RUN_TPR_PARALLEL for FEP/REST
+    * RUN_TPR_PARALLEL=yes enables parallel setup of grompp.
+    * This is useful in completing grompp quickly.
 
 

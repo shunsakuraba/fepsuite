@@ -136,7 +136,7 @@ Then, feed it to preparation script:
 python3 /path/to/fepsuite/feprest/tools/prep_mutation_fep.py --faspr /path/to/FASPR/FASPR --pdb 2LZM_nowat.pdb --mutation L99A --ff amber14sb_OL15_fs1
 ````
 
-If the program finishes without problem, you should find four directories: `wt`, `L99A`, `wt_L99A` and `wt_L99A_ref`.[^2] The first one `wt` corresponds to wild-type structure (without mutation), the second one `L99A` corresponds to Leu99Ala mutation. The third one `wt_L99A` is the "mixed" structure of wild-type and Leu99Ala mutant. If you visualize `wt_L99A/fepbase.pdb`, you will see at residue 99 that Leu sidechain and Ala hydrogens are overlapping. 
+If the program finishes without a problem, you should find four directories: `wt`, `L99A`, `wt_L99A` and `wt_L99A_ref`.[^2] The first one `wt` corresponds to wild-type structure (without mutation), the second one `L99A` corresponds to Leu99Ala mutation. The third one `wt_L99A` is the "mixed" structure of wild-type and Leu99Ala mutant. If you visualize `wt_L99A/fepbase.pdb`, you will see at residue 99 that Leu sidechain and Ala hydrogens are overlapping.
 
 Likewise, if you look into `fepbase.top`, you will see residue 99 (originally Leu) in `[ atoms ]` section is mixed with Ala residue:
 ````
@@ -232,3 +232,8 @@ If everything works fine, output should be generated at `wt_L99A/bar1.log` and `
 
 ## Advanced guide: matching atoms manually
 
+
+
+## Limitations
+
+Current script does not work with MacOS (`gsed` instead of `sed` is needed)

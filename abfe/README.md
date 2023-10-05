@@ -73,6 +73,8 @@ Currently, charged ligands are unsupported (it is top priority in TODO list and 
 
 We assume the ratio of symmetry number of the molecule to be 1. This will not be a big problem unless you are running simulations for molecules with extremely high symmetry, e.g. benzene. In case you are predicting delta-G of such molecules, you need to add log-symmetry terms. If anyone know a good algorithm for getting symmetry number please let me know.
 
+Current script does not work with MacOS (`gsed` instead of `sed` is needed)
+
 # References
 Overall algorithm implemented in this pipeline is similar to:
 ````
