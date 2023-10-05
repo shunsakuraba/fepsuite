@@ -144,13 +144,25 @@ job_submit() {
         gpureq=""
     fi
 
+    # In JAEA qsub ncpus being HW_CPN means exclusive job
+    local ncpus_pbs
+    (( ncpus_pbs = JOB_PPN * TPP ))
+    # JAEA considers half node (vnode) as a unit, if job is below the threshold run on shared
+    if (( JOB_NODES > 1 )) || (( ncpus_pbs > HW_CPN / 2 ));  then
+        # if using GPU, GPU <= 2 fits vnode
+        if (( GPP == 0 )) || (( JOB_GPN > HW_GPN / 2 )) ; then
+            # in most cases it ends up here, using exclusive resource
+            (( ncpus_pbs = HW_CPN ))
+        fi
+    fi
+
     # Run actual code and get jobid
     local -a cmd
     # select: num nodes ("chunks")
     # ncpus: total cpu cores per 1 node
     # mpiprocs: mpi procs per node
     # ompthreads: threads per mpi proc
-    cmd=(qsub -q $queue -v ${(j:,:)key_vars} -N $JOB_NAME $dependency -l select=$JOB_NODES:ncpus=$((JOB_PPN*TPP)):mpiprocs=$JOB_PPN:ompthreads=$TPP$gpureq -l walltime=$timelimit $extra $BASEFILE)
+    cmd=(qsub -q $queue -v ${(j:,:)key_vars} -N $JOB_NAME $dependency -l select=$JOB_NODES:ncpus=$ncpus_pbs:mpiprocs=$JOB_PPN:ompthreads=$TPP$gpureq -l walltime=$timelimit $extra $BASEFILE)
     echo $cmd
     # PBS Pro only emits job id like "12345.s86pbs01", that's great
     JOBID=$($cmd)
