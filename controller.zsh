@@ -94,6 +94,9 @@ controller_submit() {
         unset JOB_PPN || true
         unset JOB_NODES || true
         job_set_preferred_resource
+        if [[ -n $CPU_ONLY_STAGE ]] && [[ -n $GPP ]]; then
+            GPP=0
+        fi
 
         # PROCS: Total MPI ranks (processes)
         # PPM: MPI ranks (processes) per multidir runs (for non-replica run PPM = PROCS)
