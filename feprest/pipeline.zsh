@@ -139,12 +139,6 @@ initref() {
 }
 
 main() {
-    if [[ $reqstate = run ]]; then
-        #set -e
-        #trap '{ echo "Aborting job"; set +e; exit $ERRORCODE }' ZERR
-        set -x
-    fi
-    INITTIME=$(date +%s)
     initref
 
     case $reqstate,$stateno in
@@ -392,11 +386,6 @@ main() {
             do_bar $ID $TEMP
         ;;
     esac
-    if [[ $reqstate == run ]]; then
-        echo $STEPNO >> $ID/done_step.txt
-        CURTIME=$(date +%s)
-        echo "Pipeline stage $stateno finished in $(( CURTIME - INITTIME )) sec"
-    fi
 }
 
 main

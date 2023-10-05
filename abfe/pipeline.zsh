@@ -408,9 +408,6 @@ charge_correction() {
 # ---- end of subroutines for production run
 
 main() {
-    if [[ $reqstate = run ]]; then
-        set -x
-    fi
     case $reqstate,$stateno in
         query,all)
             echo {1..12}
@@ -603,9 +600,6 @@ main() {
             exit 1
             ;;
     esac
-    if [[ $reqstate == run ]]; then
-        echo $STEPNO >> $ID/done_step.txt
-    fi
 }
 
 main

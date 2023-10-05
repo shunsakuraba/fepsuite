@@ -219,8 +219,13 @@ case $(job_get_mode) in
         fi
 
         # Run the real pipeline
+        local inittime=$(date +%s)
         setopt ERR_EXIT
+        set -x
         source $PIPELINE_SCRIPT run $STEPNO
+        echo $STEPNO >> $ID/done_step.txt
+        local curtime=$(date +%s)
+        echo "Pipeline stage $STEPNO finished in $(( curtime - inittime )) sec."
     ;;
     submit)
         ID=${ARGS[1]}
