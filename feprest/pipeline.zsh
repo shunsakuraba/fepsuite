@@ -96,6 +96,37 @@ do_bar ()
     $PYTHON3 $FEPREST_ROOT/bar_deltae.py --xvgs $ID/prodrun/rep%sim/deltae.xvg  --nsim $NREP --temp $TEMP --save-dir $ID/bar | tee $ID/bar1.log || echo "BAR failed due to bad convergence, please continue the run to get it fixed"
 }
 
+parallelizable_singlerun ()
+{
+    logfile=$1
+    shift
+
+    # Since Gromacs grompp is super slow, it may eat up bulk of this pipeline stage.
+    if [[ $RUN_TPR_PARALLEL = yes ]]; then
+        ( job_singlerun $@ >& $logfile && echo "Exit_success" >> $logfile )&
+    else
+        job_singlerun $@
+    fi
+}
+
+wait_if_needed ()
+{
+    workdir=$1
+    logfile=$2
+    errmsg=$3
+
+    if [[ $RUN_TPR_PARALLEL = yes ]]; then
+        wait
+        for i in {0..$((NREP - 1))}; do
+            mrundir=$workdir/rep$i
+            if [[ ! -e $mrundir/$logfile ]] || [[ $(tail -1 $mrundir/$logfile) != Exit_success ]]; then
+                echo $4 1>&2
+                false    # set -x fails here
+            fi
+        done
+    fi
+}
+
 initref() {
     REFCMDINIT=()
     if [[ -n $REFINIT ]]; then
@@ -222,13 +253,20 @@ main() {
                     $PYTHON3 $FEPREST_ROOT/recover-water.py -p $work/fep_$i.top -o $work/fep_tip3p_${i}_light.top --ff $FF
                     $PYTHON3 $FEPREST_ROOT/turn-heavy.py -p $work/fep_tip3p_${i}_light.top -o $work/fep_tip3p_$i.top
                     { echo "energygrps = hot"; echo "userint1 = 1" } >> $work/nvt${p}_$i.mdp 
-                    job_singlerun $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                    parallelizable_singlerun $mrundir/grompp.log $GMX grompp -f $work/nvt${p}_$i.mdp -c ${prevgro[$((i+1))]} -p $work/fep_tip3p_$i.top -o $mrundir/nvt -po $mrundir/nvt.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
                 done
+                wait_if_needed $work grompp.log "Error: failed to grompp on tuning cycle $p replica $i"
+
+                # Actually run MD in parallel
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -rdd $DOMAIN_SHRINK # extend to 100 ps
+
+
+                # Extend run to do replica exchange
                 for i in {0..$((NREP - 1))}; do
                     mrundir=$work/rep$i
-                    job_singlerun $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
+                    parallelizable_singlerun $mrundir/extend_run.log $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
                 done
+                wait_if_needed $work extend_run.log "Error: failed to run convert-tpr on tuning cycle $p replica $i" 1>&2
                 # -bonded cpu is needed because of current patch's restriction
                 mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK -bonded cpu # extend 50 ps
                 (( STEPCOUNT = p - NINITIALTUNE )) || true
@@ -258,8 +296,9 @@ main() {
                 mrundir=$work/rep$i
                 mkdir $mrundir || true
                 reps+=$mrundir
-                job_singlerun $GMX grompp -f $work/npt$i.mdp -c $ID/nvt${NTUNE}/rep$i/nvt.gro -t $ID/nvt${NTUNE}/rep$i/nvt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/npt -po $mrundir/npt.mdout -maxwarn $((BASEWARN+1)) $REFCMD
+                parallelizable_singlerun $mrundir/npt_grompp.log $GMX grompp -f $work/npt$i.mdp -c $ID/nvt${NTUNE}/rep$i/nvt.gro -t $ID/nvt${NTUNE}/rep$i/nvt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/npt -po $mrundir/npt.mdout -maxwarn $((BASEWARN+1)) $REFCMD
             done
+            wait_if_needed $work npt_grompp.log "Error: failed to grompp on final npt run"
             mdrun_find_possible_np $NREP -deffnm npt -multidir $reps -rdd $DOMAIN_SHRINK
             ;;
         query,7)
@@ -278,14 +317,11 @@ main() {
                 mkdir $mrundir || true
                 reps+=$mrundir
                 { echo "energygrps = hot"; echo "userint1 = 1" } >> $ID/runmdps/run$i.mdp
-                job_singlerun $GMX grompp -f $ID/runmdps/run$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/prodrun -po $mrundir/run.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
-                {
-                    sed -e "/nstxout/d" $ID/runmdps/run$i.mdp
-                    echo "nstxout=0\nnstxtcout=0\nnstvout=0\nnstdhdl=0"
-                } > $ID/runmdps/eval$i.mdp
-                job_singlerun $GMX grompp -f $ID/runmdps/eval$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/eval -po $mrundir/eval.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                parallelizable_singlerun $mrundir/prodrun_grompp.log $GMX grompp -f $ID/runmdps/run$i.mdp -c $ID/npt/rep$i/npt.gro -t $ID/npt/rep$i/npt.cpt -p $ID/gentops/fep_tip3p_$i.top -o $mrundir/prodrun -po $mrundir/run.mdout -maxwarn $((BASEWARN+1)) $REFCMD -n $ID/for_rest.ndx
+                # Clear deltae.xvg
                 [[ -e $mrundir/deltae.xvg ]] && mv $mrundir/deltae.xvg $mrundir/deltae.xvg.bak
             done
+            wait_if_needed $work prodrun_grompp.log "Error: failed to grompp on final production run"
             mdrun_find_possible_np $NREP -deffnm prodrun -multidir $reps -rdd $DOMAIN_SHRINK
             mkdir $ID/checkpoint_7 || true
             for d in $reps; do
@@ -342,8 +378,9 @@ main() {
                 mrundir=$work/rep$i
                 mkdir $mrundir || true
                 reps+=$mrundir
-                job_singlerun $GMX convert-tpr -s $mrundir/prodrun_ph$((PHASE-1)) -o $mrundir/prodrun_ph$PHASE -extend $SIMLENGTH
+                parallelizable_singlerun $mrundir/extend$PHASE.log $GMX convert-tpr -s $mrundir/prodrun_ph$((PHASE-1)) -o $mrundir/prodrun_ph$PHASE -extend $SIMLENGTH
             done
+            wait_if_needed $work extend$PHASE.log "Error: failed to extend on final production run"
             # -bonded cpu is needed because of current patch's restriction
             mdrun_find_possible_np $NREP -deffnm prodrun -s prodrun_ph$PHASE -cpi prodrun -cpt 60 -hrex -othersim deltae -othersiminterval $SAMPLING_INTERVAL -multidir $reps -replex $REPLICA_INTERVAL -rdd $DOMAIN_SHRINK -bonded cpu
 
