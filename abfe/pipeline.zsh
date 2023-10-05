@@ -464,7 +464,9 @@ main() {
             # Convert the final structure into PBC-fixed one
             echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.run.final.pdb -n $ID/complex.ndx -dump $LAST
             # Then calculate the rms
-            echo "Receptor\nLigand" | job_singlerun $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
+            # remake the tpr file because atoms may not have defined mass
+            job_singlerun $GMX grompp -f mdp/dummy.mdp -p $ID/topol_ionized.top -c $ID/prerun.run.final.pdb -o $ID/prerun.run.final.tpr -po $ID/prerun_dummy.mdp
+            echo "Receptor\nLigand" | job_singlerun $GMX rms -s $ID/prerun.run.final.tpr -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
             $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
             $PYTHON3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
             # Restraint for annihilation and charging
