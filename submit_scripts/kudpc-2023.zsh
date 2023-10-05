@@ -17,7 +17,7 @@ job_prelude() {
     # Tentative fix for already reported bug
     #export SLURM_CONF=/etc/slurm/sysD/slurm.conf
     #export SLURM_CONF_modshare=/etc/slurm/sysD/slurm.conf:1
-    # In KUDPC, pip3 = pip3.8, and thus default python should by 3.8
+    # In KUDPC, pip3 = pip3.8, and thus default python should be 3.8
     PYTHON3=python3.8
 }
 
