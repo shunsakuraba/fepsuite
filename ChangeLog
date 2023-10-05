@@ -1,0 +1,6 @@
+version 1.0-beta4 (TBD)
+* Added new rlist determination scheme for FEP-ABFE
+    * Uses the high-T simulation of the ligand in vacuo at stage3
+    * Determine the water thickness size based on the rlist
+
+

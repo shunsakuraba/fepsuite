@@ -49,7 +49,7 @@ mdrun_find_possible_np() {
     while true; do
         echo "Trying with NP=$NP"
         unsetopt ERR_EXIT
-        job_mpirun $NP $GMX_MPI mdrun $args $NSTLIST_CMD
+        job_mpirun $NP $GMX_MPI mdrun $args
         if [[ $? != 0 ]]; then
             # fail to run. Check log file to see whether it is domain decomposition problem
             if [[ ! -e $log_basename.log ]]; then
@@ -112,7 +112,9 @@ set_and_add_rlist ()
 {
     MDP=$1
 
-    sync $MDP
+    sync
+
+    integrator=""
 
     # set rlist, required because we decouple via couple-intramol=no, where exclusions are used within the ligand
     if (( LIGAND_DIAMETER == 0 )); then
@@ -136,8 +138,13 @@ set_and_add_rlist ()
     fi
     echo "rlist=$rlist" >> $MDP
     echo "verlet-buffer-tolerance=-1" >> $MDP
+    if [[ -n $NSTLIST ]] && \
+        ! grep -q "integrator[[:space:]]*=[[:space:]]*cg" $MDP && \
+        ! grep -q "integrator[[:space:]]*=[[:space:]]*steep" $MDP ; then
+        echo "nstlist=$NSTLIST" >> $MDP    
+    fi
     
-    sync $MDP
+    sync
 }
 
 do_run() {
@@ -168,10 +175,6 @@ do_run() {
     else
         mdp=(-f mdp/$phase.mdp)
     fi
-    nstlist_cmd=()
-    if [[ -n $NSTLIST ]] && [[ $phase != steep ]]; then
-        nstlist_cmd=(-nstlist $NSTLIST)
-    fi
     case $cont in
         cont)
             contcmd=(-t $ID/$conf.cpt)
@@ -198,7 +201,7 @@ do_run() {
     job_singlerun $GMX grompp $mdp $index -p $ID/$topol.top -c $ID/$conf.pdb $contcmd -o $ID/$outprefix.$phase.tpr -po $ID/$outprefix.$phase.out.mdp $restrcmd -maxwarn $maxwarn
     stdout=$ID/$outprefix.$phase.stdout
     stderr=$ID/$outprefix.$phase.stderr
-    mdrun_find_possible_np 1 -deffnm $ID/$outprefix.$phase -c $ID/$outprefix.$phase.pdb $nstlist_cmd > >(tee $stdout) 2> >(tee $stderr >&2)
+    mdrun_find_possible_np 1 -deffnm $ID/$outprefix.$phase -c $ID/$outprefix.$phase.pdb > >(tee $stdout) 2> >(tee $stderr >&2)
     check_rlimit $stderr
 }
 
@@ -276,15 +279,18 @@ do_product_runs() {
             fi
             cat ./mdp/run.mdp $ID/mdp_addenda/${phase}-$i.mdp | $postprocess  > $MDP
 
-            set_and_add_rlist $MDP
+            # modifying rlist is needed only for charging and (due to GROMACS internal setup) annihilation
+            case $phase in 
+                charging-complex|charging-lig|annihilation-complex|annihilation-lig)
+                set_and_add_rlist $MDP
+                ;;
+            esac
 
             if (( iprerun < nprerun )); then
-                sync $MDP
                 dt=$(grep "^\\s*dt\\s*=" $MDP | cut -d '=' -f2 | cut -d ';' -f1)
                 declare -i nsteps # fix to integer
                 (( nsteps = ANNIH_LAMBDA_OPT_LENGTH / dt ))
                 sed -i "/nsteps/c nsteps = $nsteps" $MDP # in the future thie may be sent to postprocess
-                sync $MDP
             fi
             ndx_grompp=()
             if [[ -n $ndx ]]; then
@@ -293,13 +299,10 @@ do_product_runs() {
             job_singlerun $GMX grompp -f $MDP -p $ID/$topol -c $prevcrd.pdb -t $prevcrd.cpt -o $RUNDIR/$phase$infix.tpr -po $ID/$output.$phase$infix.$i.mdp $ndx_grompp -maxwarn $maxwarn
             DIRS+=$RUNDIR
         done
-        nstlist_cmd=()
-        if [[ -n $NSTLIST ]]; then
-            nstlist_cmd=(-nstlist $NSTLIST)
-        fi
+
         stdout=$ID/$phase.stdout
         stderr=$ID/$phase.stderr
-        mdrun_find_possible_np $nrepl -multidir $DIRS -deffnm $phase$infix -c $phase$infix.pdb -replex 500 $nstlist_cmd > >(tee $stdout) 2> >(tee $stderr >&2)
+        mdrun_find_possible_np $nrepl -multidir $DIRS -deffnm $phase$infix -c $phase$infix.pdb -replex 500 > >(tee $stdout) 2> >(tee $stderr >&2)
         if (( iprerun == nprerun )); then
             check_replica_probs $ID/$phase.0/$phase.log
         fi
@@ -319,9 +322,14 @@ do_eval_run() {
     if [[ -n $ndx ]]; then
         ndx_grompp=(-n $ID/$ndx)
     fi
-    set_and_add_rlist $ID/$phase.mdp
+    case $phase in 
+        charging-complex|charging-lig|annihilation-complex|annihilation-lig|lr-*)
+        set_and_add_rlist $ID/$phase.mdp
+    ;;
+    esac
+    
     job_singlerun $GMX grompp -f $ID/$phase.mdp -p $ID/$topol -c $ID/$prev.pdb -t $ID/$prev.cpt -o $ID/$phase.tpr -po $ID/$output.$phase.mdp $ndx_grompp -maxwarn $maxwarn
-    mdrun_find_possible_np 1 -deffnm $ID/$phase -rerun $ID/$prev.xtc $nstlist_cmd
+    mdrun_find_possible_np 1 -deffnm $ID/$phase -rerun $ID/$prev.xtc
 }
 
 do_bar() {
@@ -442,7 +450,7 @@ main() {
             do_run topol_ionized prep.npt prerun run "" "" "" cont prep 0
             ;;
         query,3)
-            echo "DEPENDS=(2); PPM=1; MULTI=1; CPU_ONLY_STAGE=yes"
+            echo "DEPENDS=(2); PPM=1; MULTI=1"
             ;;
         run,3)
             # Compute RMSD of ligands for thresholding and later uses.
@@ -458,7 +466,6 @@ main() {
             # Then calculate the rms
             echo "Receptor\nLigand" | job_singlerun $GMX rms -s $ID/prerun.run.final.pdb -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.rms.fromfinal.xvg -n $ID/complex.ndx
             $PYTHON3 $ABFE_ROOT/rms_check.py --rms=$ID/prerun.rms.fromfinal.xvg --threshold=$EQ_RMSD_CUTOFF || { echo "RMS of ligands too large, aborting the calculation" 1>&2; false }
-            $PYTHON3 $ABFE_ROOT/ligand_diameter.py --traj=$ID/prerun.run.xtc --structure=$ID/prerun.run.pdb --index=$ID/complex.ndx > $ID/diameter.txt
             $PYTHON3 $ABFE_ROOT/find_restr_from_md.py --lig-sel "Ligand" --prot-sel "Receptor" --index $ID/complex.ndx --topology $ID/conf_ionized.pdb --trajectory $ID/prerun.run.recpbc.xtc --output $ID/restrinfo
             # Restraint for annihilation and charging
             $PYTHON3 $ABFE_ROOT/generate_restr.py --restrinfo $ID/restrinfo --mdp $ID/restr_pull.mdp --ndx $ID/restr_pull.ndx
@@ -479,8 +486,21 @@ main() {
             job_singlerun $GMX grompp -f mdp/run.mdp -p $ID/topol_ionized.top -c $ID/prerun.run.pdb -t $ID/prerun.run.cpt -o $ID/pp.tpr -po $ID/pp.mdp $restrcmd -maxwarn 0 -pp $ID/pp_run.top
             $PYTHON3 $ABFE_ROOT/generate_ligand_topology.py --mol $LIG_GMX --topology $ID/pp_run.top --structure $ID/prerun.run.final.pdb --index $ID/complex.ndx --output-ligand-structure $ID/ligand.pdb --output-ligand-topology $ID/ligand.top --total-charge $ID/totalcharge.txt
 
+            # run ligand-only system to determine the cutoff distance, maxwarn = 1 for PME charge
+            job_singlerun $GMX editconf -f $ID/ligand.pdb -d 3.0 -o $ID/ligand-bigbox.pdb
+            job_singlerun $GMX grompp -f mdp/ligsample.mdp -c $ID/ligand-bigbox.pdb -p $ID/ligand.top -o $ID/ligand_only.tpr -maxwarn 1
+            # run directly without do_run because I don't want to modify NSTLIST and SAVE_*
+            job_mpirun 1 $GMX_MPI mdrun -deffnm $ID/ligand_only
+            # get the diameter
+            $PYTHON3 $ABFE_ROOT/ligand_diameter.py --traj=$ID/ligand_only.xtc --structure=$ID/ligand.pdb > $ID/diameter.txt
+
             # solvate ligand-only confs
-            job_singlerun $GMX editconf -f $ID/ligand.pdb -d $WATER_THICKNESS -bt dodecahedron -o $ID/ligand-box.pdb
+            real_water_thickness=$WATER_THICKNESS
+            diameter_safe=$(grep safe $ID/diameter.txt | cut -f2 -d ' ')
+            if (( real_water_thickness < diameter_safe )); then
+                (( real_water_thickness = diameter_safe + 0.1 ))
+            fi
+            job_singlerun $GMX editconf -f $ID/ligand.pdb -d $real_water_thickness -bt dodecahedron -o $ID/ligand-box.pdb
             do_solvate $ID/ligand-box.pdb $ID/ligand.top $ID/ligand
             generate_ndx $ID/ligand-ion $ID/ligand-ion.top $ID/ligand.ndx ligand
 

@@ -1,0 +1,23 @@
+integrator = sd
+nsteps = 200000
+
+dt = 0.0005
+
+cutoff-scheme = Verlet
+pbc = xyz
+coulombtype = PME
+
+rcoulomb = 1.0
+rvdw = 1.0
+
+nstxtcout = 100
+
+dispcorr = Ener
+
+ref_t = 1200
+gen_vel = yes
+gen_temp = 50
+tau_t = 0.2
+tc_grps = System
+
+constraints = none
