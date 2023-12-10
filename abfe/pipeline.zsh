@@ -457,6 +457,7 @@ main() {
             # Then wrap the system around using -pbc mol and -ur compact. This and above line prevents "split-ligand" and "split-receptor" artifacts.
             echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.nojump.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -pbc mol -n $ID/complex.ndx -ur compact
             # Get the final simulation time. Note that prerun.run.recpbc.xtc has been chopped off initial RUN_PROD ps, so using prerun.run.xtc instead.
+            # XXX: interleaved stderr / stdout may cause a trouble, need to make this clear
             LAST=$(job_singlerun $GMX check -f $ID/prerun.run.xtc |& grep '^Time' | awk '{ print ($2-1) * $3 }')
             # Convert the final structure into PBC-fixed one
             echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.run.final.pdb -n $ID/complex.ndx -dump $LAST

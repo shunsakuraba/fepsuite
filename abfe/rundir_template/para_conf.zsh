@@ -22,7 +22,7 @@ NANNIH=12
 LIG_PARA=2
 COMPLEX_PARA=12
 
-# Threads per process. Recommended values are: 1 (CPU) or (GPU).
+# Threads per process. Recommended values are: 1 (CPU) or 2-4 (GPU).
 TPP=1
 
 # first RUN_PROD ps will be ignored as equilibration
