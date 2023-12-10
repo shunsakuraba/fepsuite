@@ -12,13 +12,13 @@ fi
 job_prelude() {
     # if module is not set, probably /etc/profile is not read (happens because zsh is non-default shell on KUDPC)
     whence module > /dev/null || source /etc/profile
-    module unload PrgEnvIntel/2022
-    module load PrgEnvGCC/2022
-    # Tentative fix for already reported bug
-    #export SLURM_CONF=/etc/slurm/sysD/slurm.conf
-    #export SLURM_CONF_modshare=/etc/slurm/sysD/slurm.conf:1
-    # In KUDPC, pip3 = pip3.8, and thus default python should be 3.8
-    PYTHON3=python3.8
+
+    # FIXME: this should depend on $SUBSYSTEM
+    module load PrgEnvNvidia/2022
+
+    # In KUDPC, default pip3 = pip3.6, and thus default python should be 3.6
+    # In the past it was 3.8 but they seem fixed it
+    PYTHON3=python3
 }
 
 job_prelude_after_gmx() {
@@ -45,6 +45,10 @@ job_set_preferred_resource() {
         ;;
         CL)
             echo "Hardware in cloud system is unknown" 1>&2
+            exit 1
+        ;;
+        *)
+            echo "Unknown \$SUBSYSTEM ($SUBSYSTEM). Must be one of D/G"
             exit 1
         ;;
     esac
@@ -75,25 +79,12 @@ job_submit() {
     fi
 
     # set queue
-    # local queue=${GROUP}${(SUBSYSTEM:l}
-    # During testing period
-    local queue
-    case $SUBSYSTEM in
-        D)
-            queue=s32d
-        ;;
-        G)
-            queue=eg
-        ;;
-        CL)
-            queue=so
-        ;;
-    esac
+    local queue="${GROUP}${SUBSYSTEM:l}"
 
     # Run actual code and get jobid
     local mem
     (( mem = 4750 * TPP ))
-    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr --rsc p=${JOB_RANK}:t=${TPP}:c=${TPP}:m=${mem}M -t $timelimit $BASEFILE)
+    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr --rsc p=${JOB_PPN}:t=${TPP}:c=${TPP}:m=${mem}M -t $timelimit $BASEFILE)
     echo $cmd
     local jobidinfo=$($cmd)
     if [[ $? != 0 ]]; then
@@ -109,13 +100,14 @@ job_submit() {
 job_mpirun() {
     local N=$1
     shift
-
-    srun -n $N --ntasks-per-node $PPN $@
+    # KUDPC Gardenia does not export envs and thus LD_LIBRARY_PATH is not shared!
+    srun --export ALL -n $N --ntasks-per-node $PPN $@
 }
 
 job_singlerun() {
     # Even the sequential run needs "srun"
-    srun -n 1 $@
+    # same above
+    srun --export ALL -n 1 $@
 }
 
 job_get_mode() {
