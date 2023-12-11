@@ -10,11 +10,21 @@ if [[ -z $SUBSYSTEM ]]; then
 fi
 
 job_prelude() {
-    # if module is not set, probably /etc/profile is not read (happens because zsh is non-default shell on KUDPC)
-    whence module > /dev/null || source /etc/profile
+    # if module is not set, probably /etc/profile is not read. This is because bashrc and zshrc behave differently and /etc/profile is not read on non-interactive zsh.
+    if ! whence module > /dev/null; then
+        source /etc/profile
 
-    # FIXME: this should depend on $SUBSYSTEM
-    module load PrgEnvNvidia/2022
+        case $SUBSYSTEM in
+            G)
+                module load slurm/2022 SysG/2022 PrgEnvNvidia/2022
+                module list
+                ;;
+            *)
+                echo "SUBSYSTEM $SUBSYSTEM not implemented yet"
+                exit 1
+                ;;
+        esac
+    fi
 
     # In KUDPC, default pip3 = pip3.6, and thus default python should be 3.6
     # In the past it was 3.8 but they seem fixed it
@@ -42,6 +52,9 @@ job_set_preferred_resource() {
             HW_GPN=4
             CPN=64
             GPN=16
+            if [[ -z $CPU_ONLY_STAGE ]]; then
+                GPP=1
+            fi
         ;;
         CL)
             echo "Hardware in cloud system is unknown" 1>&2
