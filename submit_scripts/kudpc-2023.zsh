@@ -48,10 +48,12 @@ job_set_preferred_resource() {
             GPN=0
         ;;
         G)
-            HW_CPN=64 # 2 sockets, 32 cores/socket
-            HW_GPN=4
-            CPN=64
-            GPN=16
+            # Although Gardenia has 2 sockets/node & 32 cores / socket, the resource allocation algorithm uses 1GPU & 16 core as the unit.
+            # Thus we consider "1 GPU" as 1 node.
+            HW_CPN=16
+            HW_GPN=1
+            CPN=16
+            GPN=4 # oversubscribe 4 GPUs
             if [[ -z $CPU_ONLY_STAGE ]]; then
                 GPP=1
             fi
@@ -97,7 +99,15 @@ job_submit() {
     # Run actual code and get jobid
     local mem
     (( mem = 4750 * TPP ))
-    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr --rsc p=${JOB_PPN}:t=${TPP}:c=${TPP}:m=${mem}M -t $timelimit $BASEFILE)
+    local -a rsc
+    if [[ $SUBSYSTEM = G ]] && [[ $JOB_GPU > 1 ]]; then
+        # submit based on GPU number
+        # Do not use -g because of t= issue
+        rsc=(--rsc p=$((JOB_GPU * HW_CPN / TPP)):t=${TPP}:c=${TPP}:m=${mem}M)
+    else
+        rsc=(--rsc p=${JOB_PROCS}:t=${TPP}:c=${TPP}:m=${mem}M)
+    fi
+    local cmd=(sbatch -p $queue --export=${(j:,:)key_vars} -J $JOB_NAME $depstr $rsc -t $timelimit $BASEFILE)
     echo $cmd
     local jobidinfo=$($cmd)
     if [[ $? != 0 ]]; then
@@ -113,14 +123,23 @@ job_submit() {
 job_mpirun() {
     local N=$1
     shift
+    local ntpn=$PPN
     # KUDPC Gardenia does not export envs and thus LD_LIBRARY_PATH is not shared!
-    srun --export ALL -n $N --ntasks-per-node $PPN $@
+    if [[ $SUBSYSTEM = "G" ]]; then
+        # PPN is hacked to be 1/4 node slice
+        (( ntpn = $PPN * 4 ))
+    fi
+    srun --export ALL -n $N --ntasks-per-node $ntpn $@
 }
 
 job_singlerun() {
     # Even the sequential run needs "srun"
     # same above
-    srun --export ALL -n 1 $@
+    local -a gpus
+    if [[ $SUBSYSTEM = "G" ]]; then
+        gpus=(--gpus 1)
+    fi
+    srun $gpus --export ALL -n 1 -N 1 $@
 }
 
 job_get_mode() {
