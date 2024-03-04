@@ -58,6 +58,9 @@ job_submit() {
 
     # Default time
     local timelimit="8:00:00"
+    if [[ -n $TIMELIMIT ]]; then
+        timelimit=$TIMELIMIT
+    fi
 
     # Set dependency. Instead of (logically correct) direct dependency on all previous jobs, use step execution (= step-by-step execution of stages)
     local -a depparams
