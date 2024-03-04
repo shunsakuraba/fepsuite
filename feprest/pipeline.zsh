@@ -338,24 +338,19 @@ main() {
                     REPNO=$((NREP - 1))
                     ;;
                 esac
-                ipart=1
                 ndxfile=$ID/prodrun/fepbase_$state.ndx
                 if [[ ! -e $ndxfile ]]; then
                     $PYTHON3 $FEPREST_ROOT/make_ndx_trjconv_analysis.py -i $ID/fepbase_$state.pdb -o $ndxfile
                 fi
-                while true; do
-                    (( ipart += 1 ))
-                    ipartstr=$(printf '%04d' $ipart)
-                    sourcefile=$ID/prodrun/rep$REPNO/prodrun.part$ipartstr.trr
-                    destfile=$ID/prodrun/state$state.part$ipartstr.xtc
-                    if [[ ! -e $sourcefile ]]; then
-                        break
-                    fi
-                    if [[ -e $destfile ]] && [[ $destfile -nt $sourcefile ]]; then
-                        continue
-                    fi
-                    echo "centering\noutput" | job_singlerun $GMX trjconv -s $ID/prodrun/rep$REPNO/run.tpr -f $sourcefile -o $destfile -pbc atom -ur compact -center -n $ndxfile
-                done
+                sourcefile=$ID/prodrun/rep$REPNO/prodrun.trr
+                destfile=$ID/prodrun/state$state.xtc
+                if [[ ! -e $sourcefile ]]; then
+                    break
+                fi
+                if [[ -e $destfile ]] && [[ $destfile -nt $sourcefile ]]; then
+                    continue
+                fi
+                echo "centering\noutput" | job_singlerun $GMX trjconv -s $ID/prodrun/rep$REPNO/prodrun.tpr -f $sourcefile -o $destfile -pbc atom -ur compact -center -n $ndxfile
             done
             ;;
         query,*)
