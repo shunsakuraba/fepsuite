@@ -1,10 +1,11 @@
 import sys
+import os
 
 # FIXME: I know this script's quality is abysmal and needs updating
 
 [_, topfrom, pdbfrom, targetresid, topto, pdbto] = sys.argv
 targetresid = int(targetresid)
-targetresids = [targetresid-1, targetresid, targetresid+1] # FIXME: termini
+targetresids = [targetresid-1, targetresid, targetresid+1] # FIXME: when mutation resides at the termini this is apparently wrong. The current workaround is to make residue number gapped.
 
 
 curatom = 0
@@ -38,14 +39,24 @@ with open(topfrom) as fh, open(topto, "w") as ofh:
         elif sectionname == "moleculetype":
             moleculename = ls[0]
         elif sectionname == "atoms" and moleculename == "merged":
+            assert len(ls) >= 9, "moleculetype \"merged\" must have all atoms and residues perturbed"
             resid = int(ls[2])
             atomid = int(ls[0])
             if resid in targetresids:
                 curatom += 1
                 atomidmap[atomid] = curatom
-                ls[0] = curatom
-                ls[5] = curatom
+                ls[0] = str(curatom)
+                ls[5] = str(curatom)
                 writels()
+            perturbed = False
+            for i, j, converter in [(1, 8, str), (6, 9, float), (7, 10, float)]:
+                if converter(ls[i]) != converter(ls[j]):
+                    perturbed = True
+            if perturbed and resid != targetresid:
+                message = f"""Residue {resid}-{ls[3]} atom {atomid} name {ls[4]} is perturbed but this residue is not the target of mutation.
+This is presumably error, and this is likely to happen when His resiudes have different states before and after the mutation and subsequent structure optimization.
+If you want to proceed, change all His residues in your system into appropriate names (HID/HIE for amber and HSD/HSE for charmm) to forcefully fix the protonation state."""
+                raise RuntimeError(message)
             continue
         elif moleculename == "merged" and sectionname in numatoms:
             na = numatoms[sectionname]
