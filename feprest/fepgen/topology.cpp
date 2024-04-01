@@ -26,6 +26,8 @@ topology::topology(const string& fname)
   string line;
   string state;
   int nmoltype = 0;
+  int resid_prev = numeric_limits<int>::max();
+  int chainid = -1;
   while(getline(ifs, line)) {
     if(line == ""){
       continue;
@@ -256,6 +258,12 @@ topology::topology(const string& fname)
       resids.push_back(resi);
       charges.push_back(charge);
       masses.push_back(mass);
+      // Because there are no "chain" information in the top file, we treat "less than prev resid" as a sign for the new chain
+      if(resi < resid_prev) {
+        chainid++;
+      }
+      resid_prev = resi;
+      chainids.push_back(chainid);
     }else if(state == "pairs") {
       istringstream is(line);
       int a, b, func;

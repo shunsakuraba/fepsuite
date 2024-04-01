@@ -51,6 +51,7 @@ struct topology {
   std::vector<std::string> resnames;
   std::vector<double> charges;
   std::vector<double> masses;
+  std::vector<int> chainids;
 
   // bonds. keytype atom numbers are 0-origin
   std::map<bondkeytype, std::vector<double>> bonds;

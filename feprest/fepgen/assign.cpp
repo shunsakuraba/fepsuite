@@ -195,12 +195,16 @@ int assign_atoms_resinfo(const topology &Atop,
   const vector<string> &Bresnames = Btop.resnames;
   const vector<int> &Aresids = Atop.resids;
   const vector<int> &Bresids = Btop.resids;
+  const vector<int> &Achainids = Atop.chainids;
+  const vector<int> &Bchainids = Btop.chainids;
   int assigned = 0;
 
-  multimap<int, size_t> Bresids_to_Batoms;
+  // Residues are grouped based on chainid. This is necessary for multi-chain systems (see Issue #4)
+  multimap<pair<int, int>, size_t> Bresids_to_Batoms;
   for(int j = 0; j < (int)Bnames.size(); ++j) {
+    int chainid = Bchainids[j];
     int resid = Bresids[j];
-    Bresids_to_Batoms.insert({resid, (size_t)j});
+    Bresids_to_Batoms.insert({make_pair(chainid, resid), (size_t)j});
   }
 
   for(int i = 0; i < (int)Anames.size(); ++i) {
@@ -208,7 +212,7 @@ int assign_atoms_resinfo(const topology &Atop,
       continue;
     }
     int found = -1;
-    auto range = Bresids_to_Batoms.equal_range(Aresids[i]);
+    auto range = Bresids_to_Batoms.equal_range(make_pair(Achainids[i], Aresids[i]));
     for(auto p = range.first; p != range.second; ++p) {
       int j = p->second;
       if((*assignAofB)[j] != -1) {
