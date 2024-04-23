@@ -115,6 +115,18 @@ topology::topology(const string& fname)
       is >> atype;
       atomtypes[atype] = line;
 
+      // check for badly formatted ones (typically amber14sb.ff)
+      static bool warned_digit_started_atomtypes = false;
+
+      if(isdigit(atype[0]) && !warned_digit_started_atomtypes) {
+        // Note bond type checking was recently relaxed (Gromacs issue #4120)
+        cerr << "Warning: [ atomtypes ] contains type " << atype << " which starts from non-alphabets." << endl;
+        cerr << "Although this itself is valid, but by default bondtype is same to the atomtype, and the bondtype should not start from digits in GROMACS <= 2021 (see issue #4120 https://gitlab.com/gromacs/gromacs/-/issues/4120 )." << endl;
+        cerr << "Some user-generated force field files, such as amber14sb.ff, does not consider this restriction and often causes errors at later stage of the FEP setup." << endl;
+        cerr << "Consider renaming all such atomtypes to those starting from alphabets, e.g. 2C -> A2C." << endl;
+        warned_digit_started_atomtypes = true;
+      }
+
       // Old-type [ atomtypes ] may still exist, just to be sure
       vector<string> inputs;
       while(is){
@@ -129,7 +141,7 @@ topology::topology(const string& fname)
       // Field 3 (inputs[0-2]) (mandatory) is mass (numerical)
       // Field 4 (inputs[1-3]) (mandatory) is charge (numerical)
       // Field 5 (inputs[2-4]) (mandatory) is the particle type (single char)
-      // and number of nonbonde parameter follows.
+      // and nonbonded parameter follows.
       if(inputs.size() < 6) {
         cerr << "[ atomtypes ] line is too short" << endl;
         cerr << "\"" << line << "\"" << endl;
@@ -318,6 +330,16 @@ topology::topology(const string& fname)
         addendum = (int)vals.back(); // rep values
       }
       if(addendum == 0 && diheds.count(make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)) > 0) {
+        cerr << "There are more than one dihedral potential between atoms "
+             << a << "-" << b << "-" << c << "-" << d << " (functype " << func << ")" << endl;
+        cerr << "Although this is technically legit in GROMACS topology format, "
+             << "it is mostly likely to be a mistake in your FF preperation"
+             << " - for multiple dihedral potentials, GROMACS typically uses functype=9." << endl;
+        if(func == 1 || func == 4) {
+          cerr << "If you are absolutely certain that this potential is correct, use functype=9 instead of functype=" << func << "." << endl;
+        }else{
+          cerr << "fepgen currently cannot handle multiple functype=" << func << " dihedrals; a possible workaround is to merge two dihedrals into one line (e.g. by adding force constants if phase angles are the same)." << endl;
+        }
         throw runtime_error("unsupported: dihedral multiple entries");
       }
       vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)];
