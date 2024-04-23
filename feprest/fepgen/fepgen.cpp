@@ -2091,7 +2091,9 @@ int main(int argc, char* argv[])
   vector<int> Adepth;
 
   assigner_dictionary dictionary = load_dictionary(string(argv[0]), p.get<string>("assign-dictionary"));
-  cerr << "DEBUG: dictionary size: " << dictionary.size() << endl;
+  if(verbose) {
+    cerr << "DEBUG: dictionary size: " << dictionary.size() << endl;
+  }
 
   bool use_connectivity = p.exist("connectivity") || p.exist("assign-by-name");
   double pdist = p.get<double>("maxdist");
