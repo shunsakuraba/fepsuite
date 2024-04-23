@@ -323,7 +323,7 @@ topology::topology(const string& fname)
         vals.push_back(v);
       }
       int addendum = 0;
-      if(func == 1 || func == 9) {
+      if(func == 1 || func == 4 || func == 9) {
         if(vals.empty()) {
           throw runtime_error("unsupported: input must be canonicalized");
         }
@@ -335,11 +335,7 @@ topology::topology(const string& fname)
         cerr << "Although this is technically legit in GROMACS topology format, "
              << "it is mostly likely to be a mistake in your FF preperation"
              << " - for multiple dihedral potentials, GROMACS typically uses functype=9." << endl;
-        if(func == 1 || func == 4) {
-          cerr << "If you are absolutely certain that this potential is correct, use functype=9 instead of functype=" << func << "." << endl;
-        }else{
-          cerr << "fepgen currently cannot handle multiple functype=" << func << " dihedrals; a possible workaround is to merge two dihedrals into one line (e.g. by adding force constants if phase angles are the same)." << endl;
-        }
+        cerr << "fepgen currently cannot handle multiple functype=" << func << " dihedrals; a possible workaround is to merge two dihedrals into one line (e.g. by adding force constants if phase angles are the same)." << endl;
         throw runtime_error("unsupported: dihedral multiple entries");
       }
       vector<double> &dihedral = diheds[make_tuple(a - 1, b - 1, c - 1, d - 1, func, addendum)];
