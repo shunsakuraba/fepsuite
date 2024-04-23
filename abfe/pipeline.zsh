@@ -386,22 +386,63 @@ generate_ndx() {
     $PYTHON3 $ABFE_ROOT/make_ndx.py --structure $conf --topology $pptop --ligand $LIG_GMX $receptor --output $output
 }
 
+run_charge_correction() {
+    local top=$ID/pp_run.top
+    local reftpr=$ID/prerun.run.final.tpr
+    local complex_traj=$ID/prerun.run.recpbc.xtc
+    local ndx=$ID/complex.ndx
+
+    APBS=${APBS:-apbs}
+
+    # Gromacs has problems shifting back the ligand/receptor to the center, so we reuse the structure generated at the pipeline 3
+    local simlen
+    simlen=$(job_singlerun $GMX check -f $complex_traj 2>&1 >/dev/null | grep '^Time' | awk '{ print ($2-1) * $3 }')
+    local tt
+    for i in {1..$CHARGE_CORRECTION_NSAMP}; do
+        # first RUN_PROD ps removed
+        (( tt = RUN_PROD + simlen * (i + 0.0) / CHARGE_CORRECTION_NSAMP ))
+        charge_temp=$ID/charge_corr_in.pdb
+        rm -f $charge_temp
+        echo "System" | job_singlerun $GMX trjconv -s $reftpr -f $complex_traj -o $charge_temp -n $ndx -dump $tt
+        pushd $ID # due to intermediate files it is better executed at each $ID
+        $PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result$i.txt --ligand-group Ligand --receptor-group Receptor
+        popd
+    done
+    cat $ID/charge_result{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction.txt
+
+    top=$ID/ligand-ion.top
+    reftpr=$ID/charging-lig.0/charging-lig.tpr
+    local lig_traj=$ID/charging-lig.0/charging-lig.xtc
+    ndx=$ID/ligand.ndx
+    simlen=$(job_singlerun $GMX check -f $lig_traj 2>&1 >/dev/null | grep '^Time' | awk '{ print ($2-1) * $3 }')
+    for i in {1..$CHARGE_CORRECTION_NSAMP}; do
+        # skip first RUN_PROD ps
+        (( tt = RUN_PROD + (simlen - RUN_PROD) * (i + 0.0) / CHARGE_CORRECTION_NSAMP ))
+        charge_temp=$ID/charge_corr_in.pdb
+        rm -f $charge_temp
+        echo "Ligand\nSystem" | job_singlerun $GMX trjconv -s $reftpr -f $lig_traj -o $charge_temp -n $ndx -dump $tt -pbc mol -center -ur compact
+        pushd $ID # due to intermediate files it is better executed at each $ID
+        $PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result_lig$i.txt --ligand-group Ligand
+        popd
+    done
+    cat $ID/charge_result_lig{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction_lig.txt
+}
+
 charge_correction() {
-    CHARGEFILE=$1
-    REFSTRUCTURE=$2
+    local chargefile=$1
 
     # FIXME: do we need ligand structures as well?
-    TOTCHARGE=$(cat $CHARGEFILE)
-    ABSTOTCHARGE=$TOTCHARGE
-    if (( ABSTOTCHARGE < 0 )); then
-        (( ABSTOTCHARGE = - ABSTOTCHARGE ))
+    local totcharge=$(cat $chargefile)
+    local abstotcharge=$totcharge
+    if (( abstotcharge < 0 )); then
+        (( abstotcharge = - abstotcharge ))
     fi
-    if (( ABSTOTCHARGE < 1e-4 )); then
+    if (( abstotcharge < 1e-4 )); then
         echo "No charge correction needed"
-        echo 0.0 > $ID/charge_correction.txt
+        rm -f $ID/charge_correction.txt
+        rm -f $ID/charge_correction_lig.txt
     else
-        echo "Error: charge correction is not implemented yet."
-        exit 1
+        run_charge_correction
     fi
 }
 
@@ -457,8 +498,8 @@ main() {
             # Then wrap the system around using -pbc mol and -ur compact. This and above line prevents "split-ligand" and "split-receptor" artifacts.
             echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.nojump.xtc -o $ID/prerun.run.recpbc.xtc -b $RUN_PROD -pbc mol -n $ID/complex.ndx -ur compact
             # Get the final simulation time. Note that prerun.run.recpbc.xtc has been chopped off initial RUN_PROD ps, so using prerun.run.xtc instead.
-            # XXX: interleaved stderr / stdout may cause a trouble, need to make this clear
-            LAST=$(job_singlerun $GMX check -f $ID/prerun.run.xtc |& grep '^Time' | awk '{ print ($2-1) * $3 }')
+            # gmx check outputs into the standard error
+            LAST=$(job_singlerun $GMX check -f $ID/prerun.run.xtc 2>&1 >/dev/null | grep '^Time' | awk '{ print ($2-1) * $3 }')
             # Convert the final structure into PBC-fixed one
             echo "System" | job_singlerun $GMX trjconv -s $ID/pp_flex.tpr -f $ID/prerun.run.recpbc.xtc -o $ID/prerun.run.final.pdb -n $ID/complex.ndx -dump $LAST
             # Then calculate the rms
@@ -591,8 +632,8 @@ main() {
             do_exp lr-annihilation-lig annihilation-lig $((NANNIH - 1)) $TEMP
             do_exp lr-complex restraint $((NRESTR - 1)) $TEMP
             do_exp lr-annihilation-complex annihilation-complex $((NANNIH - 1)) $TEMP
-            # Charge correction (TODO)
-            charge_correction $ID/totalcharge.txt restraint.$((NRESTR - 1))
+            # Charge correction
+            charge_correction $ID/totalcharge.txt
             # Sum evertyhing up
             $PYTHON3 $ABFE_ROOT/calc_bar_replex.py --basedir $ID --restrinfo $ID/restrinfo --temp $TEMP > $ID/result.txt
             ;;

@@ -43,8 +43,8 @@ RECEPTOR_MDTRAJ="protein"
 # Thresholding
 #*************************
 # If ligand RMSD during equilibration exceeds this value, calculation stops (unit: nm)
-# RMSD is measured by best-fitting the receptor, but only ligand is used in RMSD calculation
-# Reference structure used is the final snapshot of the equilibration
+# RMSD is measured by best-fitting the receptor, but only ligand is used in the RMSD calculation
+# The final snapshot of the equilibration will be used as the reference structure.
 EQ_RMSD_CUTOFF=0.4
 
 # Set this value to max (ligand diameter) if calculation fails due to the bond length exceeding the domain size
@@ -75,5 +75,15 @@ IONIC_STRENGTH=0.150
 
 # positive ion name (CHARMM uses SOD)
 ION_POSITIVE=NA
-# negative ion name (CHARMM USES CLA)
+# negative ion name (CHARMM uses CLA)
 ION_NEGATIVE=CL
+
+#*************************
+# Charge correction for charged lingands
+#*************************
+
+# Set if 'apbs' is not in path
+#APBS=/path/to/apbs
+
+# Number of sampling used in charge correction
+CHARGE_CORRECTION_NSAMP=5

@@ -1,0 +1,80 @@
+# run as apbs apbs.in
+read
+    mol pqr pro1lig0.pqr
+    mol pqr pro0lig1.pqr
+    mol pqr onlylig1.pqr
+end
+
+# CALCULATE POTENTIAL WITH CHARGED PROTEIN AND ZERO CHARGED LIGAND
+elec name pro1lig0
+    mg-manual
+    dime {dime} {dime} {dime}
+    glen {glenaa} {glenaa} {glenaa} # [angstrom]
+    gcent mol 3
+    mol 1
+    lpbe
+    bcfl mdh
+    pdie 1.0
+    sdie {epsS} # in solvent
+    chgm spl4
+    srfm smol
+    srad 1.4
+    swin 0.3
+    sdens 40.0
+    temp {temp}
+    calcenergy no
+    calcforce no
+    # Ions will not work well with Rocklin scheme, because of several preconditions
+    # ion charge +1 conc {conc} radius {pos_ion_radius_aa}
+    # ion charge -1 conc {conc} radius {neg_ion_radius_aa}
+    write pot dx pro1lig0
+end
+
+# CALCULATE POTENTIAL WITH ZERO CHARGED PROTEIN AND CHARGED LIGAND
+elec name pro0lig1
+    mg-manual
+    dime {dime} {dime} {dime}
+    glen {glenaa} {glenaa} {glenaa} # [angstrom]
+    gcent mol 3
+    mol 2
+    lpbe
+    bcfl mdh
+    pdie 1.0
+    sdie {epsS} # in solvent
+    chgm spl4
+    srfm smol
+    srad 1.4
+    swin 0.3
+    sdens 40.0
+    temp {temp}
+    calcenergy no
+    calcforce no
+    # ion charge +1 conc {conc} radius {pos_ion_radius_aa}
+    # ion charge -1 conc {conc} radius {neg_ion_radius_aa}
+    write pot dx pro0lig1
+end
+
+# CALCULATE POTENTIAL WITH ONLY CHARGED LIGAND, NO PROTEIN
+elec name onlylig1
+    mg-manual
+    dime {dime} {dime} {dime}
+    glen {glenaa} {glenaa} {glenaa} # [angstrom]
+    gcent mol 3
+    mol 3
+    lpbe
+    bcfl mdh
+    pdie 1.0
+    sdie 1.0 # in vacuum
+    chgm spl4
+    srfm smol
+    srad 1.4
+    swin 0.3
+    sdens 40.0
+    temp {temp}
+    calcenergy no
+    calcforce no
+    write pot dx onlylig1
+end
+
+quit
+

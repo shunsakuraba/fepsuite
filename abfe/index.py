@@ -6,7 +6,7 @@ def load_index(ndx):
     with open(ndx) as fh:
         for l in fh:
             ls = l.split()
-            if l.starts('['):
+            if l.startswith('['):
                 group = ls[1]
                 if group in ret:
                     raise RuntimeError("Multiple groups in index file")

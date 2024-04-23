@@ -12,7 +12,9 @@ cycle_contribution = {
         "lr-lig": ("lrc", "long-range-correction", -1.0),
         "lr-annihilation-lig": ("lrc", "long-range-correction", 1.0),
         "lr-complex": ("lrc", "long-range-correction", 1.0),
-        "lr-annihilation-complex": ("lrc", "long-range-correction", -1.0)
+        "lr-annihilation-complex": ("lrc", "long-range-correction", -1.0),
+        "charge-correction-complex": ("cc", "charge-correction", 1.0),
+        "charge-correction-ligand": ("cc", "charge-correction", -1.0)
         }
 kcal_of_kj = 0.23900574
 gasconstant = 0.00831446  # kJ / mol / K 
@@ -73,6 +75,31 @@ def read_restr(args):
         - 2. * math.log(avgs[0]) - math.log(math.sin(avgs[1])) - math.log(math.sin(avgs[2])) - 3. * math.log(2 * math.pi * RT) # avogadro const in R cancels with kJ/mols in springs consts
     return - RT * mdeltaf # kJ/mol
 
+def calc_charge_correction(fsummary):
+    if os.path.exists(fsummary):
+        dat = []
+        with open(fsummary) as fh:
+            for l in fh:
+                if l.startswith("#"):
+                    continue
+                ls = l.split()
+                dat.append(float(ls[-1]))
+        if len(dat) == 0:
+            avg = 0.
+            var = 0.
+        else:
+            avg = sum(dat) / len(dat)
+            var = 0.
+            for d in dat:
+                var += (d - avg) ** 2
+            if len(dat) <= 1:
+                var = 0.
+            else:
+                var /= (len(dat) - 1)
+        return (avg, var)
+    else:
+        return (0., 0.)
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate restraint key atoms in protein and key atoms in ligand",
                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -94,6 +121,10 @@ if __name__ == "__main__":
     restre, var = bar_res["restraint"] 
     bar_res["restraint"] = (restre - analytical_e, var) # ArVBA in Boresch 2003 paper corresponds to  P...L -> P+L, thus NEGATIVE contribution
     individual_bar_res["restraint-analytical"] = (-analytical_e, 0)
+    individual_bar_res["charge-correction-complex"] = calc_charge_correction(f"{args.basedir}/charge_correction.txt")
+    ligcontr = calc_charge_correction(f"{args.basedir}/charge_correction_lig.txt")
+    individual_bar_res["charge-correction-ligand"] = (-ligcontr[0], ligcontr[1])
+
     total = 0.
     totalvar = 0.
     for mode in sorted(individual_bar_res.keys()):

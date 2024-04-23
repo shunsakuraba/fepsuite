@@ -186,11 +186,8 @@ if __name__ == "__main__":
                 if have_bonded_type:
                     bondtype = ls[1]
                     if all((c.isdigit() for c in ls[1])):
-                        sys.stderr.write("""
-                        [ atomtypes ] contains bondtype "%s", but the bondtype consists of all digits.
-                        This is considered invalid atomtype in GROMACS.
-                        """ % atomtype)
-                    raise RuntimeError("Invalid force field")
+                        raise RuntimeError(f"""[ atomtypes ] contains bondtype "{atomtype}", but the bondtype for this atomtype consists of only digits.
+This is considered invalid atomtype in GROMACS.""")
                 else:
                     bondtype = atomtype
                 if have_atomic_number:
