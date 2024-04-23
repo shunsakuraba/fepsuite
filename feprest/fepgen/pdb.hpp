@@ -24,6 +24,7 @@ public:
   const std::vector<std::string>& get_residuenames() const { return residuenames; }
   const std::vector<int>& get_resids() const { return resids; }
   const std::vector<std::string>& get_atomnames() const { return atomnames; }
+  const size_t get_numatoms() const { return (size_t)coords.cols(); } 
 
   /**
      Try to read the next structure from the specified PDB.

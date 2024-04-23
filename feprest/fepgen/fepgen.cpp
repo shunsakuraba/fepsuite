@@ -711,23 +711,44 @@ static void find_exclusions(const topology &top,
   }
 }
 
+static void make_residue_index(const pdb& pdb,
+                               vector<int> *residue_indices, 
+                               int *Nresidue)
+{
+  residue_indices->clear();
+
+  int Nresidue_ = -1;
+  pair<int, char> prev(0, ' ');
+  for(size_t i = 0; i < pdb.get_numatoms(); ++i) {
+    pair<int, char> newres = make_pair(pdb.get_resids()[i], pdb.get_chains()[i]);
+    if(i == 0 || prev != newres) {
+      prev = newres;
+      Nresidue_++;
+    }
+    residue_indices->push_back(Nresidue_);
+  }
+  *Nresidue = Nresidue_;
+}
+
 static void merge_assigns(const vector<int>& assignBofA,
                           const vector<int>& assignAofB,
+                          const vector<int>& residue_indices_A,
+                          const vector<int>& residue_indices_B,
                           vector<int>& assignOofA,
                           vector<int>& assignOofB,
                           vector<int>& assignAofO,
                           vector<int>& assignBofO,
-                          int &N)
+                          int *N)
 {
   int Bunassigned = 0;
   for(int i = 0; i < (int)assignAofB.size(); ++i) {
     if(assignAofB[i] == -1) Bunassigned++;
   }
-  N = assignBofA.size() + Bunassigned;
+  *N = assignBofA.size() + Bunassigned;
   assignOofA = vector<int>(assignBofA.size(), -1);
   assignOofB = vector<int>(assignAofB.size(), -1);
-  assignAofO = vector<int>(N, -1);
-  assignBofO = vector<int>(N, -1);
+  assignAofO = vector<int>(*N, -1);
+  assignBofO = vector<int>(*N, -1);
 
   for(int i = 0; i < (int)assignOofA.size(); ++i) {
     assignOofA[i] = i;
@@ -743,6 +764,74 @@ static void merge_assigns(const vector<int>& assignBofA,
     }
     assignBofO[assignOofB[j]] = j;
   }
+
+  // Initial map was done, then reorder by the residue index 
+  vector<int> oremap;
+  for(int i = 0; i < *N; ++i) {
+    oremap.push_back(i);
+  }
+  // sort by residue index
+  std::stable_sort(oremap.begin(), oremap.end(), 
+                   [&](const int &lhs, const int &rhs){
+                      if(assignAofO[lhs] != -1 && assignAofO[rhs] != -1) {
+                        int rl = residue_indices_A[assignAofO[lhs]];
+                        int rr = residue_indices_A[assignAofO[rhs]];
+                        if(rl != rr) { return rl < rr; }
+
+                        // check residue B status
+                        if(assignBofO[lhs] == -1) {
+                          return false;
+                        }else if(assignBofO[rhs] == -1) {
+                          return true;
+                        }else{
+                          return residue_indices_B[assignBofO[lhs]] < residue_indices_B[assignBofO[rhs]];
+                        }
+                      }else if(assignBofO[lhs] != -1 && assignBofO[rhs] != -1) {
+                        int rl = residue_indices_B[assignBofO[lhs]];
+                        int rr = residue_indices_B[assignBofO[rhs]];
+                        if(rl != rr) { return rl < rr; }
+
+                        // check residue A status
+                        if(assignAofO[lhs] == -1) {
+                          return false;
+                        }else if(assignAofO[rhs] == -1) {
+                          return true;
+                        }else{
+                          assert(!"This should not happen as the second big else-if clause is called only when either of assignAofO == -1");
+                        }
+                      }else if(assignAofO[lhs] == -1) {
+                        // residue index(A, B): lhs -> (-1, B) rhs -> (A, -1)
+                        assert(assignBofO[rhs] == -1);
+                        return false;
+                      }else if(assignAofO[rhs] == -1) {
+                        // lhs -> (A, -1) rhs-> (-1, B)
+                        assert(assignBofO[lhs] == -1);
+                        return true;
+                      }else{
+                        assert(!"Unexpected resindex pattern");
+                      }
+                   });
+
+  vector<int> assignAofO_new, assignBofO_new;
+  for(int i = 0; i < *N; ++i) {
+    assignAofO_new.push_back(assignAofO[oremap[i]]);
+    assignBofO_new.push_back(assignBofO[oremap[i]]);
+  }
+  assignAofO.swap(assignAofO_new);
+  assignBofO.swap(assignBofO_new);
+  vector<int> assignOofA_new(assignBofA.size(), -1);
+  vector<int> assignOofB_new(assignAofB.size(), -1);
+  assignOofA.swap(assignOofA_new);
+  assignOofB.swap(assignOofB_new);
+  for(int i = 0; i < *N; ++i) {
+    if(assignAofO[i] != -1) {
+      assignOofA[assignAofO[i]] = i;
+    }
+    if(assignBofO[i] != -1) {
+      assignOofB[assignBofO[i]] = i;
+    }
+  }
+
 }
 
 static void parse_push_types_helper(const string& l,
@@ -792,6 +881,8 @@ static void parse_push_types(const T& Atypes,
  
 void correct_assign_by_exclusion(const topology &Atop,
                                  const topology &Btop,
+                                 const pdb &Apdb,
+                                 const pdb &Bpdb,
                                  vector<int> &assignBofA,
                                  vector<int> &assignAofB,
                                  vector<int> &Adepth)
@@ -799,6 +890,12 @@ void correct_assign_by_exclusion(const topology &Atop,
   vector<vector<int> > Apairs_A(assignBofA.size()), Bpairs_B(assignAofB.size());
   Atop.convert_pairs_to_adj_list(Apairs_A);
   Btop.convert_pairs_to_adj_list(Bpairs_B);
+
+  vector<int> Aresindex, Bresindex;
+  int NAres, NBres;
+  make_residue_index(Apdb, &Aresindex, &NAres);
+  make_residue_index(Bpdb, &Bresindex, &NBres);
+
   bool found;
   do {
     found = false;
@@ -808,9 +905,10 @@ void correct_assign_by_exclusion(const topology &Atop,
     int N;
     // try to generate current assign
     merge_assigns(assignBofA, assignAofB, 
+                  Aresindex, Bresindex,
                   assignOofA, assignOofB,
                   assignAofO, assignBofO,
-                  N);
+                  &N);
     // generate exclusion
     vector<vector<int> > Aexclusions(N), Bexclusions(N);
     find_exclusions(Atop, assignOofA, Aexclusions);
@@ -829,6 +927,9 @@ void correct_assign_by_exclusion(const topology &Atop,
       }
     }
     
+    // If a pair exists in both states, it's OK.
+    // If a pair exists in neither states, it's OK.
+    // Otherwise, such a pair should not appear in the final assignment
     vector<int> xors;
     for(int i = 0; i < (int)assignOofA.size(); ++i) {
       if(assignAofO[i] == -1 ||
@@ -888,7 +989,8 @@ void correct_assign_by_exclusion(const topology &Atop,
            << Atop.names[Amax] << " - "
            << Btop.resnames[Bmax] << "_" 
            << Btop.resids[Bmax] << ":"
-           << Btop.names[Bmax] << endl;
+           << Btop.names[Bmax]
+           << " from the list of matched atoms" << endl;
       assignBofA[Amax] = -1;
       assignAofB[Bmax] = -1;
     }
@@ -2119,7 +2221,7 @@ int main(int argc, char* argv[])
 
     if(use_connectivity) {
       assign_atoms_connectivity(Atop, Btop, distmat, assignBofA, assignAofB, Adepth, pdist, p.exist("assign-by-name"));
-      correct_assign_by_exclusion(Atop, Btop, assignBofA, assignAofB, Adepth);
+      correct_assign_by_exclusion(Atop, Btop, Apdb, Bpdb, assignBofA, assignAofB, Adepth);
     }else{
       assign_atoms("NCO",  nullptr, Atop, Btop, distmat, assignBofA, assignAofB, pdist);
       assign_atoms("H",    nullptr, Atop, Btop, distmat, assignBofA, assignAofB, pdist);
@@ -2175,12 +2277,19 @@ int main(int argc, char* argv[])
   vector<int> assignOofA, assignOofB, assignAofO, assignBofO;
   int N;
 
-  // Make map from A/B, to/from output
-  merge_assigns(assignBofA, assignAofB, 
-                assignOofA, assignOofB,
-                assignAofO, assignBofO,
-                N);
-
+  {
+    // Make map from A/B, to/from output
+    // First make residue index mapping
+    vector<int> Aresindex, Bresindex;
+    int NAres, NBres;
+    make_residue_index(Apdb, &Aresindex, &NAres);
+    make_residue_index(Bpdb, &Bresindex, &NBres);
+    merge_assigns(assignBofA, assignAofB, 
+                  Aresindex, Bresindex,
+                  assignOofA, assignOofB,
+                  assignAofO, assignBofO,
+                  &N);
+  }
 
   // Sanity check
   {
