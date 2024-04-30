@@ -1,6 +1,8 @@
 import argparse
 import os.path
 import math
+import re
+import sys
 
 cycle_contribution = {
         "charging-lig": ("bar", "charging", 1.0),
@@ -13,8 +15,8 @@ cycle_contribution = {
         "lr-annihilation-lig": ("lrc", "long-range-correction", 1.0),
         "lr-complex": ("lrc", "long-range-correction", 1.0),
         "lr-annihilation-complex": ("lrc", "long-range-correction", -1.0),
-        "charge-correction-complex": ("cc", "charge-correction", 1.0),
-        "charge-correction-ligand": ("cc", "charge-correction", -1.0)
+        "charge-correction-complex": ("cc", "charge-correction", -1.0), # same as charging-complex
+        "charge-correction-ligand": ("cc", "charge-correction", 1.0) # same as charging-lig
         }
 kcal_of_kj = 0.23900574
 gasconstant = 0.00831446  # kJ / mol / K 
@@ -75,28 +77,76 @@ def read_restr(args):
         - 2. * math.log(avgs[0]) - math.log(math.sin(avgs[1])) - math.log(math.sin(avgs[2])) - 3. * math.log(2 * math.pi * RT) # avogadro const in R cancels with kJ/mols in springs consts
     return - RT * mdeltaf # kJ/mol
 
-def calc_charge_correction(fsummary):
-    if os.path.exists(fsummary):
+def avg(ls):
+    return sum(ls) / len(ls)
+
+def calc_charge_correction_impl(values):
+    UNIT = 0
+    VALUE = 1
+
+    # vacuum permittivity in e^2/(kJ/mol)/nm.
+    # use kJ/mol at this moment (later converted to kcal at the end)
+    eps0 = 8.8541878128e-12 / 1.602176634e-19**2 / 6.02214076e+23 / 1e9 * 1e3
+
+    retvals = []
+
+    for isample in range(len(values["V"])):
+        latticea = values["lengths"][isample][VALUE]
+        xi_LS = values["xi_LS"][isample][VALUE]
+        epsS = values["epsS"][isample][VALUE]
+
+        # Note Rocklin corrected charging FE while we need to correct discharging FE (on complex state)
+        q_initial = values["QS"][isample][VALUE]
+        q_final = q_initial - values["QL"][isample][VALUE]
+        # latticea is used because xi_LS is scaled by this number
+        dgnet_usv = - xi_LS / (8. * math.pi * eps0 * epsS) * (q_final**2 - q_initial**2) / latticea
+
+        ip_v = values["IP/V"][isample][VALUE]
+        il_v = values["IL/V"][isample][VALUE]
+
+        dgrip = ip_v * q_final - (ip_v + il_v) * q_initial
+
+        nsol = values["Ns"][isample][VALUE]
+        gammas = values["gammaS"][isample][VALUE]
+        volume = values["V"][isample][VALUE]
+
+        dgdsc = - gammas * nsol / (6 * eps0 * volume) * (q_final - q_initial)
+        
+        dgtot = dgnet_usv + dgrip + dgdsc
+        print(f" CC {isample} dgnet_usv {dgnet_usv:10.5f}  dgrip {dgrip:10.5f}  dgdsc {dgdsc:10.5f}  dgtot {dgtot:10.5f}",
+              file=sys.stderr)
+
+        retvals.append(dgtot)
+    mean = avg(retvals)
+    devs = sum([(x - mean) ** 2 for x in retvals])
+    var = devs / (len(retvals) - 1)
+
+    return (mean, var)
+
+def calc_charge_correction(fdetail):
+    if os.path.exists(fdetail):
         dat = []
-        with open(fsummary) as fh:
+        with open(fdetail) as fh:
+            values = {}
+            pat = re.compile(r"\s*(?P<name>[A-Za-z_/]+)(?:\[(?P<unit>.+)\])?:\s*(?P<value>[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)")
             for l in fh:
-                if l.startswith("#"):
+                m = pat.match(l.strip())
+                if m is None:
                     continue
-                ls = l.split()
-                dat.append(float(ls[-1]))
-        if len(dat) == 0:
-            avg = 0.
-            var = 0.
-        else:
-            avg = sum(dat) / len(dat)
-            var = 0.
-            for d in dat:
-                var += (d - avg) ** 2
-            if len(dat) <= 1:
-                var = 0.
-            else:
-                var /= (len(dat) - 1)
-        return (avg, var)
+                name = m.group("name")
+                unit = m.group("unit")
+                value = float(m.group("value"))
+                if name not in values:
+                    values[name] = []
+                values[name].append((unit, value))
+        #print(values)
+        print("""If you use this program please read and cite:
+Accurate Calculation of Relative Binding Free Energies between Ligands with Different Net Charges.
+Wei Chen, Yuqing Deng, Ellery Russell, Yujie Wu, Robert Abel, and Lingle Wang
+Journal of Chemical Theory and Computation, 14, 6346 (2018).""",
+              file=sys.stderr)
+        (charge_corr, var) = calc_charge_correction_impl(values)
+        return (charge_corr, var)
     else:
         return (0., 0.)
 
@@ -121,9 +171,20 @@ if __name__ == "__main__":
     restre, var = bar_res["restraint"] 
     bar_res["restraint"] = (restre - analytical_e, var) # ArVBA in Boresch 2003 paper corresponds to  P...L -> P+L, thus NEGATIVE contribution
     individual_bar_res["restraint-analytical"] = (-analytical_e, 0)
-    individual_bar_res["charge-correction-complex"] = calc_charge_correction(f"{args.basedir}/charge_correction.txt")
+
+    cfactor = cycle_contribution["charge-correction-complex"][2]
+    compcontr = calc_charge_correction(f"{args.basedir}/charge_correction.txt")
+    ccc = (compcontr[0] * cfactor, compcontr[1] * cfactor ** 2)
+    individual_bar_res["charge-correction-complex"] = ccc
+    cfactor = cycle_contribution["charge-correction-ligand"][2]
     ligcontr = calc_charge_correction(f"{args.basedir}/charge_correction_lig.txt")
-    individual_bar_res["charge-correction-ligand"] = (-ligcontr[0], ligcontr[1])
+    ccl = (ligcontr[0] * cfactor, ligcontr[1] * cfactor ** 2)
+    individual_bar_res["charge-correction-ligand"] = ccl
+    for (m, vnew) in [ccc, ccl]:
+        (e, v) = bar_res["charging"]
+        e += m
+        v += vnew
+        bar_res["charging"] = (e, v)
 
     total = 0.
     totalvar = 0.

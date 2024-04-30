@@ -405,10 +405,10 @@ run_charge_correction() {
         rm -f $charge_temp
         echo "System" | job_singlerun $GMX trjconv -s $reftpr -f $complex_traj -o $charge_temp -n $ndx -dump $tt
         pushd $ID # due to intermediate files it is better executed at each $ID
-        $PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result$i.txt --ligand-group Ligand --receptor-group Receptor
+        #$PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result$i.txt --ligand-group Ligand --receptor-group Receptor > charge_detail$i.txt
         popd
     done
-    cat $ID/charge_result{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction.txt
+    cat $ID/charge_detail{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction.txt
 
     top=$ID/ligand-ion.top
     reftpr=$ID/charging-lig.0/charging-lig.tpr
@@ -422,10 +422,10 @@ run_charge_correction() {
         rm -f $charge_temp
         echo "Ligand\nSystem" | job_singlerun $GMX trjconv -s $reftpr -f $lig_traj -o $charge_temp -n $ndx -dump $tt -pbc mol -center -ur compact
         pushd $ID # due to intermediate files it is better executed at each $ID
-        $PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result_lig$i.txt --ligand-group Ligand
+        #$PYTHON3 $ABFE_ROOT/charge_correction_generator.py --top ${top##$ID/} --pdb ${charge_temp##$ID/} --ndx ${ndx##$ID/} --summary charge_result_lig$i.txt --ligand-group Ligand > charge_detaillig$i.txt
         popd
     done
-    cat $ID/charge_result_lig{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction_lig.txt
+    cat $ID/charge_detaillig{1..$CHARGE_CORRECTION_NSAMP}.txt > $ID/charge_correction_lig.txt
 }
 
 charge_correction() {

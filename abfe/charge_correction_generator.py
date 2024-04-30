@@ -412,6 +412,7 @@ class RokhlinChargeCorrection:
     xi_LS: float # lattice sum constant(dimensionless).
     QP: float  # net charge of protein.
     QL: float  # net charge of ligand.
+    QS: float  # net charge of system.
     gammaS:float  # quadrupole of a solvent molecule[nm^2].
     nsol: int   # number of solvent molecule.
     Lref: float # length of refference box used in APBS[nm].
@@ -449,10 +450,12 @@ class RokhlinChargeCorrection:
         print("xi_LS:               %10.3f" % self.xi_LS)
 
 
-        self.QL = self.calc_net_charge(TopologyInfo.TOP_LIGAND)
-        self.QP = self.calc_net_charge(TopologyInfo.TOP_RECEPTOR)
-        print("QP[e]:               %10d" % self.QP)
-        print("QL[e]:               %10d" % self.QL)
+        self.QL = self.calc_net_charge([TopologyInfo.TOP_LIGAND])
+        self.QP = self.calc_net_charge([TopologyInfo.TOP_RECEPTOR])
+        self.QS = self.calc_net_charge([TopologyInfo.TOP_LIGAND, TopologyInfo.TOP_RECEPTOR, TopologyInfo.TOP_WATER, TopologyInfo.TOP_IONS, TopologyInfo.TOP_OTHER])
+        print("QP[e]:               %10g" % self.QP)
+        print("QL[e]:               %10g" % self.QL)
+        print("QS[e]:               %10g" % self.QS)
 
         self.nsol, self.gammaS = self.calc_quadrupole(pdb)
         print("gammaS[e*nm^2]:      %10.3e" % self.gammaS)
@@ -516,6 +519,8 @@ class RokhlinChargeCorrection:
         if watertype is None:
             print("Warning: Unknown water model type. Static dielectric constant (epsS) is guessed based on experimental water parameters")
             watertype = "exp"
+        else:
+            print(f"Water type:          {water_model_library[watertype]['name']}")
         de = water_model_library[watertype]["dielectric"]
         return numpy.interp(self.temp, de[0], de[1])
 
@@ -586,12 +591,14 @@ class RokhlinChargeCorrection:
 
         return (sumg + sumr)*lattice.a, V
 
-    def calc_net_charge(self, mtype):
+    def calc_net_charge(self, mtypes):
         """
-        Calculate net charge of given atoms.
+        Calculate net charge of given atom types.
         """
-
-        return numpy.sum(self.topinfo.charge[self.topinfo.mtype == mtype])
+        ret = 0.
+        for mtype in mtypes:
+            ret += numpy.sum(self.topinfo.charge[self.topinfo.mtype == mtype])
+        return ret
 
     @staticmethod
     def load_pdb(pdb):
@@ -778,6 +785,15 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    print("""Copyright 2021-2024 (C) Shun Sakruaba
+This file is part of FEP-suite software.
+You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+Also, if you use this program please read and cite:
+Calculating the binding free energies of charged species based on explicit-solvent simulations employing lattice-sum methods: An accurate correction scheme for electrostatic finite-size effects.
+Gabriel J. Rocklin, David L. Mobley, Ken A. Dill, and Philippe H. Hünenberger
+The Journal of Chemical Physics, 139, 184103 (2013).""")
 
     topinfo = GMXTopParser().parse_top(args.top, args.ndx, args.ligand_group, args.receptor_group)
     ddg = RokhlinChargeCorrection(topinfo, args.pdb, args.temp)
