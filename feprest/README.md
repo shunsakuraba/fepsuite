@@ -85,10 +85,11 @@ If you are using supercomputer, you need to run this on on remote side.
 
 Before running the pipeline, prepare mdtraj and pymbar (ver 3.0.3) package for python3.
 ```sh
-pip3 install numpy cython --user
+pip3 install numpy cython==0.29.37 --user
 pip3 install mdtraj pymbar==3.0.3 --user
 python3 -c "import mdtraj"   # checks whether it works correctly
 ```
+Newer `cython` (>=3.0) changed the interface significantly and `mdtraj` does not work with the new one.
 `pymbar` must be `3.0.3` because `pymbar` frequently changes the API within minor version update. (We are planning to remove `pymbar` dependency in the future.)
 
 ### Preparation 4: (remote) compiling patched GROMACS
@@ -104,13 +105,15 @@ cmake -DCMAKE_INSTALL_PREFIX=$HOME/opt/gromacs-2020-hrex -DGMX_MPI=on ..
 make -j8 && make install
 ```
 
+If you are using CUDA 12+, GROMACS 2020 has a trouble compiling. In this case, adding target computing capability in cmake as `-DGMX_CUDA_TARGET_COMPUTE="80;86;89"` may be helpful. Note `"80;86;89"` part should be numbers corresponding to your GPU card; see [NVIDIA's official CC information](https://developer.nvidia.com/cuda-gpus) for details.
+
 If you have trouble compiling gromacs, consult your supercomputer center's support team.
 
 ## Preparing the input structure
 
 Here, we show how to generate FEP/REST input in the protein mutation case. For other case see the advanced guide at the bottom of this document.
 
-### Preparing FEP input file with prep_mutation_fep.py
+### Preparing FEP input file with `prep_mutation_fep.py`
 
 Make a working directoy and download PDB file of T4 Lysozyme.
 

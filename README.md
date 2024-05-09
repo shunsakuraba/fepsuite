@@ -10,8 +10,8 @@
 
 FEP-suite is a collection of programs for calculating various free energy differences. The pipeline uses GROMACS as a backend. There are currently two pipelines:
 
-* ABFE (absolute binding free energy) estimator, calculating binding free-energy betweeen receptor and ligand (typically protein and drug).
-* FEP/REST (free energy perturbation / replica exchange solute tempering), a relative free-energy difference calculation pipeline with an enhanced sampling technique.
+* [ABFE](abfe/README.md) (absolute binding free energy) estimator, calculating binding free-energy betweeen receptor and ligand (typically protein and drug).
+* [FEP/REST](feprest/README.md) (free energy perturbation / replica exchange solute tempering), a relative free-energy difference calculation pipeline with an enhanced sampling technique.
 
 Under both directory named `abfe` and `feprest` you can see README.md corresponding to each pipeline and how to use. Have fun!
 

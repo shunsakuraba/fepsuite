@@ -33,9 +33,8 @@ job_submit() {
 
     # Run actual code
     local cmd=($BASEFILE)
-    echo RUN=yes $cmd
-    local jobidinfo
-    jobidinfo=$(RUN=yes $cmd)
+    echo Running: "RUN=yes $cmd"
+    RUN=yes $cmd
     if [[ $? != 0 ]]; then
         echo "Submission failed" 1>&2
         exit 1

@@ -10,13 +10,19 @@ where `C_0` = 1 mol / L and `RT` is the gasconstant * temperature (K). Typically
 
 ## Prepration
 
-Before running the script, prepare mdtraj and pyedr package for python3.
+Before running the script, prepare mdtraj and pyedr package for python3, in the system you run fepsuite.
 ```sh
 % pip3 install cython mdtraj pyedr --user   # cython is necessary for mdtraj
 % python3 -c "import mdtraj"   # check whether mdtraj works
 ```
 
-Also, you will need GROMACS 2022.5 or later (2022.4 or -2021 **does not work** correctly). 
+Also, you will need GROMACS 2022.5 or later (2022.4 or -2021 **does not work** correctly).
+
+Finally, if your ligand is not neutral (charged), you will need to install [APBS](https://server.poissonboltzmann.org). If you are using Ubuntu and you are an administrator you can install by:
+```
+% sudo apt install apbs
+```
+For other cases, manual installation of APBS is difficult (due to bunch of dependencies). I recommend using binary releases of APBS if you can use.
 
 ## Calculating the free energy
 Then, follow the next order to run the FEP-ABFE.
@@ -69,9 +75,11 @@ Typically, poses obtained from docking simulation are not stable. We recommend t
 
 # Bugs and caveats
 
-Currently, charged ligands are unsupported (it is top priority in TODO list and will likely be implemented on next major release).
+Currently charged correction for charged lingands are in "testing" phase. If you find any strange baheviour please let me know.
 
-We assume the ratio of symmetry number of the molecule to be 1. This will not be a big problem unless you are running simulations for molecules with extremely high symmetry, e.g. benzene. In case you are predicting delta-G of such molecules, you need to add log-symmetry terms. If anyone know a good algorithm for getting symmetry number please let me know.
+Ligand with a large diameter requires long rlist length and therefore consumes much calculation time.
+
+We assume the ratio of symmetry number of the molecule to be 1. This will not be a big problem unless you are running simulations for molecules with extremely high symmetry, e.g. benzene. In case you are predicting delta-G of such molecules, you need to add log-symmetry terms (see e.g. Boresch paper below for details). If anyone know a good (and practical) algorithm for getting symmetry number please let me know.
 
 Current script does not work with MacOS (`gsed` instead of `sed` is needed)
 
