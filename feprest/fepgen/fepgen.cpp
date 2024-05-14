@@ -1011,7 +1011,7 @@ static void do_check_cmap_add_zerofill(const topology &Atop, const topology &Bto
                                        map<topology::cmaptype, tuple<int, int, vector<double>>> *cmaptypes_plus0)
 {
   assert(cmaptypes_plus0->size() > 0);
-  for(const auto cmA: Atop.cmaps) {
+  for(const auto& cmA: Atop.cmaps) {
     int a = get<0>(cmA);
     int b = get<1>(cmA);
     int c = get<2>(cmA);

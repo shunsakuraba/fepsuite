@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 #include "topology.hpp"
 
 #include <iostream> // debug
