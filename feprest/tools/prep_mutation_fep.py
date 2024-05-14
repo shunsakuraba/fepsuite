@@ -295,7 +295,7 @@ class DefaultProteinMutationGenerator:
 
     def solvate_curdir_conf_topology(self, radius: float):
         """Convert conf.pdb + topol.top into conf_ionized.pdb and topol_ionized.top"""
-        check_call_verbose([self.gmx] + f"editconf -f fepbase.pdb -d {radius} -bt dodecahedron -o conf_box".split())
+        check_call_verbose([self.gmx] + f"editconf -f fepbase.pdb -d {radius} -bt dodecahedron -o conf_box.pdb".split())
         maybe_relative = ""
         if os.path.exists(f"{self.ff}.ff"):
             maybe_relative = "./"
@@ -310,7 +310,7 @@ class DefaultProteinMutationGenerator:
         waterbox = "spc216.gro"
         if self.water_model in ["tip4p", "tip4pew"]:
             waterbox = "tip4p.gro"
-        check_call_verbose([self.gmx] + f"solvate -cp conf_box -p topol_solvated -cs {waterbox} -o conf_solvated.pdb".split())
+        check_call_verbose([self.gmx] + f"solvate -cp conf_box.pdb -p topol_solvated -cs {waterbox} -o conf_solvated.pdb".split())
         with open("dummy.mdp", "w") as ofh:
             pass # clear dummy file
         log_with_color("Note: if error about \"no default Bond types\" occurs on next grompp, remove molecules containing [ bonds ] from corresponding \"ions.itp\""
