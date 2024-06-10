@@ -82,6 +82,7 @@ controller_submit() {
         DEPENDS=()
 
         unset PPM
+        unset CPU_ONLY_STAGE
         # get necessary resource information
         eval $($PIPELINE_SCRIPT query $STEPNO)
         if [[ -z $PPM ]]; then 
