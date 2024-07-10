@@ -5,7 +5,7 @@ if [[ -z $GROUP ]]; then
     GROUP=$(groups | tr ' ' '\n' | grep '^gr')
 fi
 if [[ -z $SUBSYSTEM ]]; then
-    echo "Specify SUBSYSTEM (currently allowed choices: CL/D/G)" 1>&2
+    echo "Specify SUBSYSTEM (currently allowed choices: A/G)" 1>&2
     exit 1
 fi
 
@@ -17,6 +17,10 @@ job_prelude() {
         case $SUBSYSTEM in
             G)
                 module load slurm/2022 SysG/2022 PrgEnvNvidia/2022
+                module list
+                ;;
+            A)
+                module load slurm/2022 sysA/2022 PrgEnvIntel/2022
                 module list
                 ;;
             *)
@@ -41,6 +45,12 @@ job_init_queue_stat() {
 
 job_set_preferred_resource() {
     case $SUBSYSTEM in
+        A)
+            HW_CPN=112 # 2 sockets, 56 cores/socket
+            HW_GPN=0
+            CPN=112
+            GPN=0
+        ;;
         D)
             HW_CPN=40 # 2 sockets, 20 cores/socket
             HW_GPN=0
@@ -98,7 +108,11 @@ job_submit() {
 
     # Run actual code and get jobid
     local mem
-    (( mem = 4750 * TPP ))
+    if [[ $SUBSYSTEM = G ]]; then
+        (( mem = 4750 * TPP ))
+    elif [[ $SUBSYSTEM = A ]]; then
+        (( mem = 1000 * TPP ))
+    fi
     local -a rsc
     if [[ $SUBSYSTEM = G ]] && [[ $JOB_GPU > 1 ]]; then
         # submit based on GPU number
@@ -136,9 +150,15 @@ job_singlerun() {
     # Even the sequential run needs "srun"
     # same above
     local -a gpus
-    if [[ $SUBSYSTEM = "G" ]]; then
-        gpus=(--gpus 1)
-    fi
+    case $SUBSYSTEM in 
+        A|B)
+            # without this slurm hangs hu
+            gpus=(--gpus 0)
+            ;;
+        G)
+            gpus=(--gpus 1)
+            ;;
+    esac
     srun $gpus --export ALL -n 1 -N 1 $@
 }
 
