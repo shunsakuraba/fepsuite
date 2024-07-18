@@ -256,13 +256,21 @@ main() {
 
 
                 # Extend run to do replica exchange
+                REPOPT_EXTEND_RUN_LENGTH=${EXTEND_RUN_LENGTH:-50}
                 for i in {0..$((NREP - 1))}; do
                     mrundir=$work/rep$i
-                    parallelizable_singlerun $mrundir/extend_run.log $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend 50
+                    parallelizable_singlerun $mrundir/extend_run.log $GMX convert-tpr -s $mrundir/nvt -o $mrundir/nvt_c -extend $REPOPT_EXTEND_RUN_LENGTH
                 done
                 wait_if_needed $work extend_run.log "Error: failed to run convert-tpr on tuning cycle $p replica $i" 1>&2
                 # -bonded cpu is needed because of current patch's restriction
-                mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex 100 -rdd $DOMAIN_SHRINK -bonded cpu # extend 50 ps
+                REPOPT_REPLEX_INTERVAL=${REPOPT_REPLEX_INTERVAL:-100}
+                local -a nstlista
+                nstlista=()
+                if [[ -n $REPOPT_REPLEX_INTERVAL ]] && (( REPOPT_REPLEX_INTERVAL <= 50 )); then
+                    # Add nstlist if replex interval is too short
+                    nstlista=(-nstlist $REPOPT_REPLEX_INTERVAL)
+                fi
+                mdrun_find_possible_np $NREP -deffnm nvt -multidir $reps -s nvt_c -cpi nvt -hrex -replex $REPOPT_REPLEX_INTERVAL $nstlista -rdd $DOMAIN_SHRINK -bonded cpu # extend 50 ps
                 (( STEPCOUNT = p - NINITIALTUNE )) || true
                 if (( STEPCOUNT < 1 )); then
                     (( STEPCOUNT = 1 ))
