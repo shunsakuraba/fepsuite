@@ -33,6 +33,10 @@ void fit_selected(const VectorXd& Amass,
       selcount++;
     }
   }
+  if(selcount == 0) {
+    cerr << "Warning: too few atoms are selected for best-fitting. The program assumes you have best-fitted two PDB files already by some other programs." << endl;
+    return;
+  }
   refmean /= Amass.sum();
   int selcountB = 0;
   for(int i = 0; i < Bmass.rows(); ++i) {
@@ -41,6 +45,10 @@ void fit_selected(const VectorXd& Amass,
   if(selcount != selcountB) {
     cerr << "Warning: two PDBs have unequal number of C-alpha or phosphate atoms. The program assumes you have best-fitted two PDB files already by some other programs." << endl;
     // returns without best-fitting
+    return;
+  }
+  if(selcountB == 0) {
+    cerr << "Warning: too few atoms are selected for best-fitting. The program assumes you have best-fitted two PDB files already by some other programs." << endl;
     return;
   }
   

@@ -2125,6 +2125,7 @@ int main(int argc, char* argv[])
   p.add<string>("assign-dictionary", 0, "Specify assignment matching pair", false, "assign-dictionary.txt");
   p.add<string>("generate-restraint", 0, "Comma-separated list. If non-empty, restraints are generated for the specified atom name, with 1000 kJ/mol/nm^2", false, "");
   p.add("protein", 0, "Use protein atom-matching instead of nucleic acids");
+  p.add("no-best-fitting", 0, "Stop best-fitting two structures at the beginning of the program");
   p.add("connectivity", 0, "match atoms by connectivity");
   p.add("assign-by-name", 0, "match atoms by both connectivity and name");
   p.add("gen-exclusion", 0, "Program writes exclusions explicitly instead of nexcl");
@@ -2165,6 +2166,8 @@ int main(int argc, char* argv[])
     VectorXd Bmass = set_selected_mass(Bnames, "CA");
 
     fit_selected(Amass, Bmass, Acoords, Bcoords);
+  }else if(p.exist("no-best-fitting")){
+    // do nothing
   }else{
     VectorXd Amass = set_selected_mass(Anames, "P");
     VectorXd Bmass = set_selected_mass(Bnames, "P");
