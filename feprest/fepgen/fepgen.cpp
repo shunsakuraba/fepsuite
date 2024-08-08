@@ -282,10 +282,8 @@ static const vector<double> get_angle_entry(const topology &top, topology::angle
   }
 }
 
-/*
-Returns expected bond base angle between two atoms
-*/
-static double topological_min_angle(const topology &Atop, int a, int b, int c)
+// I want C++17's std::optional as a return value. Few years later, if C++17 is universally accepted, I need to rewrite this to a saner code.
+static pair<bool, double> topological_min_angle_impl(const topology &Atop, int a, int b, int c)
 {
   for(int functype: {1, 2, 5, 10 }) { // harmonic, g96, U-B, restraint
     for(int order: {0, 1}) {
@@ -298,12 +296,25 @@ static double topological_min_angle(const topology &Atop, int a, int b, int c)
       if(Atop.angles.count(key) > 0) {
         const vector<double> entry = get_angle_entry(Atop, key);
         assert(entry.size() > 0);
-        return entry[0]; // for angle types 1,2,5 and 10 first element is theta0 (degree)
+        return make_pair(true, entry[0]); // for angle types 1,2,5 and 10 first element is theta0 (degree)
       }
     }
   }
-  cerr << "Error: failed to find angle between" << Atop.names[a] << " - " << Atop.names[b] << " - " << Atop.names[c] << endl;
-  exit(1);
+  return make_pair(false, 0.);
+}
+
+/*
+Returns expected bond base angle between two atoms
+*/
+static double topological_min_angle(const topology &Atop, int a, int b, int c)
+{
+  pair<bool, double> retval = topological_min_angle_impl(Atop, a, b, c);
+  if(retval.first) {
+    return retval.second;
+  }else{
+    cerr << "Error: failed to find angle between" << Atop.names[a] << " - " << Atop.names[b] << " - " << Atop.names[c] << endl;
+    exit(1);
+  }
 }
 
 static const vector<double> get_dihedral_entry(const topology &top, topology::dihedkeytype& key)
@@ -482,15 +493,16 @@ static vector<double> topological_min_dihed(const topology &Atop, int a, int b, 
 }
 
 // Returns true if angle is defined and close to 180 degree. 
-bool unfavored_for_dihedral_restraint(const Matrix3Xd &coords, int a1, int a2, int a3)
+// From real-world testing it has been revealed that actual structures may be very skewed, and is better to use topological angle rather than the structural angle.
+bool unfavored_for_dihedral_restraint(const topology &top, int a1, int a2, int a3)
 {
   if(a1 == -1 || a2 == -1 || a3 == -1) {
     return false;
   }
-  const double linear_angle_threshold = 170.0 * M_PI / 180.0;
+  const double linear_angle_threshold = 160.0;
 
-  double a = angle(coords.col(a1), coords.col(a2), coords.col(a3));
-  return (a > linear_angle_threshold);
+  double amin = topological_min_angle(top, a1, a2, a3);
+  return (amin > linear_angle_threshold);
 }
 
 void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
@@ -623,8 +635,8 @@ void output_dummies(ofstream &Ofs, const Matrix3Xd &Acoords,
     int da = assignAofO[dihed_o];
 
     // Here I assume that, there are no three atoms that are linear in state B and non-linear in state A - are there any major counterexample?
-    if(unfavored_for_dihedral_restraint(Acoords, pa, ba, aa) ||
-       unfavored_for_dihedral_restraint(Acoords, ba, aa, da)){
+    if(unfavored_for_dihedral_restraint(Atop, pa, ba, aa) ||
+       unfavored_for_dihedral_restraint(Atop, ba, aa, da)){
       if(verbose) {
         cerr << "Skipping dihedral restraint " << (p + 1) << "-" << (bond_o + 1) << "-" << (angle_o + 1) << "-" << (dihed_o + 1) << " because some atoms are linear" << endl;
       }
