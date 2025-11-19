@@ -57,6 +57,12 @@ You may want to use the script below as an alternative template.
   <dd>Kyoto University, slurm (but their resource request part is customized), Intel MPI (MPICH-like)</dd>
   <dt>jaea-sgi8600.zsh</dt>
   <dd>Japan Atomic Energy Agency, PBSPro, Intel MPI + SGI mpt</dd>
+  <dt>tokyo-wisteria.zsh</dt>
+  <dd>The University of Tokyo, Wisteria, Fujitsu pjsub, Intel MPI</dd>
+  <dt>kyushu-genkai.zsh</dt>
+  <dd>Kyushu University, Genkai, Fujitsu pjsub, Intel MPI</dd>
+  <dt>tsukuba-pegasus.zsh</dt>
+  <dd>Tsukuba Univresity, Pegasus, NQSV, OpenMPI</dd>
 </dl>
 
 # Tips for zsh scripting
