@@ -69,7 +69,6 @@ job_submit() {
     for d in $DEPENDS; do
         local jid
         jid=$(controller_get_jobid $d)
-        echo "DEBUG \"$jid\" \"$LIVE_ID_LIST\"" 1>&2
         # -W depend=afterok:(ID) only accepts live ID in the jobsystem. Few days after the job completion the ID is invalidated.
         # Note in the pathological case, the ID may turn dead while running this script, but we can't do anything (if anyone knows the way please teach me!)
         # Expansion I: index of last occurence (0 not found)
