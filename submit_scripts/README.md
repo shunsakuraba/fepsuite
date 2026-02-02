@@ -63,6 +63,8 @@ You may want to use the script below as an alternative template.
   <dd>Kyushu University, Genkai, Fujitsu pjsub, Intel MPI</dd>
   <dt>tsukuba-pegasus.zsh</dt>
   <dd>Tsukuba Univresity, Pegasus, NQSV, OpenMPI</dd>
+  <dt>jcahpc-miyabi-g.zsh</dt>
+  <dd>JCAHPC, Miyabi (system G), PBSPro, OpenMPI</dd>
 </dl>
 
 # Tips for zsh scripting
