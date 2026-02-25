@@ -115,8 +115,8 @@ job_submit() {
     local -a cmd
 
 
-    # default qsub wrapper has several bugs and will submit without.
-    cmd=(/system/tool/nqsv/src/qsub_wrapper2 -q $queue -v ${(j:,:)key_vars} -N $JOB_NAME $dependency -b $JOB_NODES -l elapstim_req=$timelimit $extra $BASEFILE --cancel-after)
+    # Now that they fixed the default qsub wrapper's bug, we can submit using typical qsub
+    cmd=(qsub -q $queue -v ${(j:,:)key_vars} -N $JOB_NAME $dependency -b $JOB_NODES -l elapstim_req=$timelimit $extra $BASEFILE --cancel-after)
     echo $cmd 1>&2
     RET=($($cmd))
     if [[ $? != 0 ]]; then
